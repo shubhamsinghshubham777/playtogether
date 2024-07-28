@@ -20,6 +20,29 @@
             "request": "launch",
             "type": "dart",
             "flutterMode": "release"
+        },
+        {
+            "name": "Flutter: Launch Android",
+            "type": "dart",
+            "request": "launch",
+            "program": "lib/main.dart",
+            "deviceId": "edc21965"
+        },
+        {
+            "name": "Flutter: Launch Windows",
+            "type": "dart",
+            "request": "launch",
+            "program": "lib/main.dart",
+            "deviceId": "windows"
+        },
+    ],
+    "compounds": [
+        {
+            "name": "Launch Android and Windows",
+            "configurations": [
+                "Flutter: Launch Android",
+                "Flutter: Launch Windows"
+            ]
         }
     ]
 }

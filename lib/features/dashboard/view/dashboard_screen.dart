@@ -27,6 +27,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   }
 
   @override
+  void setState(VoidCallback fn) {
+    if (!mounted) {
+      return;
+    }
+
+    super.setState(fn);
+  }
+
+  @override
   Widget build(BuildContext context) {
     final userNotifier = ref.watch(authenticatedUserProvider.notifier);
 

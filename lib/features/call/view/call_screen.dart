@@ -23,10 +23,13 @@ class CallScreen extends ConsumerStatefulWidget {
 }
 
 class _CallScreenState extends ConsumerState<CallScreen> {
+  final _messageController = TextEditingController();
+
   final _localRTCVideoRenderer = RTCVideoRenderer();
   final _remoteRTCVideoRenderer = RTCVideoRenderer();
   MediaStream? _localStream;
   RTCPeerConnection? _rtcPeerConnection;
+  RTCDataChannel? _rtcDataChannel;
   List<RTCIceCandidate> rtcIceCadidates = [];
   bool isAudioOn = true;
   bool isVideoOn = true;
@@ -34,6 +37,8 @@ class _CallScreenState extends ConsumerState<CallScreen> {
 
   StreamSubscription<dynamic>? _candidateListener;
   StreamSubscription<dynamic>? _docExistanceListener;
+
+  String? currentRemoteMessage;
 
   @override
   void initState() {
@@ -44,6 +49,15 @@ class _CallScreenState extends ConsumerState<CallScreen> {
   }
 
   @override
+  void setState(VoidCallback fn) {
+    if (!mounted) {
+      return;
+    }
+
+    super.setState(fn);
+  }
+
+  @override
   void dispose() {
     _docExistanceListener?.cancel();
     _candidateListener?.cancel();
@@ -51,6 +65,7 @@ class _CallScreenState extends ConsumerState<CallScreen> {
     _localRTCVideoRenderer.dispose();
     _remoteRTCVideoRenderer.dispose();
     _localStream?.dispose();
+    _rtcDataChannel?.close();
     _rtcPeerConnection?.dispose();
     super.dispose();
   }
@@ -65,7 +80,25 @@ class _CallScreenState extends ConsumerState<CallScreen> {
             'Caller: ${widget.callerUid}'
             '\nCallee: ${widget.calleeUid}'
             '\nIs calling or being called?: '
-            '${widget.offer != null ? 'Being called' : 'Calling'}',
+            '${widget.offer != null ? 'Being called' : 'Calling'}'
+            '\nCurrent message: $currentRemoteMessage',
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(controller: _messageController),
+                ),
+                const SizedBox(width: 16),
+                IconButton(
+                  onPressed: () => _rtcDataChannel?.send(
+                    RTCDataChannelMessage(_messageController.text),
+                  ),
+                  icon: const Icon(Icons.send),
+                ),
+              ],
+            ),
           ),
           Expanded(
             child: GridView(
@@ -97,9 +130,14 @@ class _CallScreenState extends ConsumerState<CallScreen> {
     });
 
     // listen for remotePeer mediaTrack event
-    _rtcPeerConnection!.onTrack = (event) {
+    _rtcPeerConnection?.onTrack = (event) {
       _remoteRTCVideoRenderer.srcObject = event.streams[0];
       setState(() {});
+    };
+
+    _rtcPeerConnection?.onDataChannel = (channel) {
+      _rtcDataChannel = channel;
+      _setupDataChannel();
     };
 
     // get localStream
@@ -111,8 +149,8 @@ class _CallScreenState extends ConsumerState<CallScreen> {
     });
 
     // add mediaTrack to peerConnection
-    _localStream!.getTracks().forEach((track) {
-      _rtcPeerConnection!.addTrack(track, _localStream!);
+    _localStream?.getTracks().forEach((track) {
+      _rtcPeerConnection?.addTrack(track, _localStream!);
     });
 
     // set source for local video renderer
@@ -122,15 +160,15 @@ class _CallScreenState extends ConsumerState<CallScreen> {
     // Incoming call
     if (widget.offer != null) {
       // set SDP offer as remoteDescription for peerConnection
-      await _rtcPeerConnection!.setRemoteDescription(
+      await _rtcPeerConnection?.setRemoteDescription(
         RTCSessionDescription(widget.offer["sdp"], widget.offer["type"]),
       );
 
       // create SDP answer
-      RTCSessionDescription answer = await _rtcPeerConnection!.createAnswer();
+      final answer = await _rtcPeerConnection!.createAnswer();
 
       // set SDP answer as localDescription for peerConnection
-      _rtcPeerConnection!.setLocalDescription(answer);
+      _rtcPeerConnection?.setLocalDescription(answer);
 
       FirebaseFirestore.instance
           .collection('calls')
@@ -151,7 +189,7 @@ class _CallScreenState extends ConsumerState<CallScreen> {
           String sdpMid = candidate["id"];
           int sdpMLineIndex = candidate["label"];
           // add iceCandidate
-          _rtcPeerConnection!.addCandidate(
+          _rtcPeerConnection?.addCandidate(
             RTCIceCandidate(rtcCandidate, sdpMid, sdpMLineIndex),
           );
         }
@@ -161,8 +199,14 @@ class _CallScreenState extends ConsumerState<CallScreen> {
     // Outgoing call
     else {
       // listen for local iceCandidate and add it to the list of IceCandidate
-      _rtcPeerConnection!.onIceCandidate =
+      _rtcPeerConnection?.onIceCandidate =
           (RTCIceCandidate candidate) => rtcIceCadidates.add(candidate);
+
+      _rtcDataChannel = await _rtcPeerConnection?.createDataChannel(
+        'chat',
+        RTCDataChannelInit(),
+      );
+      _setupDataChannel();
 
       // Initialise the document
       FirebaseFirestore.instance
@@ -171,10 +215,10 @@ class _CallScreenState extends ConsumerState<CallScreen> {
           .set({});
 
       // create SDP Offer
-      RTCSessionDescription offer = await _rtcPeerConnection!.createOffer();
+      final offer = await _rtcPeerConnection!.createOffer();
 
       // set SDP offer as localDescription for peerConnection
-      await _rtcPeerConnection!.setLocalDescription(offer);
+      await _rtcPeerConnection?.setLocalDescription(offer);
 
       // make a call to remote peer over signalling
       await FirebaseFirestore.instance
@@ -192,7 +236,7 @@ class _CallScreenState extends ConsumerState<CallScreen> {
         if (snapshot.data()?.containsKey('answer') ?? false) {
           final data = snapshot.data()?['answer'];
           // Callee has accepted the call
-          await _rtcPeerConnection!.setRemoteDescription(
+          await _rtcPeerConnection?.setRemoteDescription(
             RTCSessionDescription(data["sdp"], data["type"]),
           );
 
@@ -212,6 +256,13 @@ class _CallScreenState extends ConsumerState<CallScreen> {
         }
       });
     }
+  }
+
+  void _setupDataChannel() {
+    _rtcDataChannel?.onMessage = (message) {
+      debugPrint('Received msg: ${message.text}');
+      setState(() => currentRemoteMessage = message.text);
+    };
   }
 
   Future<void> _deleteCallRelatedData() async {
