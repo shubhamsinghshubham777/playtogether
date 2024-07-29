@@ -1,10 +1,16 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:awesome_extensions/awesome_extensions.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
+import 'package:media_kit/media_kit.dart';
+import 'package:media_kit_video/media_kit_video.dart';
+import 'package:playtogether/features/call/model/call_screen_state.dart';
+import 'package:playtogether/features/call/view/pt_video_controls.dart';
 
 class CallScreen extends ConsumerStatefulWidget {
   const CallScreen({
@@ -22,9 +28,8 @@ class CallScreen extends ConsumerStatefulWidget {
   ConsumerState<ConsumerStatefulWidget> createState() => _CallScreenState();
 }
 
-class _CallScreenState extends ConsumerState<CallScreen> {
-  final _messageController = TextEditingController();
-
+class _CallScreenState extends ConsumerState<CallScreen>
+    with WidgetsBindingObserver {
   final _localRTCVideoRenderer = RTCVideoRenderer();
   final _remoteRTCVideoRenderer = RTCVideoRenderer();
   MediaStream? _localStream;
@@ -38,10 +43,19 @@ class _CallScreenState extends ConsumerState<CallScreen> {
   StreamSubscription<dynamic>? _candidateListener;
   StreamSubscription<dynamic>? _docExistanceListener;
 
-  String? currentRemoteMessage;
+  late final videoPlayer = Player();
+  late final videoController = VideoController(videoPlayer);
+
+  var screenState = const CallScreenState(
+    videoName: null,
+    isPlayingVideo: false,
+    currentVideoMillis: 0,
+    chatMessage: null,
+  );
 
   @override
   void initState() {
+    WidgetsBinding.instance.addObserver(this);
     _localRTCVideoRenderer.initialize();
     _remoteRTCVideoRenderer.initialize();
     _setupPeerConnection().then((_) => _observeIfFirebaseDocExistsElseLeave());
@@ -58,7 +72,14 @@ class _CallScreenState extends ConsumerState<CallScreen> {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _refreshLocalStream();
+    super.didChangeAppLifecycleState(state);
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _docExistanceListener?.cancel();
     _candidateListener?.cancel();
     _deleteCallRelatedData();
@@ -67,6 +88,14 @@ class _CallScreenState extends ConsumerState<CallScreen> {
     _localStream?.dispose();
     _rtcDataChannel?.close();
     _rtcPeerConnection?.dispose();
+
+    // Video Player
+    try {
+      videoPlayer.dispose();
+    } catch (e, st) {
+      debugPrint('Error while disposing video player: ${e.toString()}');
+      debugPrintStack(stackTrace: st);
+    }
     super.dispose();
   }
 
@@ -81,29 +110,59 @@ class _CallScreenState extends ConsumerState<CallScreen> {
             '\nCallee: ${widget.calleeUid}'
             '\nIs calling or being called?: '
             '${widget.offer != null ? 'Being called' : 'Calling'}'
-            '\nCurrent message: $currentRemoteMessage',
+            '\nCurrent message: $screenState',
           ),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(controller: _messageController),
-                ),
-                const SizedBox(width: 16),
-                IconButton(
-                  onPressed: () => _rtcDataChannel?.send(
-                    RTCDataChannelMessage(_messageController.text),
+          FilledButton(
+            onPressed: () async {
+              FilePickerResult? result = await FilePicker.platform.pickFiles();
+              if (result != null) {
+                await videoPlayer.open(
+                  Media(result.files.single.path!),
+                  play: false,
+                );
+                await _updateScreenState(
+                  screenState.copyWith(
+                    videoName: result.files.single.name,
                   ),
-                  icon: const Icon(Icons.send),
+                );
+              }
+            },
+            child: const Text('Open'),
+          ),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 500),
+            child: AspectRatio(
+              aspectRatio: 16 / 9,
+              child: Video(
+                controller: videoController,
+                controls: (_) => PTVideoControls(
+                  videoPlayer,
+                  onPlayPause: (isPlaying, positionMillis) {
+                    _controlsLog(
+                      'isPlaying: $isPlaying, '
+                      'positionMillis: $positionMillis',
+                    );
+                    _updateScreenState(
+                      screenState.copyWith(
+                        isPlayingVideo: isPlaying,
+                        currentVideoMillis: positionMillis,
+                      ),
+                    );
+                  },
+                  onSeek: (positionMillis) {
+                    _controlsLog('onSeek: $positionMillis');
+                    _updateScreenState(
+                      screenState.copyWith(currentVideoMillis: positionMillis),
+                    );
+                  },
                 ),
-              ],
+              ),
             ),
           ),
           Expanded(
             child: GridView(
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
+              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                maxCrossAxisExtent: 300,
               ),
               children: [
                 RTCVideoView(_localRTCVideoRenderer, mirror: true),
@@ -141,12 +200,7 @@ class _CallScreenState extends ConsumerState<CallScreen> {
     };
 
     // get localStream
-    _localStream = await navigator.mediaDevices.getUserMedia({
-      'audio': isAudioOn,
-      'video': isVideoOn
-          ? {'facingMode': isFrontCameraSelected ? 'user' : 'environment'}
-          : false,
-    });
+    _localStream = await navigator.mediaDevices.getUserMedia(_mediaConstraints);
 
     // add mediaTrack to peerConnection
     _localStream?.getTracks().forEach((track) {
@@ -261,7 +315,11 @@ class _CallScreenState extends ConsumerState<CallScreen> {
   void _setupDataChannel() {
     _rtcDataChannel?.onMessage = (message) {
       debugPrint('Received msg: ${message.text}');
-      setState(() => currentRemoteMessage = message.text);
+      setState(() {
+        screenState = CallScreenState.fromJson(jsonDecode(message.text));
+      });
+      videoPlayer.seek(Duration(milliseconds: screenState.currentVideoMillis));
+      (screenState.isPlayingVideo ? videoPlayer.play() : videoPlayer.pause());
     };
   }
 
@@ -294,7 +352,53 @@ class _CallScreenState extends ConsumerState<CallScreen> {
         .doc(widget.calleeUid)
         .snapshots()
         .listen((snapshot) {
-      if (!snapshot.exists) context.pop<void>();
+      try {
+        if (!snapshot.exists) context.pop<void>();
+      } catch (e, st) {
+        debugPrint('Could not pop screen! Reason: $e');
+        debugPrintStack(stackTrace: st);
+      }
     });
   }
+
+  Future<void> _updateScreenState(CallScreenState localState) async {
+    setState(() => screenState = localState);
+    await _rtcDataChannel?.send(
+      RTCDataChannelMessage(jsonEncode(screenState.toJson())),
+    );
+  }
+
+  /// Workaround for local stream freezing when app is in background
+  /// <br/>
+  /// Ref: https://github.com/flutter-webrtc/flutter-webrtc/issues/276#issuecomment-1162536379
+  Future<void> _refreshLocalStream() async {
+    _localStream = await Helper.openCamera(_mediaConstraints);
+    _localStream?.getVideoTracks().elementAtOrNull(0)?.enabled = isVideoOn;
+    _localRTCVideoRenderer.srcObject = _localStream;
+    await Future.forEach(
+      _localStream?.getTracks() ?? <MediaStreamTrack>[],
+      (track) async {
+        if (track is VideoTrack) {
+          track.enabled = isVideoOn;
+        } else if (track is AudioTrack) {
+          track.enabled = isAudioOn;
+        }
+        final senders = await _rtcPeerConnection?.getSenders();
+        senders?.forEach((sender) => sender.replaceTrack(track));
+      },
+    );
+  }
+
+  Map<String, dynamic> get _mediaConstraints {
+    return {
+      'audio': isAudioOn,
+      'video': isVideoOn
+          ? {
+              'facingMode': isFrontCameraSelected ? 'user' : 'environment',
+            }
+          : false,
+    };
+  }
 }
+
+void _controlsLog(String msg) => debugPrint('CONTROLS => $msg');

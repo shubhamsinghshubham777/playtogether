@@ -49,5 +49,10 @@
 	<string>PlayTogether needs camera permission to allow video calling</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>PlayTogether needs microphone permission to allow video calling</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
 </dict>
 </plist>

@@ -2,6 +2,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:media_kit/media_kit.dart';
 import 'package:playtogether/features/auth/provider/auth_providers.dart';
 import 'package:playtogether/features/dashboard/view/dashboard_screen.dart';
 import 'package:playtogether/firebase_options.dart';
@@ -14,6 +15,7 @@ import 'package:window_manager/window_manager.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  MediaKit.ensureInitialized();
   if (isDesktop) await _setupDesktopWindow();
   await _setupFirebase();
   runApp(const ProviderScope(child: PTApp()));
