@@ -113,18 +113,12 @@ class _CallScreenState extends ConsumerState<CallScreen>
             '\nCurrent message: $screenState',
           ),
           FilledButton(
-            // TODO(Shubham): Hide player controls until a file is loaded
             onPressed: () async {
               FilePickerResult? result = await FilePicker.platform.pickFiles();
               if (result != null) {
-                await videoPlayer.open(
-                  Media(result.files.single.path!),
-                  play: false,
-                );
-                await _updateScreenState(
-                  screenState.copyWith(
-                    videoName: result.files.single.name,
-                  ),
+                videoPlayer.open(Media(result.files.single.path!), play: false);
+                _updateScreenState(
+                  screenState.copyWith(videoName: result.files.single.name),
                 );
               }
             },

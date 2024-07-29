@@ -35,6 +35,9 @@ class _PTVideoControlsState extends State<PTVideoControls> {
 
   bool showControls = true;
 
+  bool isMediaLoaded = false;
+  StreamSubscription<dynamic>? mediaTracksSubscription;
+
   @override
   void initState() {
     playingSubscription = widget.player.stream.playing.listen(
@@ -49,6 +52,11 @@ class _PTVideoControlsState extends State<PTVideoControls> {
     durationSubscription = widget.player.stream.duration.listen(
       (newDuration) => setState(() => duration = newDuration),
     );
+    mediaTracksSubscription = widget.player.stream.playlist.listen(
+      (mediaTracks) {
+        setState(() => isMediaLoaded = mediaTracks.medias.isNotEmpty);
+      },
+    );
     super.initState();
   }
 
@@ -57,11 +65,13 @@ class _PTVideoControlsState extends State<PTVideoControls> {
     playingSubscription?.cancel();
     positionSubscription?.cancel();
     durationSubscription?.cancel();
+    mediaTracksSubscription?.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    if (!isMediaLoaded) return const SizedBox.shrink();
     return AnimatedSwitcher(
       duration: 250.milliseconds,
       reverseDuration: 250.milliseconds,
