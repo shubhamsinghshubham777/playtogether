@@ -113,6 +113,7 @@ class _CallScreenState extends ConsumerState<CallScreen>
             '\nCurrent message: $screenState',
           ),
           FilledButton(
+            // TODO(Shubham): Hide player controls until a file is loaded
             onPressed: () async {
               FilePickerResult? result = await FilePicker.platform.pickFiles();
               if (result != null) {
@@ -353,7 +354,7 @@ class _CallScreenState extends ConsumerState<CallScreen>
         .snapshots()
         .listen((snapshot) {
       try {
-        if (!snapshot.exists) context.pop<void>();
+        if (!snapshot.exists && mounted) context.pop<void>();
       } catch (e, st) {
         debugPrint('Could not pop screen! Reason: $e');
         debugPrintStack(stackTrace: st);
