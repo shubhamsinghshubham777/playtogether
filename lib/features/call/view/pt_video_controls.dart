@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:playtogether/utils.dart';
 
-// TODO(Shubham): Hide controls automatically after 3 seconds
 class PTVideoControls extends StatefulWidget {
   const PTVideoControls(
     this.player, {
@@ -41,17 +40,14 @@ class _PTVideoControlsState extends State<PTVideoControls> {
     playingSubscription = widget.player.stream.playing.listen(
       (isPlaying) {
         setState(() => playing = isPlaying);
+        _hideControls();
       },
     );
     positionSubscription = widget.player.stream.position.listen(
-      (newPosition) {
-        setState(() => position = newPosition);
-      },
+      (newPosition) => setState(() => position = newPosition),
     );
     durationSubscription = widget.player.stream.duration.listen(
-      (newDuration) {
-        setState(() => duration = newDuration);
-      },
+      (newDuration) => setState(() => duration = newDuration),
     );
     super.initState();
   }
@@ -78,7 +74,10 @@ class _PTVideoControlsState extends State<PTVideoControls> {
         child: GestureDetector(
           onTap: isDesktop
               ? null
-              : () => setState(() => showControls = !showControls),
+              : () {
+                  setState(() => showControls = !showControls);
+                  _hideControls();
+                },
           behavior: HitTestBehavior.translucent,
           child: !showControls
               ? null
@@ -167,6 +166,14 @@ class _PTVideoControlsState extends State<PTVideoControls> {
 
     if (isUninitialised) return 0;
     if (isDurationSliderDragging) return durationSliderDragValue;
-    return position.inMilliseconds / duration.inMilliseconds;
+    return (position.inMilliseconds / duration.inMilliseconds).clamp(0, 1);
+  }
+
+  void _hideControls({Duration after = const Duration(seconds: 3)}) {
+    if (!isDesktop) {
+      Future.delayed(after, () {
+        if (playing && showControls) setState(() => showControls = false);
+      });
+    }
   }
 }
