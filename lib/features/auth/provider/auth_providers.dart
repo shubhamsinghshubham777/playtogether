@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_sign_in_all_platforms/google_sign_in_all_platforms.dart';
@@ -28,6 +29,7 @@ class AuthenticatedUser extends _$AuthenticatedUser {
           accessToken: googleResponse?.accessToken,
         ),
       );
+      await onboardUser();
     } catch (e, st) {
       debugPrint('error: $e');
       debugPrintStack(stackTrace: st);
@@ -37,6 +39,16 @@ class AuthenticatedUser extends _$AuthenticatedUser {
   Future<void> signOut() async {
     await _googleClient.signOut();
     await FirebaseAuth.instance.signOut();
+  }
+
+  Future<void> onboardUser() async {
+    final user = await ref.read(authenticatedUserProvider.future);
+    if (user != null) {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .set(user.toJson());
+    }
   }
 }
 

@@ -82,7 +82,7 @@ class _CallScreenState extends ConsumerState<CallScreen>
     WidgetsBinding.instance.removeObserver(this);
     _docExistanceListener?.cancel();
     _candidateListener?.cancel();
-    _deleteCallRelatedData();
+    deleteCallRelatedData(widget.calleeUid);
     _localRTCVideoRenderer.dispose();
     _remoteRTCVideoRenderer.dispose();
     _localStream?.dispose();
@@ -318,29 +318,6 @@ class _CallScreenState extends ConsumerState<CallScreen>
     };
   }
 
-  Future<void> _deleteCallRelatedData() async {
-    debugPrint('Deleting doc having id: ${widget.calleeUid}');
-
-    final docToDelete =
-        FirebaseFirestore.instance.collection('calls').doc(widget.calleeUid);
-
-    final candidatesCollectionToDelete = docToDelete.collection('candidates');
-
-    final candidatesCollectionData = await candidatesCollectionToDelete.get();
-
-    debugPrint('Deleting candidates...');
-
-    await candidatesCollectionData.docs
-        .map((doc) => doc.reference.delete())
-        .wait;
-
-    debugPrint('Deleting complete doc...');
-
-    await docToDelete.delete();
-
-    debugPrint('Call data deletion complete ✅');
-  }
-
   void _observeIfFirebaseDocExistsElseLeave() {
     _docExistanceListener = FirebaseFirestore.instance
         .collection('calls')
@@ -394,6 +371,27 @@ class _CallScreenState extends ConsumerState<CallScreen>
           : false,
     };
   }
+}
+
+Future<void> deleteCallRelatedData(String calleeUid) async {
+  debugPrint('Deleting doc having id: $calleeUid');
+
+  final docToDelete =
+      FirebaseFirestore.instance.collection('calls').doc(calleeUid);
+
+  final candidatesCollectionToDelete = docToDelete.collection('candidates');
+
+  final candidatesCollectionData = await candidatesCollectionToDelete.get();
+
+  debugPrint('Deleting candidates...');
+
+  await candidatesCollectionData.docs.map((doc) => doc.reference.delete()).wait;
+
+  debugPrint('Deleting complete doc...');
+
+  await docToDelete.delete();
+
+  debugPrint('Call data deletion complete ✅');
 }
 
 void _controlsLog(String msg) => debugPrint('CONTROLS => $msg');

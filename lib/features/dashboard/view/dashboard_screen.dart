@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:playtogether/features/auth/provider/auth_providers.dart';
+import 'package:playtogether/features/auth/provider/user_providers.dart';
 import 'package:playtogether/features/auth/view/auth_screen.dart';
 import 'package:playtogether/features/call/view/call_screen.dart';
 import 'package:playtogether/features/dashboard/view/add_friends_screen.dart';
@@ -39,6 +40,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   Widget build(BuildContext context) {
     final userNotifier = ref.watch(authenticatedUserProvider.notifier);
 
+    final incomingCallUser =
+        ref.watch(userProvider(uid: incomingCallData?['callerId'])).valueOrNull;
+
     ref.listen(authenticatedUserProvider, (oldState, newState) {
       if (oldState?.valueOrNull != null && newState.valueOrNull == null) {
         context.pushAndRemoveUntil(const AuthScreen());
@@ -53,16 +57,27 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               const Text('Dashboard'),
-              if (incomingCallData != null)
+              if (incomingCallData != null && incomingCallUser != null)
                 Row(
                   children: [
-                    Flexible(
-                      child: Text(
-                        '${incomingCallData?['callerId']} is calling you',
+                    if (incomingCallUser.photoURL != null)
+                      SizedBox(
+                        width: 32,
+                        height: 32,
+                        child: Image.network(incomingCallUser.photoURL!),
                       ),
+                    Flexible(
+                      child: Text('${incomingCallUser.name} is calling you'),
                     ),
                     FilledButton(
-                      onPressed: () {},
+                      onPressed: () async {
+                        final currentUser = await ref.read(
+                          authenticatedUserProvider.future,
+                        );
+                        if (currentUser != null) {
+                          deleteCallRelatedData(currentUser.uid);
+                        }
+                      },
                       child: const Text('Decline'),
                     ),
                     FilledButton(
@@ -72,7 +87,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         );
                         if (currentUser != null) {
                           _joinCall(
-                            callerId: incomingCallData?['callerId'],
+                            callerId: incomingCallUser.uid,
                             calleeId: currentUser.uid,
                             offer: incomingCallData?['offer'],
                           );
