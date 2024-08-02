@@ -11,9 +11,11 @@ part 'pt_user.g.dart';
 class PTUser with _$PTUser {
   const factory PTUser({
     required String uid,
-    required String name,
-    required String email,
+    required String? name,
+    required String? email,
     required String? photoURL,
+    required List<String> friendsUids,
+    required List<String> friendRequestsUids,
   }) = _PTUser;
 
   factory PTUser.fromJson(Map<String, Object?> json) => _$PTUserFromJson(json);

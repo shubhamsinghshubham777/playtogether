@@ -58,8 +58,8 @@ class _PTAppState extends ConsumerState<PTApp> {
   @override
   void initState() {
     postFrameCallBack(() async {
-      final user = await ref.read(authenticatedUserProvider.future);
-      setState(() => isLoggedIn = user != null);
+      final userId = await ref.read(currentUserIdProvider.future);
+      setState(() => isLoggedIn = userId != null);
     });
     super.initState();
   }

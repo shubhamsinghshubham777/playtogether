@@ -11,10 +11,10 @@ class AuthScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final userState = ref.watch(authenticatedUserProvider);
-    final userNotifier = ref.watch(authenticatedUserProvider.notifier);
+    final currentUserIdState = ref.watch(currentUserIdProvider);
+    final userNotifier = ref.watch(currentUserIdProvider.notifier);
 
-    ref.listen(authenticatedUserProvider, (_, newState) async {
+    ref.listen(currentUserIdProvider, (_, newState) async {
       if (newState.valueOrNull != null) {
         if (isDesktop) {
           await windowManager.show();
@@ -27,7 +27,7 @@ class AuthScreen extends ConsumerWidget {
     return Scaffold(
       body: Column(
         children: [
-          Text('User is: $userState'),
+          Text('User is: $currentUserIdState'),
           FilledButton(
             onPressed: userNotifier.signInWithGoogle,
             child: const Text('Login with Google'),

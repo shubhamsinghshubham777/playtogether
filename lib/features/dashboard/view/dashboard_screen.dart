@@ -38,12 +38,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final userNotifier = ref.watch(authenticatedUserProvider.notifier);
+    final currentUserData = ref.watch(currentUserDataProvider).valueOrNull;
+    final userNotifier = ref.watch(currentUserIdProvider.notifier);
 
     final incomingCallUser =
         ref.watch(userProvider(uid: incomingCallData?['callerId'])).valueOrNull;
 
-    ref.listen(authenticatedUserProvider, (oldState, newState) {
+    ref.listen(currentUserIdProvider, (oldState, newState) {
       if (oldState?.valueOrNull != null && newState.valueOrNull == null) {
         context.pushAndRemoveUntil(const AuthScreen());
       }
@@ -56,6 +57,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              Text('currentUserData: $currentUserData'),
               const Text('Dashboard'),
               if (incomingCallData != null && incomingCallUser != null)
                 Row(
@@ -71,24 +73,24 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     ),
                     FilledButton(
                       onPressed: () async {
-                        final currentUser = await ref.read(
-                          authenticatedUserProvider.future,
+                        final currentUserId = await ref.read(
+                          currentUserIdProvider.future,
                         );
-                        if (currentUser != null) {
-                          deleteCallRelatedData(currentUser.uid);
+                        if (currentUserId != null) {
+                          deleteCallRelatedData(currentUserId);
                         }
                       },
                       child: const Text('Decline'),
                     ),
                     FilledButton(
                       onPressed: () async {
-                        final currentUser = await ref.read(
-                          authenticatedUserProvider.future,
+                        final currentUserId = await ref.read(
+                          currentUserIdProvider.future,
                         );
-                        if (currentUser != null) {
+                        if (currentUserId != null) {
                           _joinCall(
                             callerId: incomingCallUser.uid,
-                            calleeId: currentUser.uid,
+                            calleeId: currentUserId,
                             offer: incomingCallData?['offer'],
                           );
                         }
@@ -112,12 +114,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               ),
               FilledButton(
                 onPressed: () async {
-                  final currentUser = await ref.read(
-                    authenticatedUserProvider.future,
+                  final currentUserId = await ref.read(
+                    currentUserIdProvider.future,
                   );
-                  if (currentUser != null) {
+                  if (currentUserId != null) {
                     _joinCall(
-                      callerId: currentUser.uid,
+                      callerId: currentUserId,
                       calleeId: _calleeEmailController.text,
                     );
                   }
@@ -149,11 +151,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   }
 
   Future<void> _observeIncomingCall() async {
-    final currentUser = await ref.read(authenticatedUserProvider.future);
-    if (currentUser != null) {
+    final currentUserId = await ref.read(currentUserIdProvider.future);
+    if (currentUserId != null) {
       FirebaseFirestore.instance
           .collection('calls')
-          .doc(currentUser.uid)
+          .doc(currentUserId)
           .snapshots()
           .listen((snapshot) {
         if (snapshot.data()?.containsKey('callerId') ?? false) {
