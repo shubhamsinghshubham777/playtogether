@@ -1,13 +1,10 @@
 import 'package:awesome_extensions/awesome_extensions.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:playtogether/features/auth/provider/auth_providers.dart';
 import 'package:playtogether/features/auth/view/auth_screen.dart';
-import 'package:playtogether/features/call/view/call_screen.dart';
-import 'package:playtogether/features/dashboard/provider/friend_provider.dart';
 import 'package:playtogether/features/dashboard/view/add_friends_screen.dart';
-import 'package:playtogether/utils.dart';
+import 'package:playtogether/features/dashboard/view/friends_screen.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
@@ -18,32 +15,9 @@ class DashboardScreen extends ConsumerStatefulWidget {
 
 class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   int selectedScreenIndex = 0;
-  final _calleeEmailController = TextEditingController();
-  DocumentSnapshot? incomingCallData;
-
-  @override
-  void initState() {
-    postFrameCallBack(_observeIncomingCall);
-    super.initState();
-  }
-
-  @override
-  void setState(VoidCallback fn) {
-    if (!mounted) {
-      return;
-    }
-
-    super.setState(fn);
-  }
 
   @override
   Widget build(BuildContext context) {
-    final currentUserData = ref.watch(currentUserDataProvider).valueOrNull;
-    final userNotifier = ref.watch(currentUserIdProvider.notifier);
-
-    final incomingCallUser =
-        ref.watch(userProvider(uid: incomingCallData?['callerId'])).valueOrNull;
-
     ref.listen(currentUserIdProvider, (oldState, newState) {
       if (oldState?.valueOrNull != null && newState.valueOrNull == null) {
         context.pushAndRemoveUntil(const AuthScreen());
@@ -53,83 +27,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     return Scaffold(
       body: IndexedStack(
         index: selectedScreenIndex,
-        children: [
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('currentUserData: $currentUserData'),
-              const Text('Dashboard'),
-              if (incomingCallData != null && incomingCallUser != null)
-                Row(
-                  children: [
-                    if (incomingCallUser.photoURL != null)
-                      SizedBox(
-                        width: 32,
-                        height: 32,
-                        child: Image.network(incomingCallUser.photoURL!),
-                      ),
-                    Flexible(
-                      child: Text('${incomingCallUser.name} is calling you'),
-                    ),
-                    FilledButton(
-                      onPressed: () async {
-                        final currentUserId = await ref.read(
-                          currentUserIdProvider.future,
-                        );
-                        if (currentUserId != null) {
-                          deleteCallRelatedData(currentUserId);
-                        }
-                      },
-                      child: const Text('Decline'),
-                    ),
-                    FilledButton(
-                      onPressed: () async {
-                        final currentUserId = await ref.read(
-                          currentUserIdProvider.future,
-                        );
-                        if (currentUserId != null) {
-                          _joinCall(
-                            callerId: incomingCallUser.uid,
-                            calleeId: currentUserId,
-                            offer: incomingCallData?['offer'],
-                          );
-                        }
-                      },
-                      child: const Text('Answer'),
-                    ),
-                  ],
-                ),
-              FilledButton(
-                onPressed: userNotifier.signOut,
-                child: const Text('Sign out'),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(24),
-                child: TextField(
-                  controller: _calleeEmailController,
-                  decoration: const InputDecoration(
-                    hintText: 'Enter email of who you want to call',
-                  ),
-                ),
-              ),
-              FilledButton(
-                onPressed: () async {
-                  final currentUserId = await ref.read(
-                    currentUserIdProvider.future,
-                  );
-                  if (currentUserId != null) {
-                    _joinCall(
-                      callerId: currentUserId,
-                      calleeId: _calleeEmailController.text,
-                    );
-                  }
-                },
-                child: const Text('Call'),
-              ),
-            ],
-          ),
-          const AddFriendsScreen(),
-        ],
+        children: const [FriendsScreen(), AddFriendsScreen()],
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: selectedScreenIndex,
@@ -147,34 +45,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           ),
         ],
       ),
-    );
-  }
-
-  Future<void> _observeIncomingCall() async {
-    final currentUserId = await ref.read(currentUserIdProvider.future);
-    if (currentUserId != null) {
-      FirebaseFirestore.instance
-          .collection('calls')
-          .doc(currentUserId)
-          .snapshots()
-          .listen((snapshot) {
-        if (snapshot.data()?.containsKey('callerId') ?? false) {
-          debugPrint('New incoming call data: ${snapshot.data()}');
-          setState(() => incomingCallData = snapshot);
-        } else {
-          setState(() => incomingCallData = null);
-        }
-      });
-    }
-  }
-
-  void _joinCall({
-    required String callerId,
-    required String calleeId,
-    dynamic offer,
-  }) {
-    context.push(
-      CallScreen(callerUid: callerId, calleeUid: calleeId, offer: offer),
     );
   }
 }
