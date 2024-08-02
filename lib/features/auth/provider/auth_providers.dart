@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:google_sign_in_all_platforms/google_sign_in_all_platforms.dart';
 import 'package:playtogether/env.dart';
 import 'package:playtogether/features/auth/model/pt_user.dart';
+import 'package:playtogether/features/dashboard/provider/friend_provider.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'auth_providers.g.dart';
@@ -79,17 +80,10 @@ GoogleSignIn googleClient(GoogleClientRef ref) {
 }
 
 @riverpod
-Stream<PTUser?> currentUserData(CurrentUserDataRef ref) async* {
+Future<PTUser?> currentUserData(CurrentUserDataRef ref) async {
   final userId = ref.watch(currentUserIdProvider).valueOrNull;
   if (userId != null) {
-    yield* FirebaseFirestore.instance
-        .collection('users')
-        .doc(userId)
-        .snapshots()
-        .map((docSnapshot) {
-      final rawData = docSnapshot.data();
-      if (rawData != null) return PTUser.fromJson(rawData);
-      return null;
-    });
+    return ref.watch(userProvider(uid: userId)).valueOrNull;
   }
+  return null;
 }

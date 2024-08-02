@@ -3,9 +3,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:playtogether/features/auth/provider/auth_providers.dart';
-import 'package:playtogether/features/auth/provider/user_providers.dart';
 import 'package:playtogether/features/auth/view/auth_screen.dart';
 import 'package:playtogether/features/call/view/call_screen.dart';
+import 'package:playtogether/features/dashboard/provider/friend_provider.dart';
 import 'package:playtogether/features/dashboard/view/add_friends_screen.dart';
 import 'package:playtogether/utils.dart';
 
