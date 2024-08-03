@@ -16,7 +16,6 @@ class FriendsScreen extends ConsumerStatefulWidget {
 
 class _FriendsScreenState extends ConsumerState<FriendsScreen> {
   DocumentSnapshot? incomingCallData;
-  final _calleeEmailController = TextEditingController();
 
   @override
   void initState() {
@@ -26,10 +25,7 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen> {
 
   @override
   void setState(VoidCallback fn) {
-    if (!mounted) {
-      return;
-    }
-
+    if (!mounted) return;
     super.setState(fn);
   }
 
@@ -91,39 +87,39 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen> {
           onPressed: userNotifier.signOut,
           child: const Text('Sign out'),
         ),
-        Padding(
-          padding: const EdgeInsets.all(24),
-          child: TextField(
-            controller: _calleeEmailController,
-            decoration: const InputDecoration(
-              hintText: 'Enter email of who you want to call',
-            ),
-          ),
-        ),
-        FilledButton(
-          onPressed: () async {
-            final currentUserId = await ref.read(
-              currentUserIdProvider.future,
-            );
-            if (currentUserId != null && context.mounted) {
-              _joinCall(
-                context: context,
-                callerId: currentUserId,
-                calleeId: _calleeEmailController.text,
-              );
-            }
-          },
-          child: const Text('Call'),
-        ),
         if (currentUserData?.friendsUids.isNotEmpty ?? false)
           Expanded(
-            child: ListView.builder(
-              itemCount: currentUserData?.friendsUids.length,
-              itemBuilder: (listContext, index) {
-                return _FriendListTile(
-                  uid: currentUserData!.friendsUids[index],
-                );
-              },
+            child: Column(
+              children: [
+                const Text('Your friends'),
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: currentUserData?.friendsUids.length,
+                    itemBuilder: (_, index) {
+                      final uid = currentUserData!.friendsUids[index];
+                      return _FriendListTile(key: ValueKey(uid), uid: uid);
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        if (currentUserData?.friendRequestsUids.isNotEmpty ?? false)
+          Expanded(
+            child: Column(
+              children: [
+                const Text('Your friend requests'),
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: currentUserData?.friendRequestsUids.length,
+                    itemBuilder: (_, index) {
+                      final uid = currentUserData!.friendRequestsUids[index];
+                      return _FriendRequestListTile(
+                          key: ValueKey(uid), uid: uid);
+                    },
+                  ),
+                ),
+              ],
             ),
           ),
       ],
@@ -158,10 +154,9 @@ class _FriendListTile extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final currentUser = ref.watch(currentUserDataProvider).valueOrNull;
     final friend = ref.watch(userProvider(uid: uid)).valueOrNull;
+    final friendUpdater = ref.watch(friendshipStateProvider(uid: uid).notifier);
 
-    if (friend == null || currentUser == null) {
-      return const SizedBox.shrink();
-    }
+    if (friend == null || currentUser == null) return const SizedBox.shrink();
 
     return ListTile(
       onTap: () => _joinCall(
@@ -173,7 +168,53 @@ class _FriendListTile extends ConsumerWidget {
           ? Image.network(friend.photoURL!, width: 32, height: 32)
           : null,
       title: Text(friend.name ?? ''),
-      trailing: const Icon(Icons.arrow_forward),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.arrow_forward),
+          IconButton(
+            onPressed: () => friendUpdater.unfriend(uid: uid),
+            icon: const Icon(Icons.person_remove),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FriendRequestListTile extends ConsumerWidget {
+  const _FriendRequestListTile({super.key, required this.uid});
+
+  final String uid;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final currentUser = ref.watch(currentUserDataProvider).valueOrNull;
+    final friend = ref.watch(userProvider(uid: uid)).valueOrNull;
+    final friendUpdater = ref.watch(friendshipStateProvider(uid: uid).notifier);
+
+    if (friend == null || currentUser == null) {
+      return const SizedBox.shrink();
+    }
+
+    return ListTile(
+      leading: friend.photoURL != null
+          ? Image.network(friend.photoURL!, width: 32, height: 32)
+          : null,
+      title: Text(friend.name ?? ''),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            onPressed: () => friendUpdater.rejectFriendRequest(uid: uid),
+            icon: const Icon(Icons.close),
+          ),
+          IconButton(
+            onPressed: () => friendUpdater.acceptFriendRequest(uid: uid),
+            icon: const Icon(Icons.check),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -53,7 +53,7 @@ class CurrentUserId extends _$CurrentUserId {
     if (!docSnapshot.exists && user != null) {
       final ptUser = PTUser(
         uid: user.uid,
-        name: user.displayName,
+        name: user.displayName?.toUpperCase(),
         email: user.email,
         photoURL: user.photoURL,
         friendsUids: [],
@@ -80,10 +80,22 @@ GoogleSignIn googleClient(GoogleClientRef ref) {
 }
 
 @riverpod
-Future<PTUser?> currentUserData(CurrentUserDataRef ref) async {
-  final userId = ref.watch(currentUserIdProvider).valueOrNull;
-  if (userId != null) {
-    return ref.watch(userProvider(uid: userId)).valueOrNull;
+class CurrentUserData extends _$CurrentUserData {
+  @override
+  Future<PTUser?> build() async {
+    final userId = ref.watch(currentUserIdProvider).valueOrNull;
+    if (userId != null) {
+      return ref.watch(userProvider(uid: userId)).valueOrNull;
+    }
+    return null;
   }
-  return null;
+
+  Future<void> updateUserData(PTUser? user) async {
+    if (user != null) {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .set(user.toJson());
+    }
+  }
 }
