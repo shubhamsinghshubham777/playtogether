@@ -16,6 +16,7 @@ dependencies:
   firebase_storage: ^12.1.1
   flutter:
     sdk: flutter
+  flutter_animate: ^4.5.0
   flutter_riverpod: ^2.5.1
   flutter_webrtc: ^0.11.5
   freezed_annotation: ^2.4.4
@@ -50,3 +51,12 @@ dependency_overrides:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/image/
+    - assets/icon/
+
+flutter_assets:
+  assets_path: assets/
+  output_path: lib/
+  filename: assets.dart
+  field_prefix:

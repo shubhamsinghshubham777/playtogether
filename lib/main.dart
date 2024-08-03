@@ -1,4 +1,5 @@
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -39,10 +40,7 @@ Future<void> _setupDesktopWindow() async {
     minimumSize: Size(400, 600),
     center: true,
   );
-  windowManager.waitUntilReadyToShow(windowOptions, () async {
-    await windowManager.show();
-    await windowManager.focus();
-  });
+  await windowManager.waitUntilReadyToShow(windowOptions, windowManager.show);
 }
 
 class PTApp extends ConsumerStatefulWidget {
@@ -70,6 +68,7 @@ class _PTAppState extends ConsumerState<PTApp> {
       themeMode: ThemeMode.dark,
       theme: ThemeData.light(useMaterial3: true),
       darkTheme: ThemeData.dark(useMaterial3: true),
+      scrollBehavior: const CupertinoScrollBehavior(),
       home: isLoggedIn != null
           ? Scaffold(
               body: isLoggedIn == true

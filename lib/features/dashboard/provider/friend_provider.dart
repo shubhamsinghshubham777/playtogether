@@ -97,7 +97,6 @@ class FriendshipState extends _$FriendshipState {
 
     final isAlreadyFriend =
         friendData?.friendsUids.contains(currentUserData?.uid) ?? false;
-    ;
 
     if (isRequestAlreadySent) {
       throw Exception(
