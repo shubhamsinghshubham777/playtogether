@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:playtogether/features/auth/provider/auth_providers.dart';
 import 'package:playtogether/features/auth/view/auth_screen.dart';
+import 'package:playtogether/features/dashboard/view/account_screen.dart';
 import 'package:playtogether/features/dashboard/view/add_friends_screen.dart';
 import 'package:playtogether/features/dashboard/view/friends_screen.dart';
 
@@ -27,7 +28,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     return Scaffold(
       body: IndexedStack(
         index: selectedScreenIndex,
-        children: const [FriendsScreen(), AddFriendsScreen()],
+        children: const [
+          FriendsScreen(),
+          AddFriendsScreen(),
+          AccountScreen(),
+        ],
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: selectedScreenIndex,
@@ -42,6 +47,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             icon: Icon(Icons.person_add_outlined),
             activeIcon: Icon(Icons.person_add),
             label: 'Add Friend',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.settings_outlined),
+            activeIcon: Icon(Icons.settings),
+            label: 'Account',
           ),
         ],
       ),

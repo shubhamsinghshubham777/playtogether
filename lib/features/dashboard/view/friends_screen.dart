@@ -32,97 +32,97 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen> {
   @override
   Widget build(BuildContext context) {
     final currentUserData = ref.watch(currentUserDataProvider).valueOrNull;
-    final userNotifier = ref.watch(currentUserIdProvider.notifier);
 
     final incomingCallUser =
         ref.watch(userProvider(uid: incomingCallData?['callerId'])).valueOrNull;
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text('currentUserData: $currentUserData'),
-        const Text('Dashboard'),
-        if (incomingCallData != null && incomingCallUser != null)
-          Row(
-            children: [
-              if (incomingCallUser.photoURL != null)
-                SizedBox(
-                  width: 32,
-                  height: 32,
-                  child: Image.network(incomingCallUser.photoURL!),
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Dashboard'),
+        centerTitle: true,
+      ),
+      body: Column(
+        children: [
+          if (incomingCallData != null && incomingCallUser != null)
+            Row(
+              children: [
+                if (incomingCallUser.photoURL != null)
+                  SizedBox(
+                    width: 32,
+                    height: 32,
+                    child: Image.network(incomingCallUser.photoURL!),
+                  ),
+                Flexible(
+                  child: Text('${incomingCallUser.name} is calling you'),
                 ),
-              Flexible(
-                child: Text('${incomingCallUser.name} is calling you'),
-              ),
-              FilledButton(
-                onPressed: () async {
-                  final currentUserId = await ref.read(
-                    currentUserIdProvider.future,
-                  );
-                  if (currentUserId != null) {
-                    deleteCallRelatedData(currentUserId);
-                  }
-                },
-                child: const Text('Decline'),
-              ),
-              FilledButton(
-                onPressed: () async {
-                  final currentUserId = await ref.read(
-                    currentUserIdProvider.future,
-                  );
-                  if (currentUserId != null && context.mounted) {
-                    _joinCall(
-                      context: context,
-                      callerId: incomingCallUser.uid,
-                      calleeId: currentUserId,
-                      offer: incomingCallData?['offer'],
+                FilledButton(
+                  onPressed: () async {
+                    final currentUserId = await ref.read(
+                      currentUserIdProvider.future,
                     );
-                  }
-                },
-                child: const Text('Answer'),
+                    if (currentUserId != null) {
+                      deleteCallRelatedData(currentUserId);
+                    }
+                  },
+                  child: const Text('Decline'),
+                ),
+                FilledButton(
+                  onPressed: () async {
+                    final currentUserId = await ref.read(
+                      currentUserIdProvider.future,
+                    );
+                    if (currentUserId != null && context.mounted) {
+                      _joinCall(
+                        context: context,
+                        callerId: incomingCallUser.uid,
+                        calleeId: currentUserId,
+                        offer: incomingCallData?['offer'],
+                      );
+                    }
+                  },
+                  child: const Text('Answer'),
+                ),
+              ],
+            ),
+          if (currentUserData?.friendsUids.isNotEmpty ?? false)
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Your friends'),
+                  Expanded(
+                    child: ListView.builder(
+                      itemCount: currentUserData?.friendsUids.length,
+                      itemBuilder: (_, index) {
+                        final uid = currentUserData!.friendsUids[index];
+                        return _FriendListTile(key: ValueKey(uid), uid: uid);
+                      },
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
-        FilledButton(
-          onPressed: userNotifier.signOut,
-          child: const Text('Sign out'),
-        ),
-        if (currentUserData?.friendsUids.isNotEmpty ?? false)
-          Expanded(
-            child: Column(
-              children: [
-                const Text('Your friends'),
-                Expanded(
-                  child: ListView.builder(
-                    itemCount: currentUserData?.friendsUids.length,
-                    itemBuilder: (_, index) {
-                      final uid = currentUserData!.friendsUids[index];
-                      return _FriendListTile(key: ValueKey(uid), uid: uid);
-                    },
-                  ),
-                ),
-              ],
             ),
-          ),
-        if (currentUserData?.friendRequestsUids.isNotEmpty ?? false)
-          Expanded(
-            child: Column(
-              children: [
-                const Text('Your friend requests'),
-                Expanded(
-                  child: ListView.builder(
-                    itemCount: currentUserData?.friendRequestsUids.length,
-                    itemBuilder: (_, index) {
-                      final uid = currentUserData!.friendRequestsUids[index];
-                      return _FriendRequestListTile(
-                          key: ValueKey(uid), uid: uid);
-                    },
+          if (currentUserData?.friendRequestsUids.isNotEmpty ?? false)
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Your friend requests'),
+                  Expanded(
+                    child: ListView.builder(
+                      itemCount: currentUserData?.friendRequestsUids.length,
+                      itemBuilder: (_, index) {
+                        final uid = currentUserData!.friendRequestsUids[index];
+                        return _FriendRequestListTile(
+                            key: ValueKey(uid), uid: uid);
+                      },
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-      ],
+        ],
+      ),
     );
   }
 
