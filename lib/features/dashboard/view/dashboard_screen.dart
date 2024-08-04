@@ -1,11 +1,12 @@
 import 'package:awesome_extensions/awesome_extensions.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/material.dart';
 import 'package:playtogether/features/auth/provider/auth_providers.dart';
 import 'package:playtogether/features/auth/view/auth_screen.dart';
 import 'package:playtogether/features/dashboard/view/account_screen.dart';
-import 'package:playtogether/features/dashboard/view/add_friends_screen.dart';
+import 'package:playtogether/features/dashboard/view/add_friends_bottom_sheet.dart';
 import 'package:playtogether/features/dashboard/view/friends_screen.dart';
+import 'package:playtogether/utils.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
@@ -26,34 +27,36 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     });
 
     return Scaffold(
-      body: IndexedStack(
-        index: selectedScreenIndex,
-        children: const [
-          FriendsScreen(),
-          AddFriendsScreen(),
-          AccountScreen(),
+      appBar: AppBar(
+        title: const Text('PlayTogether'),
+        centerTitle: true,
+        elevation: 16,
+        scrolledUnderElevation: 16,
+        actions: [
+          IconButton(
+            onPressed: () => showModalBottomSheet(
+              context: context,
+              builder: (_) => const AccountScreen(),
+              showDragHandle: true,
+            ),
+            icon: const Icon(Icons.settings),
+          ),
+          const SizedBox(width: 8),
         ],
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: selectedScreenIndex,
-        onTap: (index) => setState(() => selectedScreenIndex = index),
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person_outline),
-            activeIcon: Icon(Icons.person),
-            label: 'Friends',
+      body: const FriendsScreen(),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => showModalBottomSheet(
+          context: context,
+          builder: (_) => const AddFriendsBottomSheet(),
+          showDragHandle: true,
+          isScrollControlled: true,
+          constraints: BoxConstraints(
+            maxHeight:
+                context.height * (!isDesktop && context.isLandscape ? 1 : 0.75),
           ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person_add_outlined),
-            activeIcon: Icon(Icons.person_add),
-            label: 'Add Friend',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.settings_outlined),
-            activeIcon: Icon(Icons.settings),
-            label: 'Account',
-          ),
-        ],
+        ),
+        child: const Icon(Icons.person_add),
       ),
     );
   }

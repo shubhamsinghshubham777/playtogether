@@ -1,5 +1,5 @@
 import 'package:firebase_core/firebase_core.dart';
-import 'package:flutter/cupertino.dart';
+import 'package:flex_color_scheme/flex_color_scheme.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -36,8 +36,8 @@ Future<void> _setupFirebase() async {
 Future<void> _setupDesktopWindow() async {
   await windowManager.ensureInitialized();
   const windowOptions = WindowOptions(
-    size: Size(1000, 800),
-    minimumSize: Size(400, 600),
+    size: Size(1000, 1000),
+    minimumSize: Size(400, 800),
     center: true,
   );
   await windowManager.waitUntilReadyToShow(windowOptions, windowManager.show);
@@ -66,9 +66,11 @@ class _PTAppState extends ConsumerState<PTApp> {
   Widget build(BuildContext context) {
     return MaterialApp(
       themeMode: ThemeMode.dark,
-      theme: ThemeData.light(useMaterial3: true),
-      darkTheme: ThemeData.dark(useMaterial3: true),
-      scrollBehavior: const CupertinoScrollBehavior(),
+      darkTheme: FlexThemeData.dark(
+        scheme: FlexScheme.greenM3,
+        useMaterial3: true,
+        useMaterial3ErrorColors: true,
+      ),
       home: isLoggedIn != null
           ? Scaffold(
               body: isLoggedIn == true

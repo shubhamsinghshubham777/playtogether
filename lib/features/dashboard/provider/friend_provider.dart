@@ -40,6 +40,10 @@ class SearchFriendResult extends _$SearchFriendResult {
   AsyncValue<List<PTUser>> build() => const AsyncData([]);
 
   Future<void> searchFriendsByName(String friendName) async {
+    if (friendName.isEmpty) {
+      state = const AsyncData([]);
+      return;
+    }
     state = const AsyncLoading();
     state = await AsyncValue.guard(() async {
       final currentUserData = await ref.read(currentUserDataProvider.future);
