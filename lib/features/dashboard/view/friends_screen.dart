@@ -50,6 +50,7 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen> {
                   child: FadeInImage.assetNetwork(
                     placeholder: Assets.imageTransparent,
                     image: incomingCallUser.photoURL!,
+                    imageErrorBuilder: (_, __, ___) => networkImageErrorIcon,
                     fit: BoxFit.cover,
                   ),
                 ),
@@ -225,6 +226,7 @@ class _FriendGridItem extends ConsumerWidget {
                   : FadeInImage.assetNetwork(
                       placeholder: Assets.imageTransparent,
                       image: friend.photoURL!,
+                      imageErrorBuilder: (_, __, ___) => networkImageErrorIcon,
                       fit: BoxFit.cover,
                     ),
             ),
@@ -390,6 +392,7 @@ class _FriendRequestListItem extends ConsumerWidget {
                 ? FadeInImage.assetNetwork(
                     placeholder: Assets.imageTransparent,
                     image: friend.photoURL!,
+                    imageErrorBuilder: (_, __, ___) => networkImageErrorIcon,
                     width: double.infinity,
                     height: double.infinity,
                     fit: BoxFit.cover,
@@ -523,3 +526,5 @@ void _joinCall({
     CallScreen(callerUid: callerId, calleeUid: calleeId, offer: offer),
   );
 }
+
+const networkImageErrorIcon = Icon(Icons.error_outline, size: 100);

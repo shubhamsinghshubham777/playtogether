@@ -34,10 +34,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         scrolledUnderElevation: 16,
         actions: [
           IconButton(
-            onPressed: () => showModalBottomSheet(
+            onPressed: () => _showModalBottomSheet(
               context: context,
-              builder: (_) => const AccountScreen(),
-              showDragHandle: true,
+              child: const AccountScreen(),
             ),
             icon: const Icon(Icons.settings),
           ),
@@ -46,18 +45,29 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       ),
       body: const FriendsScreen(),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => showModalBottomSheet(
+        onPressed: () => _showModalBottomSheet(
           context: context,
-          builder: (_) => const AddFriendsBottomSheet(),
-          showDragHandle: true,
-          isScrollControlled: true,
-          constraints: BoxConstraints(
-            maxHeight:
-                context.height * (!isDesktop && context.isLandscape ? 1 : 0.75),
-          ),
+          child: const AddFriendsBottomSheet(),
         ),
         child: const Icon(Icons.person_add),
       ),
     );
   }
+}
+
+void _showModalBottomSheet({
+  required BuildContext context,
+  required Widget child,
+}) {
+  showModalBottomSheet(
+    context: context,
+    builder: (_) => child,
+    showDragHandle: true,
+    isScrollControlled: true,
+    constraints: BoxConstraints(
+      maxWidth: 600,
+      maxHeight:
+          context.height * (!isDesktop && context.isLandscape ? 1 : 0.75),
+    ),
+  );
 }

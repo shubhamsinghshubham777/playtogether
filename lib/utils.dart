@@ -8,3 +8,16 @@ bool isDesktop = defaultTargetPlatform == TargetPlatform.windows ||
 void postFrameCallBack(VoidCallback callback) {
   WidgetsBinding.instance.addPostFrameCallback((_) => callback());
 }
+
+List<Widget> verticalSpace(double space, List<Widget> children) {
+  final widgets = <Widget>[];
+  for (var i = 0; i < children.length; i++) {
+    widgets.add(
+      Padding(
+        padding: EdgeInsets.only(bottom: i != children.length ? space : 0),
+        child: children[i],
+      ),
+    );
+  }
+  return widgets;
+}
