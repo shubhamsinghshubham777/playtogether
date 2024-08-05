@@ -9,8 +9,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
+import 'package:playtogether/features/auth/model/pt_user.dart';
 import 'package:playtogether/features/call/model/call_screen_state.dart';
 import 'package:playtogether/features/call/view/pt_video_controls.dart';
+import 'package:playtogether/features/dashboard/provider/friend_provider.dart';
+import 'package:playtogether/utils.dart';
 
 class CallScreen extends ConsumerStatefulWidget {
   const CallScreen({
@@ -23,6 +26,29 @@ class CallScreen extends ConsumerStatefulWidget {
   final String callerUid;
   final String calleeUid;
   final dynamic offer;
+
+  static Future<void> deleteCallRelatedData(String calleeUid) async {
+    debugPrint('Deleting doc having id: $calleeUid');
+
+    final docToDelete =
+        FirebaseFirestore.instance.collection('calls').doc(calleeUid);
+
+    final candidatesCollectionToDelete = docToDelete.collection('candidates');
+
+    final candidatesCollectionData = await candidatesCollectionToDelete.get();
+
+    debugPrint('Deleting candidates...');
+
+    await candidatesCollectionData.docs
+        .map((doc) => doc.reference.delete())
+        .wait;
+
+    debugPrint('Deleting complete doc...');
+
+    await docToDelete.delete();
+
+    debugPrint('Call data deletion complete ✅');
+  }
 
   @override
   ConsumerState<ConsumerStatefulWidget> createState() => _CallScreenState();
@@ -53,6 +79,8 @@ class _CallScreenState extends ConsumerState<CallScreen>
     chatMessage: null,
   );
 
+  String? localVideoName;
+
   @override
   void initState() {
     WidgetsBinding.instance.addObserver(this);
@@ -79,21 +107,19 @@ class _CallScreenState extends ConsumerState<CallScreen>
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    _docExistanceListener?.cancel();
-    _candidateListener?.cancel();
-    deleteCallRelatedData(widget.calleeUid);
-    _localRTCVideoRenderer.dispose();
-    _remoteRTCVideoRenderer.dispose();
-    _localStream?.dispose();
-    _rtcDataChannel?.close();
-    _rtcPeerConnection?.dispose();
-
-    // Video Player
     try {
+      WidgetsBinding.instance.removeObserver(this);
+      _docExistanceListener?.cancel();
+      _candidateListener?.cancel();
+      CallScreen.deleteCallRelatedData(widget.calleeUid);
+      _localRTCVideoRenderer.dispose();
+      _remoteRTCVideoRenderer.dispose();
+      _localStream?.dispose();
+      _rtcDataChannel?.close();
+      _rtcPeerConnection?.dispose();
       videoPlayer.dispose();
     } catch (e, st) {
-      debugPrint('Error while disposing video player: ${e.toString()}');
+      debugPrint('Error while disposing call screen: ${e.toString()}');
       debugPrintStack(stackTrace: st);
     }
     super.dispose();
@@ -101,73 +127,196 @@ class _CallScreenState extends ConsumerState<CallScreen>
 
   @override
   Widget build(BuildContext context) {
+    final callerData =
+        ref.watch(userProvider(uid: widget.callerUid)).valueOrNull;
+
+    final calleeData =
+        ref.watch(userProvider(uid: widget.calleeUid)).valueOrNull;
+
     return Scaffold(
-      appBar: AppBar(),
-      body: Column(
-        children: [
-          Text(
-            'Caller: ${widget.callerUid}'
-            '\nCallee: ${widget.calleeUid}'
-            '\nIs calling or being called?: '
-            '${widget.offer != null ? 'Being called' : 'Calling'}'
-            '\nCurrent message: $screenState',
+      appBar: AppBar(
+        leading: IconButton(
+          onPressed: context.pop<void>,
+          icon: const Icon(Icons.arrow_back),
+        ),
+        title: const Text('Room'),
+        centerTitle: true,
+        actions: [
+          IconButton(
+            onPressed: _openVideoPicker,
+            icon: const Icon(Icons.upload),
           ),
-          FilledButton(
-            onPressed: () async {
-              FilePickerResult? result = await FilePicker.platform.pickFiles();
-              if (result != null) {
-                videoPlayer.open(Media(result.files.single.path!), play: false);
-                _updateScreenState(
-                  screenState.copyWith(videoName: result.files.single.name),
-                );
-              }
-            },
-            child: const Text('Open'),
-          ),
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxHeight: 500),
-            child: AspectRatio(
-              aspectRatio: 16 / 9,
-              child: Video(
-                controller: videoController,
-                controls: (_) => PTVideoControls(
-                  videoPlayer,
-                  onPlayPause: (isPlaying, positionMillis) {
-                    _controlsLog(
-                      'isPlaying: $isPlaying, '
-                      'positionMillis: $positionMillis',
-                    );
-                    _updateScreenState(
-                      screenState.copyWith(
-                        isPlayingVideo: isPlaying,
-                        currentVideoMillis: positionMillis,
-                      ),
-                    );
-                  },
-                  onSeek: (positionMillis) {
-                    _controlsLog('onSeek: $positionMillis');
-                    _updateScreenState(
-                      screenState.copyWith(currentVideoMillis: positionMillis),
-                    );
-                  },
-                ),
-              ),
+          const SizedBox(width: 8),
+        ],
+      ),
+      body: context.isLandscape
+          ? _buildLandscapeScreen(
+              callerData: callerData,
+              calleeData: calleeData,
+            )
+          : _buildPortraitScreen(
+              callerData: callerData,
+              calleeData: calleeData,
             ),
-          ),
-          Expanded(
-            child: GridView(
-              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                maxCrossAxisExtent: 300,
+    );
+  }
+
+  Column _buildLandscapeScreen({PTUser? calleeData, PTUser? callerData}) {
+    final rtcVideoViewSize = context.mediaQueryShortestSide * 0.35;
+    return Column(
+      children: [
+        Expanded(
+          child: Row(
+            children: [
+              Expanded(child: _buildVideoPlayer()),
+              const SizedBox(width: 8),
+              Column(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  SizedBox(
+                    width: rtcVideoViewSize,
+                    height: rtcVideoViewSize,
+                    child: _RTCVideoView(
+                      videoRenderer: _localRTCVideoRenderer,
+                      mirror: false,
+                      user: callerData,
+                    ),
+                  ),
+                  SizedBox(
+                    width: rtcVideoViewSize,
+                    height: rtcVideoViewSize,
+                    child: _RTCVideoView(
+                      videoRenderer: _remoteRTCVideoRenderer,
+                      mirror: false,
+                      user: calleeData,
+                    ),
+                  ),
+                ],
               ),
+              const SizedBox(width: 24),
+            ],
+          ),
+        ),
+        _buildVideoName(),
+        const SizedBox(height: 16),
+      ],
+    );
+  }
+
+  Widget _buildPortraitScreen({PTUser? callerData, PTUser? calleeData}) {
+    return Column(
+      children: [
+        _buildVideoPlayer(),
+        _buildVideoName(),
+        Flexible(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                RTCVideoView(_localRTCVideoRenderer, mirror: true),
-                RTCVideoView(_remoteRTCVideoRenderer),
+                Expanded(
+                  child: AspectRatio(
+                    aspectRatio: 1,
+                    child: _RTCVideoView(
+                      videoRenderer: _localRTCVideoRenderer,
+                      mirror: false,
+                      user: callerData,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: AspectRatio(
+                    aspectRatio: 1,
+                    child: _RTCVideoView(
+                      videoRenderer: _remoteRTCVideoRenderer,
+                      mirror: true,
+                      user: calleeData,
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
-        ],
+        ),
+      ],
+    );
+  }
+
+  Padding _buildVideoName() {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Text(
+        callback(() {
+          if (screenState.videoName == null) {
+            return 'No video loaded, tap the button on the top right to add one';
+          }
+
+          if (screenState.videoName != localVideoName) {
+            return 'Please load the same video as the other person!';
+          }
+
+          return screenState.videoName ?? '';
+        }),
+        style: context.titleLarge?.copyWith(
+          color: screenState.videoName == null ||
+                  screenState.videoName != localVideoName
+              ? context.theme.colorScheme.error
+              : null,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 1,
+        ),
+        textAlign: TextAlign.center,
+        maxLines: 3,
+        overflow: TextOverflow.ellipsis,
       ),
     );
+  }
+
+  Widget _buildVideoPlayer() {
+    return Padding(
+      padding: const EdgeInsets.all(12),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: SizedBox(
+          height: context.isLandscape ? context.height : context.height / 2,
+          child: Video(
+            controller: videoController,
+            controls: (_) => PTVideoControls(
+              videoPlayer,
+              onPlayPause: (isPlaying, positionMillis) {
+                _controlsLog(
+                  'isPlaying: $isPlaying, '
+                  'positionMillis: $positionMillis',
+                );
+                _updateScreenState(
+                  screenState.copyWith(
+                    isPlayingVideo: isPlaying,
+                    currentVideoMillis: positionMillis,
+                  ),
+                );
+              },
+              onSeek: (positionMillis) {
+                _controlsLog('onSeek: $positionMillis');
+                _updateScreenState(
+                  screenState.copyWith(currentVideoMillis: positionMillis),
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openVideoPicker() async {
+    final result = await FilePicker.platform.pickFiles(type: FileType.video);
+    if (result != null) {
+      videoPlayer.open(Media(result.files.single.path!), play: false);
+      final videoName = result.files.single.name;
+      localVideoName = videoName;
+      _updateScreenState(screenState.copyWith(videoName: videoName));
+    }
   }
 
   Future<void> _setupPeerConnection() async {
@@ -373,25 +522,78 @@ class _CallScreenState extends ConsumerState<CallScreen>
   }
 }
 
-Future<void> deleteCallRelatedData(String calleeUid) async {
-  debugPrint('Deleting doc having id: $calleeUid');
+class _RTCVideoView extends StatefulWidget {
+  const _RTCVideoView({
+    required this.videoRenderer,
+    required this.mirror,
+    required this.user,
+  });
 
-  final docToDelete =
-      FirebaseFirestore.instance.collection('calls').doc(calleeUid);
+  final RTCVideoRenderer videoRenderer;
+  final bool mirror;
+  final PTUser? user;
 
-  final candidatesCollectionToDelete = docToDelete.collection('candidates');
+  @override
+  State<_RTCVideoView> createState() => _RTCVideoViewState();
+}
 
-  final candidatesCollectionData = await candidatesCollectionToDelete.get();
+class _RTCVideoViewState extends State<_RTCVideoView> {
+  bool showUserDetails = false;
 
-  debugPrint('Deleting candidates...');
-
-  await candidatesCollectionData.docs.map((doc) => doc.reference.delete()).wait;
-
-  debugPrint('Deleting complete doc...');
-
-  await docToDelete.delete();
-
-  debugPrint('Call data deletion complete ✅');
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(24),
+      child: MouseRegion(
+        onEnter: (_) => setState(() => showUserDetails = true),
+        onExit: (_) => setState(() => showUserDetails = false),
+        child: GestureDetector(
+          onTap: isDesktop
+              ? null
+              : () => setState(() => showUserDetails = !showUserDetails),
+          child: Stack(
+            children: [
+              ColoredBox(
+                color: Colors.black,
+                child: RTCVideoView(
+                  widget.videoRenderer,
+                  mirror: widget.mirror,
+                ),
+              ),
+              AnimatedSwitcher(
+                duration: Durations.short3,
+                child: showUserDetails
+                    ? Container(
+                        alignment: Alignment.bottomCenter,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Colors.transparent,
+                              context.theme.colorScheme.surface,
+                            ],
+                          ),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Text(
+                            widget.user?.name ?? '',
+                            style: context.titleLarge,
+                            maxLines: 3,
+                            textAlign: TextAlign.center,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      )
+                    : null,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 void _controlsLog(String msg) => debugPrint('CONTROLS => $msg');

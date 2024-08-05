@@ -1,11 +1,12 @@
 import 'package:awesome_extensions/awesome_extensions.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/material.dart';
+import 'package:playtogether/assets.dart';
 import 'package:playtogether/features/auth/provider/auth_providers.dart';
 import 'package:playtogether/features/auth/view/auth_screen.dart';
 import 'package:playtogether/features/dashboard/view/account_screen.dart';
-import 'package:playtogether/features/dashboard/view/add_friends_bottom_sheet.dart';
-import 'package:playtogether/features/dashboard/view/friends_screen.dart';
+import 'package:playtogether/features/dashboard/view/friends/add_friends_bottom_sheet.dart';
+import 'package:playtogether/features/dashboard/view/friends/friends_screen.dart';
 import 'package:playtogether/utils.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
@@ -28,10 +29,18 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('PlayTogether'),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Transform.translate(
+              offset: const Offset(0, 3),
+              child: Image.asset(Assets.imageAppLogo, width: 24),
+            ),
+            const SizedBox(width: 12),
+            const Text('PlayTogether'),
+          ],
+        ),
         centerTitle: true,
-        elevation: 16,
-        scrolledUnderElevation: 16,
         actions: [
           IconButton(
             onPressed: () => _showModalBottomSheet(
@@ -44,12 +53,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         ],
       ),
       body: const FriendsScreen(),
-      floatingActionButton: FloatingActionButton(
+      floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showModalBottomSheet(
           context: context,
           child: const AddFriendsBottomSheet(),
         ),
-        child: const Icon(Icons.person_add),
+        icon: const Icon(Icons.person_add),
+        label: const Text('Add Friends'),
       ),
     );
   }

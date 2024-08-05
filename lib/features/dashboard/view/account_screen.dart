@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:playtogether/assets.dart';
 import 'package:playtogether/features/auth/provider/auth_providers.dart';
-import 'package:playtogether/features/dashboard/view/friends_screen.dart';
+import 'package:playtogether/features/dashboard/view/friends/friends_screen.dart';
 import 'package:playtogether/utils.dart';
 
 class AccountScreen extends ConsumerWidget {

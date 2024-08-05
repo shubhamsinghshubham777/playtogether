@@ -33,13 +33,23 @@ class _PTVideoControlsState extends State<PTVideoControls> {
   bool isDurationSliderDragging = false;
   double durationSliderDragValue = 0;
 
-  bool showControls = true;
+  bool showControls = false;
 
   bool isMediaLoaded = false;
   StreamSubscription<dynamic>? mediaTracksSubscription;
 
   @override
   void initState() {
+    // Single state allocations
+    final playerState = widget.player.state;
+    setState(() {
+      playing = playerState.playing;
+      position = playerState.position;
+      duration = playerState.duration;
+      isMediaLoaded = playerState.playlist.medias.isNotEmpty;
+    });
+
+    // Stream subscriptions
     playingSubscription = widget.player.stream.playing.listen(
       (isPlaying) {
         setState(() => playing = isPlaying);
@@ -94,6 +104,7 @@ class _PTVideoControlsState extends State<PTVideoControls> {
               : Stack(
                   alignment: Alignment.center,
                   children: [
+                    Container(color: Colors.black38),
                     Padding(
                       padding: const EdgeInsets.all(24),
                       child: Row(
@@ -137,7 +148,7 @@ class _PTVideoControlsState extends State<PTVideoControls> {
                     Align(
                       alignment: Alignment.bottomLeft,
                       child: SizedBox(
-                        height: 24,
+                        height: 48,
                         child: Slider(
                           value: _durationSliderValue,
                           onChangeStart: (_) => setState(

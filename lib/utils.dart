@@ -9,6 +9,8 @@ void postFrameCallBack(VoidCallback callback) {
   WidgetsBinding.instance.addPostFrameCallback((_) => callback());
 }
 
+T callback<T>(T Function() callback) => callback();
+
 List<Widget> verticalSpace(double space, List<Widget> children) {
   final widgets = <Widget>[];
   for (var i = 0; i < children.length; i++) {
