@@ -127,11 +127,21 @@ class _CallScreenState extends ConsumerState<CallScreen>
 
   @override
   Widget build(BuildContext context) {
-    final callerData =
-        ref.watch(userProvider(uid: widget.callerUid)).valueOrNull;
+    final callerData = ref
+        .watch(
+          userProvider(
+            uid: widget.offer != null ? widget.calleeUid : widget.callerUid,
+          ),
+        )
+        .valueOrNull;
 
-    final calleeData =
-        ref.watch(userProvider(uid: widget.calleeUid)).valueOrNull;
+    final calleeData = ref
+        .watch(
+          userProvider(
+            uid: widget.offer != null ? widget.callerUid : widget.calleeUid,
+          ),
+        )
+        .valueOrNull;
 
     return Scaffold(
       appBar: AppBar(
