@@ -58,6 +58,13 @@ class _PTAppState extends ConsumerState<PTApp> {
     postFrameCallBack(() async {
       final userId = await ref.read(currentUserIdProvider.future);
       setState(() => isLoggedIn = userId != null);
+      // This is a workaround for distortion of window on start up
+      // Ref: https://github.com/leanflutter/window_manager/issues/464#issuecomment-2254384071
+      if (isDesktop) {
+        final size = await windowManager.getSize();
+        windowManager.setSize(Size(size.width + 1, size.height + 1));
+        windowManager.setSize(Size(size.width, size.height));
+      }
     });
     super.initState();
   }
