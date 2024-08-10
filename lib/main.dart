@@ -78,7 +78,6 @@ class _PTAppState extends ConsumerState<PTApp> {
         useMaterial3: true,
         useMaterial3ErrorColors: true,
       ),
-      debugShowCheckedModeBanner: false,
       home: isLoggedIn != null
           ? Scaffold(
               body: isLoggedIn == true

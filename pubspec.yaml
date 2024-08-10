@@ -44,6 +44,7 @@ dev_dependencies:
   freezed: ^2.5.2
   json_serializable: ^6.8.0
   envied_generator: ^0.5.4+1
+  msix: ^3.16.7
 
 dependency_overrides:
   google_sign_in_all_platforms_mobile:
@@ -63,3 +64,10 @@ flutter_assets:
   output_path: lib/
   filename: assets.dart
   field_prefix:
+
+msix_config:
+  capabilities: internetClient, microphone, webcam
+  display_name: PlayTogether
+  identity_name: app.playtogether
+  languages: en-us
+  publisher_display_name: PlayTogether
