@@ -70,4 +70,5 @@ msix_config:
   display_name: PlayTogether
   identity_name: app.playtogether
   languages: en-us
+  logo_path: assets\image\app_logo.png
   publisher_display_name: PlayTogether
