@@ -13,6 +13,8 @@
 
 PlayTogether is a WebRTC-based shared media player. Written in Flutter, it allows you to enjoy your local media with your friends in real-time while having a video call with them 📹📷
 
+### ⚠️ Note: The app only uses a `STUN` server right now, therefore you can only connect to the peers on your same/local network. So make sure to use the same WiFi/LAN when using the app.
+
 ## Screenshots
 
 |   **Feature**  	| **Screenshot** 	|
