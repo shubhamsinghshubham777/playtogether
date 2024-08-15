@@ -17,11 +17,12 @@ PlayTogether is a WebRTC-based shared media player. Written in Flutter, it allow
 
 |   **Feature**  	| **Screenshot** 	|
 |:--------------:	|:--------------:	|
-| Authentication 	| ![1](https://github.com/user-attachments/assets/48b0296f-4fba-4cdf-82ab-b099a109afc6)	|
-|    Dashboard   	| ![2](https://github.com/user-attachments/assets/c8b67bd2-c74f-43b4-ab39-1e503fb8870d)	|
-|     Profile    	| ![3](https://github.com/user-attachments/assets/1d321f34-e65b-4e0f-9307-629b2589e39b)	|
-|  Incoming Call 	| ![4](https://github.com/user-attachments/assets/4cbfc57d-4ae8-442e-979c-27f4c048705a)	|
-|   Video Call   	| ![5](https://github.com/user-attachments/assets/a9d4923e-189f-40a2-a18b-6fa2bf94f5e0)	|
+|   Video Demo  	| <video src="https://github.com/user-attachments/assets/c6d78fb8-e294-4de8-abb2-513c0aff0ddf" /> |
+| Authentication 	| ![1](https://github.com/user-attachments/assets/48b0296f-4fba-4cdf-82ab-b099a109afc6)	          |
+|    Dashboard   	| ![2](https://github.com/user-attachments/assets/c8b67bd2-c74f-43b4-ab39-1e503fb8870d)	          |
+|     Profile    	| ![3](https://github.com/user-attachments/assets/1d321f34-e65b-4e0f-9307-629b2589e39b)	          |
+|  Incoming Call 	| ![4](https://github.com/user-attachments/assets/4cbfc57d-4ae8-442e-979c-27f4c048705a)	          |
+|   Video Call   	| ![5](https://github.com/user-attachments/assets/a9d4923e-189f-40a2-a18b-6fa2bf94f5e0)	          |
 
 ## Get Started
 This project uses [FVM](https://fvm.app/) to lock onto a specific Flutter version. Right now, it uses Flutter `3.22.3`, so please make sure to set up FVM on your system and run `pub use 3.22.3` before starting up the project.
