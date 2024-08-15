@@ -3,23 +3,30 @@
     // Hover to view descriptions of existing attributes.
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
+    // Both variants use `debug` mode because the Windows app does not work on
+    // `release` mode because of some issue with the `media_kit` library
     "configurations": [
         {
-            "name": "playtogether",
+            "args": [
+                "--dart-define",
+                "FLAVOR=development"
+            ],
+            "flutterMode": "debug",
+            "name": "(dev) PlayTogether",
+            "program": "lib/main.dart",
+            "request": "launch",
+            "type": "dart",
+        },
+        {
+            "args": [
+                "--dart-define",
+                "FLAVOR=production"
+            ],
+            "flutterMode": "debug",
+            "name": "(prod) PlayTogether",
+            "program": "lib/main.dart",
             "request": "launch",
             "type": "dart"
         },
-        {
-            "name": "playtogether (profile mode)",
-            "request": "launch",
-            "type": "dart",
-            "flutterMode": "profile"
-        },
-        {
-            "name": "playtogether (release mode)",
-            "request": "launch",
-            "type": "dart",
-            "flutterMode": "release"
-        },
-    ]
+    ],
 }
