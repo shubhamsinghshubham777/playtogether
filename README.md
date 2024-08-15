@@ -42,7 +42,7 @@ GOOGLE_CLIENT_SECRET=GOCSPX-xxxxxx99KnByxxxxxxxSuLhvpxxx
 
 ### For Viewers / Users
 
-If you are a viewer/user and want to install the provided .msix file on your Windows system, please follow this guide to install the certificate to be able to do so:
+If you are a viewer/user and want to install the provided MSIX file (in [releases](https://github.com/shubhamsinghshubham777/playtogether/releases)) on your Windows system, please follow this guide to install the certificate to be able to do so:
 
 1. Select `Properties` from the right-click menu of the MSIX package.
 2. Go to the `Digital Signature` tab.
