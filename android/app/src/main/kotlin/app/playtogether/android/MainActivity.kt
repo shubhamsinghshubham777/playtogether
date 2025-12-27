@@ -1,4 +1,4 @@
-package app.playtogether.playtogether
+package app.playtogether.android
 
 import io.flutter.embedding.android.FlutterActivity
 
