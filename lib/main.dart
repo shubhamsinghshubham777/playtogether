@@ -1,30 +1,40 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:fvp/fvp.dart' as fvp;
+import 'package:media_kit/media_kit.dart';
 import 'package:playtogether/env.dart';
+import 'package:playtogether/pt_video_player.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: ".env");
-  fvp.registerWith(
-    options: {
-      'subtitleFontFile':
-          'https://github.com/mpv-android/mpv-android/raw/master/app/src/main/assets/subfont.ttf',
-    },
-  );
+  MediaKit.ensureInitialized();
   await Supabase.initialize(url: Env.supabaseUrl, anonKey: Env.supabasePublishableKey);
   runApp(const MainApp());
 }
 
-class MainApp extends StatelessWidget {
+class MainApp extends StatefulWidget {
   const MainApp({super.key});
+
+  @override
+  State<MainApp> createState() => _MainAppState();
+}
+
+class _MainAppState extends State<MainApp> {
+  late final player = Player();
+
+  @override
+  void dispose() {
+    player.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       darkTheme: ThemeData.dark(useMaterial3: true),
       themeMode: .dark,
-      home: Scaffold(body: Center(child: Text('Hello World!'))),
+      home: Scaffold(body: PTVideoPlayer(player)),
     );
   }
 }

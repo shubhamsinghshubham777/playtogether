@@ -1,14 +1,20 @@
 PODS:
-  - app_links (6.4.1):
-    - FlutterMacOS
-  - file_picker (0.0.1):
-    - FlutterMacOS
-  - FlutterMacOS (1.0.0)
-  - fvp (0.35.1):
+  - accessing_security_scoped_resource (0.0.1):
     - Flutter
     - FlutterMacOS
-    - mdk (~> 0.35.0)
-  - mdk (0.35.0)
+  - app_links (6.4.1):
+    - FlutterMacOS
+  - file_selector_macos (0.0.1):
+    - FlutterMacOS
+  - FlutterMacOS (1.0.0)
+  - macos_file_picker (0.0.1):
+    - FlutterMacOS
+  - media_kit_libs_macos_video (1.0.4):
+    - FlutterMacOS
+  - media_kit_video (0.0.1):
+    - FlutterMacOS
+  - package_info_plus (0.0.1):
+    - FlutterMacOS
   - path_provider_foundation (0.0.1):
     - Flutter
     - FlutterMacOS
@@ -17,52 +23,62 @@ PODS:
     - FlutterMacOS
   - url_launcher_macos (0.0.1):
     - FlutterMacOS
-  - video_player_avfoundation (0.0.1):
-    - Flutter
+  - wakelock_plus (0.0.1):
     - FlutterMacOS
 
 DEPENDENCIES:
+  - accessing_security_scoped_resource (from `Flutter/ephemeral/.symlinks/plugins/accessing_security_scoped_resource/darwin`)
   - app_links (from `Flutter/ephemeral/.symlinks/plugins/app_links/macos`)
-  - file_picker (from `Flutter/ephemeral/.symlinks/plugins/file_picker/macos`)
+  - file_selector_macos (from `Flutter/ephemeral/.symlinks/plugins/file_selector_macos/macos`)
   - FlutterMacOS (from `Flutter/ephemeral`)
-  - fvp (from `Flutter/ephemeral/.symlinks/plugins/fvp/darwin`)
+  - macos_file_picker (from `Flutter/ephemeral/.symlinks/plugins/macos_file_picker/macos`)
+  - media_kit_libs_macos_video (from `Flutter/ephemeral/.symlinks/plugins/media_kit_libs_macos_video/macos`)
+  - media_kit_video (from `Flutter/ephemeral/.symlinks/plugins/media_kit_video/macos`)
+  - package_info_plus (from `Flutter/ephemeral/.symlinks/plugins/package_info_plus/macos`)
   - path_provider_foundation (from `Flutter/ephemeral/.symlinks/plugins/path_provider_foundation/darwin`)
   - shared_preferences_foundation (from `Flutter/ephemeral/.symlinks/plugins/shared_preferences_foundation/darwin`)
   - url_launcher_macos (from `Flutter/ephemeral/.symlinks/plugins/url_launcher_macos/macos`)
-  - video_player_avfoundation (from `Flutter/ephemeral/.symlinks/plugins/video_player_avfoundation/darwin`)
-
-SPEC REPOS:
-  trunk:
-    - mdk
+  - wakelock_plus (from `Flutter/ephemeral/.symlinks/plugins/wakelock_plus/macos`)
 
 EXTERNAL SOURCES:
+  accessing_security_scoped_resource:
+    :path: Flutter/ephemeral/.symlinks/plugins/accessing_security_scoped_resource/darwin
   app_links:
     :path: Flutter/ephemeral/.symlinks/plugins/app_links/macos
-  file_picker:
-    :path: Flutter/ephemeral/.symlinks/plugins/file_picker/macos
+  file_selector_macos:
+    :path: Flutter/ephemeral/.symlinks/plugins/file_selector_macos/macos
   FlutterMacOS:
     :path: Flutter/ephemeral
-  fvp:
-    :path: Flutter/ephemeral/.symlinks/plugins/fvp/darwin
+  macos_file_picker:
+    :path: Flutter/ephemeral/.symlinks/plugins/macos_file_picker/macos
+  media_kit_libs_macos_video:
+    :path: Flutter/ephemeral/.symlinks/plugins/media_kit_libs_macos_video/macos
+  media_kit_video:
+    :path: Flutter/ephemeral/.symlinks/plugins/media_kit_video/macos
+  package_info_plus:
+    :path: Flutter/ephemeral/.symlinks/plugins/package_info_plus/macos
   path_provider_foundation:
     :path: Flutter/ephemeral/.symlinks/plugins/path_provider_foundation/darwin
   shared_preferences_foundation:
     :path: Flutter/ephemeral/.symlinks/plugins/shared_preferences_foundation/darwin
   url_launcher_macos:
     :path: Flutter/ephemeral/.symlinks/plugins/url_launcher_macos/macos
-  video_player_avfoundation:
-    :path: Flutter/ephemeral/.symlinks/plugins/video_player_avfoundation/darwin
+  wakelock_plus:
+    :path: Flutter/ephemeral/.symlinks/plugins/wakelock_plus/macos
 
 SPEC CHECKSUMS:
+  accessing_security_scoped_resource: 4a87897646efbc3a4578e28ea4c08083d7bf3e67
   app_links: 05a6ec2341985eb05e9f97dc63f5837c39895c3f
-  file_picker: 7584aae6fa07a041af2b36a2655122d42f578c1a
+  file_selector_macos: 9e9e068e90ebee155097d00e89ae91edb2374db7
   FlutterMacOS: d0db08ddef1a9af05a5ec4b724367152bb0500b1
-  fvp: 5a47a325ffa8d63e70a276a6436416ae703206a5
-  mdk: baa616b93f696c7066df0e5ebe057badfa9c462b
+  macos_file_picker: 8308ccb8cca0578190f640cd163b3da001db0222
+  media_kit_libs_macos_video: 85a23e549b5f480e72cae3e5634b5514bc692f65
+  media_kit_video: fa6564e3799a0a28bff39442334817088b7ca758
+  package_info_plus: f0052d280d17aa382b932f399edf32507174e870
   path_provider_foundation: bb55f6dbba17d0dccd6737fe6f7f34fbd0376880
   shared_preferences_foundation: 7036424c3d8ec98dfe75ff1667cb0cd531ec82bb
   url_launcher_macos: f87a979182d112f911de6820aefddaf56ee9fbfd
-  video_player_avfoundation: dd410b52df6d2466a42d28550e33e4146928280a
+  wakelock_plus: 917609be14d812ddd9e9528876538b2263aaa03b
 
 PODFILE CHECKSUM: 54d867c82ac51cbd61b565781b9fada492027009
 
