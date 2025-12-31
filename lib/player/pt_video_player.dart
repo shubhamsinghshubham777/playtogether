@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:fast_file_picker/fast_file_picker.dart';
 import 'package:file_selector/file_selector.dart';
+import 'package:flutter/foundation.dart' show defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
@@ -140,210 +141,219 @@ class _PTVideoPlayerControlsState extends State<_PTVideoPlayerControls> {
     });
   }
 
+  bool get _isMobile =>
+      defaultTargetPlatform == TargetPlatform.android ||
+      defaultTargetPlatform == TargetPlatform.iOS;
+
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
 
-    return Focus(
-      autofocus: true,
-      onKeyEvent: handleKeyEvent,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: MouseRegion(
-          onEnter: (_) => setState(() => showControls = true),
-          onExit: (_) => setState(() => showControls = false),
-          child: AnimatedSwitcher(
-            duration: Durations.short2,
-            child: !showControls
-                ? null
-                : Align(
-                    alignment: .bottomCenter,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(16),
-                        color: colors.surfaceContainer,
-                      ),
-                      padding: EdgeInsets.all(16),
-                      child: Column(
-                        mainAxisSize: .min,
-                        spacing: 16,
-                        children: [
-                          Row(
-                            mainAxisAlignment: .center,
-                            spacing: 24,
-                            children: [
-                              // Audio Tracks Button
-                              ValueListenableBuilder(
-                                valueListenable: audioTracks,
-                                builder: (context, audioTracks, _) {
-                                  return IconButton(
-                                    onPressed: audioTracks.isEmpty
-                                        ? null
-                                        : () => showDialog(
-                                            context: context,
-                                            builder: (context) => ChooserDialog(
-                                              type: 'Audio',
-                                              values: audioTracks,
-                                              onChosen: (track) async {
-                                                await widget.player.setAudioTrack(track);
-                                                if (context.mounted) Navigator.of(context).pop();
-                                              },
-                                            ),
-                                          ),
-                                    icon: Icon(Icons.audiotrack_rounded),
-                                    iconSize: 32,
-                                  );
-                                },
-                              ),
-
-                              // Play/Pause Button
-                              ValueListenableBuilder(
-                                valueListenable: playing,
-                                builder: (context, playing, _) {
-                                  return IconButton(
-                                    onPressed: () {
-                                      widget.player.playOrPause();
-                                      if (playing) {
-                                        widget.syncService.broadcastPause();
-                                      } else {
-                                        widget.syncService.broadcastPlay();
-                                      }
-                                    },
-                                    icon: Icon(
-                                      playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
+    final controlsWidget = AnimatedSwitcher(
+      duration: Durations.short2,
+      child: !showControls
+          ? null
+          : Align(
+              alignment: .bottomCenter,
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  color: colors.surfaceContainer,
+                ),
+                padding: EdgeInsets.all(16),
+                child: Column(
+                  mainAxisSize: .min,
+                  spacing: 16,
+                  children: [
+                    Row(
+                      mainAxisAlignment: .center,
+                      spacing: 24,
+                      children: [
+                        // Audio Tracks Button
+                        ValueListenableBuilder(
+                          valueListenable: audioTracks,
+                          builder: (context, audioTracks, _) {
+                            return IconButton(
+                              onPressed: audioTracks.isEmpty
+                                  ? null
+                                  : () => showDialog(
+                                      context: context,
+                                      builder: (context) => ChooserDialog(
+                                        type: 'Audio',
+                                        values: audioTracks,
+                                        onChosen: (track) async {
+                                          await widget.player.setAudioTrack(track);
+                                          if (context.mounted) Navigator.of(context).pop();
+                                        },
+                                      ),
                                     ),
-                                    iconSize: 64,
-                                  );
-                                },
-                              ),
+                              icon: Icon(Icons.audiotrack_rounded),
+                              iconSize: 32,
+                            );
+                          },
+                        ),
 
-                              // Subtitle Tracks Button
-                              ValueListenableBuilder(
-                                valueListenable: subtitleTracks,
-                                builder: (context, subtitleTracks, _) {
-                                  return IconButton(
-                                    onPressed: subtitleTracks.isEmpty
-                                        ? null
-                                        : () => showDialog(
-                                            context: context,
-                                            builder: (context) => ChooserDialog(
-                                              type: 'Subtitle',
-                                              values: subtitleTracks,
-                                              onChosen: (track) async {
-                                                await widget.player.setSubtitleTrack(track);
-                                                if (context.mounted) Navigator.of(context).pop();
-                                              },
-                                            ),
-                                          ),
-                                    icon: Icon(Icons.subtitles),
-                                    iconSize: 32,
-                                  );
-                                },
-                              ),
-
-                              // Chat Toggle Button
-                              Badge(
-                                isLabelVisible: widget.unreadCount > 0,
-                                label: Text('${widget.unreadCount}'),
-                                child: IconButton(
-                                  onPressed: widget.onChatToggle,
-                                  icon: Icon(
-                                    widget.isChatOpen
-                                        ? Icons.chat_bubble
-                                        : Icons.chat_bubble_outline,
-                                  ),
-                                  iconSize: 32,
-                                ),
-                              ),
-                            ],
-                          ),
-                          ValueListenableBuilder(
-                            valueListenable: duration,
-                            builder: (context, duration, _) => ValueListenableBuilder(
-                              valueListenable: position,
-                              builder: (context, position, _) {
-                                return ProgressSection(
-                                  position: position,
-                                  duration: duration,
-                                  onSeek: (newPosition) async {
-                                    await widget.player.seek(newPosition);
-                                    widget.syncService.broadcastSeek(newPosition);
-                                  },
-                                  volumeSection: ValueListenableBuilder(
-                                    valueListenable: volume,
-                                    builder: (context, volume, _) => Row(
-                                      spacing: 8,
-                                      children: [
-                                        Icon(Icons.volume_up),
-                                        SizedBox(
-                                          width: 150,
-                                          child: Slider(
-                                            padding: EdgeInsets.zero,
-                                            value: (volume / 100).clamp(0, 1),
-                                            onChanged: (value) {
-                                              widget.player.setVolume(value * 100);
-                                            },
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                );
+                        // Play/Pause Button
+                        ValueListenableBuilder(
+                          valueListenable: playing,
+                          builder: (context, playing, _) {
+                            return IconButton(
+                              onPressed: () {
+                                widget.player.playOrPause();
+                                if (playing) {
+                                  widget.syncService.broadcastPause();
+                                } else {
+                                  widget.syncService.broadcastPlay();
+                                }
                               },
+                              icon: Icon(playing ? Icons.pause_rounded : Icons.play_arrow_rounded),
+                              iconSize: 64,
+                            );
+                          },
+                        ),
+
+                        // Subtitle Tracks Button
+                        ValueListenableBuilder(
+                          valueListenable: subtitleTracks,
+                          builder: (context, subtitleTracks, _) {
+                            return IconButton(
+                              onPressed: subtitleTracks.isEmpty
+                                  ? null
+                                  : () => showDialog(
+                                      context: context,
+                                      builder: (context) => ChooserDialog(
+                                        type: 'Subtitle',
+                                        values: subtitleTracks,
+                                        onChosen: (track) async {
+                                          await widget.player.setSubtitleTrack(track);
+                                          if (context.mounted) Navigator.of(context).pop();
+                                        },
+                                      ),
+                                    ),
+                              icon: Icon(Icons.subtitles),
+                              iconSize: 32,
+                            );
+                          },
+                        ),
+
+                        // Chat Toggle Button
+                        Badge(
+                          isLabelVisible: widget.unreadCount > 0,
+                          label: Text('${widget.unreadCount}'),
+                          child: IconButton(
+                            onPressed: widget.onChatToggle,
+                            icon: Icon(
+                              widget.isChatOpen ? Icons.chat_bubble : Icons.chat_bubble_outline,
                             ),
+                            iconSize: 32,
                           ),
-                        ],
+                        ),
+                      ],
+                    ),
+                    ValueListenableBuilder(
+                      valueListenable: duration,
+                      builder: (context, duration, _) => ValueListenableBuilder(
+                        valueListenable: position,
+                        builder: (context, position, _) {
+                          return ProgressSection(
+                            position: position,
+                            duration: duration,
+                            onSeek: (newPosition) async {
+                              await widget.player.seek(newPosition);
+                              widget.syncService.broadcastSeek(newPosition);
+                            },
+                            volumeSection: ValueListenableBuilder(
+                              valueListenable: volume,
+                              builder: (context, volume, _) => Row(
+                                spacing: 8,
+                                children: [
+                                  Icon(Icons.volume_up),
+                                  SizedBox(
+                                    width: 150,
+                                    child: Slider(
+                                      padding: EdgeInsets.zero,
+                                      value: (volume / 100).clamp(0, 1),
+                                      onChanged: (value) {
+                                        widget.player.setVolume(value * 100);
+                                      },
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
                       ),
                     ),
-                  ),
-          ),
-        ),
-      ),
+                  ],
+                ),
+              ),
+            ),
+    );
+
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: _isMobile
+          ? GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => setState(() => showControls = !showControls),
+              child: controlsWidget,
+            )
+          : Focus(
+              autofocus: true,
+              onKeyEvent: handleKeyEvent,
+              child: MouseRegion(
+                onEnter: (_) => setState(() => showControls = true),
+                onExit: (_) => setState(() => showControls = false),
+                child: controlsWidget,
+              ),
+            ),
     );
   }
 
   KeyEventResult handleKeyEvent(FocusNode _, KeyEvent event) {
-    if (event is KeyDownEvent) {
-      switch (event.logicalKey) {
-        case .space:
-        case .keyK:
-          widget.player.playOrPause();
-          if (playing.value) {
-            widget.syncService.broadcastPause();
-          } else {
-            widget.syncService.broadcastPlay();
-          }
-          break;
-        case .arrowLeft:
-          final newPos = position.value - Duration(seconds: 5);
-          widget.player.seek(newPos);
-          widget.syncService.broadcastSeek(newPos);
-          break;
-        case .arrowRight:
-          final newPos = position.value + Duration(seconds: 5);
-          widget.player.seek(newPos);
-          widget.syncService.broadcastSeek(newPos);
-          break;
-        case .arrowUp:
-          widget.player.setVolume(volume.value + 10);
-          break;
-        case .arrowDown:
-          widget.player.setVolume(volume.value - 10);
-          break;
-        case .keyJ:
-          final newPos = position.value - Duration(seconds: 10);
-          widget.player.seek(newPos);
-          widget.syncService.broadcastSeek(newPos);
-          break;
-        case .keyL:
-          final newPos = position.value + Duration(seconds: 10);
-          widget.player.seek(newPos);
-          widget.syncService.broadcastSeek(newPos);
-          break;
-      }
-      return .handled;
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+      return KeyEventResult.ignored;
     }
-    if (event is KeyRepeatEvent) return .handled;
-    return .ignored;
+
+    switch (event.logicalKey) {
+      case LogicalKeyboardKey.space:
+      case LogicalKeyboardKey.keyK:
+        widget.player.playOrPause();
+        if (playing.value) {
+          widget.syncService.broadcastPause();
+        } else {
+          widget.syncService.broadcastPlay();
+        }
+        return KeyEventResult.handled;
+      case LogicalKeyboardKey.arrowLeft:
+        final newPos = position.value - Duration(seconds: 5);
+        widget.player.seek(newPos);
+        widget.syncService.broadcastSeek(newPos);
+        return KeyEventResult.handled;
+      case LogicalKeyboardKey.arrowRight:
+        final newPos = position.value + Duration(seconds: 5);
+        widget.player.seek(newPos);
+        widget.syncService.broadcastSeek(newPos);
+        return KeyEventResult.handled;
+      case LogicalKeyboardKey.arrowUp:
+        widget.player.setVolume(volume.value + 10);
+        return KeyEventResult.handled;
+      case LogicalKeyboardKey.arrowDown:
+        widget.player.setVolume(volume.value - 10);
+        return KeyEventResult.handled;
+      case LogicalKeyboardKey.keyJ:
+        final newPos = position.value - Duration(seconds: 10);
+        widget.player.seek(newPos);
+        widget.syncService.broadcastSeek(newPos);
+        return KeyEventResult.handled;
+      case LogicalKeyboardKey.keyL:
+        final newPos = position.value + Duration(seconds: 10);
+        widget.player.seek(newPos);
+        widget.syncService.broadcastSeek(newPos);
+        return KeyEventResult.handled;
+      default:
+        return KeyEventResult.ignored;
+    }
   }
 }
