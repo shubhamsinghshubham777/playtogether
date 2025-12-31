@@ -9,22 +9,20 @@ class SyncService {
 
   final Player _player;
   final String _clientId = const Uuid().v4();
+  final String username;
 
   RealtimeChannel? _channel;
   int _lastAppliedTimestamp = 0;
   bool _hasReceivedInitialState = false;
   bool _isApplyingRemoteAction = false;
 
-  SyncService(this._player);
+  SyncService(this._player, {required this.username});
 
   /// Connect to the sync channel and start listening
   Future<void> connect() async {
     final supabase = Supabase.instance.client;
 
-    _channel = supabase.channel(
-      _roomName,
-      opts: const RealtimeChannelConfig(self: false),
-    );
+    _channel = supabase.channel(_roomName, opts: const RealtimeChannelConfig(self: false));
 
     _channel!
         .onBroadcast(event: SyncEventType.play, callback: _handlePlay)
@@ -33,10 +31,10 @@ class SyncService {
         .onBroadcast(event: SyncEventType.stateRequest, callback: _handleStateRequest)
         .onBroadcast(event: SyncEventType.stateResponse, callback: _handleStateResponse)
         .subscribe((status, error) {
-      if (status == RealtimeSubscribeStatus.subscribed) {
-        _requestInitialState();
-      }
-    });
+          if (status == RealtimeSubscribeStatus.subscribed) {
+            _requestInitialState();
+          }
+        });
   }
 
   /// Broadcast a play action
