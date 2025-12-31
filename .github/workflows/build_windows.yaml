@@ -2,7 +2,7 @@ name: Build App Installer (Windows)
 on:
   workflow_dispatch:
 permissions:
-  contents: write
+  contents: read
 
 # Cancel previous runs when a new commit is pushed
 concurrency:
@@ -54,12 +54,8 @@ jobs:
         with:
           path: ./build/windows/x64/installer/Release/inno-script.iss
 
-      - name: Release installer
-        uses: softprops/action-gh-release@v2
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          files: |
-            ./build/windows/x64/installer/Release/${{ steps.envs.outputs.APP_NAME_CAMEL_CASE }}-x86_64-${{ steps.envs.outputs.APP_VERSION }}-Installer.exe
-          name: "${{ steps.envs.outputs.APP_VERSION }}_${{ github.run_id }}"
-          target_commitish: "${{ github.sha }}"
-          tag_name: "v${{ steps.envs.outputs.APP_VERSION }}_${{ github.run_id }}"
+          name: windows-installer
+          path: ./build/windows/x64/installer/Release/${{ steps.envs.outputs.APP_NAME_CAMEL_CASE }}-x86_64-${{ steps.envs.outputs.APP_VERSION }}-Installer.exe

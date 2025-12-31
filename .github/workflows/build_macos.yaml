@@ -2,7 +2,7 @@ name: Build App Installer (macOS)
 on:
   workflow_dispatch:
 permissions:
-  contents: write
+  contents: read
 
 # Cancel previous runs when a new commit is pushed
 concurrency:
@@ -68,19 +68,8 @@ jobs:
             "PlayTogether-${{ steps.version.outputs.APP_VERSION }}-macOS.dmg" \
             "build/macos/Build/Products/Release/PlayTogether.app"
 
-      - name: Release DMG
-        uses: softprops/action-gh-release@v2
+      - name: Upload DMG artifact
+        uses: actions/upload-artifact@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          files: |
-            ./PlayTogether-${{ steps.version.outputs.APP_VERSION }}-macOS.dmg
-          name: "${{ steps.version.outputs.APP_VERSION }}_${{ github.run_id }}"
-          target_commitish: "${{ github.sha }}"
-          tag_name: "v${{ steps.version.outputs.APP_VERSION }}_${{ github.run_id }}"
-          body: |
-            ## macOS Installation Notes
-
-            This build is unsigned. To run the app:
-            1. Open the DMG and drag PlayTogether to Applications
-            2. Right-click the app and select "Open" (first time only)
-            3. Or run: `xattr -cr /Applications/PlayTogether.app`
+          name: macos-dmg
+          path: ./PlayTogether-${{ steps.version.outputs.APP_VERSION }}-macOS.dmg

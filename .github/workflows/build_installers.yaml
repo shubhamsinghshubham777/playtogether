@@ -1,0 +1,170 @@
+name: Build App Installers
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+
+# Cancel previous runs when a new commit is pushed
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Extract version once to use across all jobs
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      app_version: ${{ steps.version.outputs.APP_VERSION }}
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v6
+
+      - name: Extract version from pubspec.yaml
+        id: version
+        run: |
+          VERSION=$(grep '^version:' pubspec.yaml | cut -d ' ' -f 2 | cut -d '+' -f 1)
+          echo "APP_VERSION=$VERSION" >> $GITHUB_OUTPUT
+
+  windows:
+    runs-on: windows-latest
+    needs: version
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v6
+
+      - name: Get Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.38.1'
+          cache: true
+
+      - name: Cache Flutter build outputs
+        uses: actions/cache@v4
+        with:
+          path: |
+            build/windows
+            .dart_tool
+          key: ${{ runner.os }}-flutter-build-${{ hashFiles('**/pubspec.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-flutter-build-
+
+      - name: Create .env file
+        run: |
+          echo "${{ secrets.ENV_FILE }}" | Out-File -FilePath .env -Encoding utf8
+
+      - name: Build Windows App
+        run: |
+          flutter config --enable-windows-desktop
+          flutter build windows --release
+
+      - name: Build iss script
+        run: dart run inno_bundle:build --no-app --release --no-installer
+
+      - name: Build installer
+        uses: Minionguyjpro/Inno-Setup-Action@v1.2.2
+        with:
+          path: ./build/windows/x64/installer/Release/inno-script.iss
+
+      - name: Rename installer
+        run: |
+          mv "./build/windows/x64/installer/Release/PlayTogether-x86_64-${{ needs.version.outputs.app_version }}-Installer.exe" "./PlayTogether-${{ needs.version.outputs.app_version }}-Windows.exe"
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: ./PlayTogether-${{ needs.version.outputs.app_version }}-Windows.exe
+
+  macos:
+    runs-on: macos-latest
+    needs: version
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v6
+
+      - name: Get Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.38.1'
+          cache: true
+
+      - name: Cache Flutter build outputs
+        uses: actions/cache@v4
+        with:
+          path: |
+            build/macos
+            .dart_tool
+          key: ${{ runner.os }}-flutter-build-${{ hashFiles('**/pubspec.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-flutter-build-
+
+      - name: Create .env file
+        run: |
+          echo "${{ secrets.ENV_FILE }}" > .env
+
+      - name: Install CocoaPods dependencies
+        run: |
+          cd macos
+          pod install
+
+      - name: Build macOS App
+        run: |
+          flutter config --enable-macos-desktop
+          flutter build macos --release
+
+      - name: Install create-dmg
+        run: brew install create-dmg
+
+      - name: Create DMG
+        run: |
+          create-dmg \
+            --volname "PlayTogether" \
+            --window-pos 200 120 \
+            --window-size 800 400 \
+            --icon-size 100 \
+            --icon "PlayTogether.app" 200 190 \
+            --hide-extension "PlayTogether.app" \
+            --app-drop-link 600 185 \
+            "PlayTogether-${{ needs.version.outputs.app_version }}-macOS.dmg" \
+            "build/macos/Build/Products/Release/PlayTogether.app"
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-dmg
+          path: ./PlayTogether-${{ needs.version.outputs.app_version }}-macOS.dmg
+
+  release:
+    runs-on: ubuntu-latest
+    needs: [ version, windows, macos ]
+    steps:
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-installer
+
+      - name: Download macOS artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-dmg
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          files: |
+            ./PlayTogether-${{ needs.version.outputs.app_version }}-Windows.exe
+            ./PlayTogether-${{ needs.version.outputs.app_version }}-macOS.dmg
+          name: "v${{ needs.version.outputs.app_version }}"
+          target_commitish: "${{ github.sha }}"
+          tag_name: "v${{ needs.version.outputs.app_version }}_${{ github.run_id }}"
+          body: |
+            ## Downloads
+            - **Windows**: `PlayTogether-${{ needs.version.outputs.app_version }}-Windows.exe`
+            - **macOS**: `PlayTogether-${{ needs.version.outputs.app_version }}-macOS.dmg`
+
+            ## macOS Installation Notes
+            This build is unsigned. To run the app:
+            1. Open the DMG and drag PlayTogether to Applications
+            2. Right-click the app and select "Open" (first time only)
+            3. Or run: `xattr -cr /Applications/PlayTogether.app`
