@@ -33,3 +33,5 @@ flutter:
 inno_bundle:
   id: a05680d0-e422-11f0-af00-4b68febb008b
   publisher: Shubham Singh
+  languages:
+    - english
