@@ -89,7 +89,7 @@ class _PTVideoPlayerState extends State<PTVideoPlayer> {
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 300),
             curve: Curves.easeInOut,
-            width: _isChatOpen ? screenWidth * 0.4 : 0,
+            width: _isChatOpen ? screenWidth * 0.35 : 0,
             child: _isChatOpen
                 ? PopScope(
                     canPop: false,

@@ -1,3 +1,4 @@
+import 'package:flex_color_scheme/flex_color_scheme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:media_kit/media_kit.dart';
@@ -46,8 +47,8 @@ class _MainAppState extends State<MainApp> {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      darkTheme: ThemeData.dark(useMaterial3: true),
-      themeMode: .dark,
+      darkTheme: FlexThemeData.dark(scheme: .cyanM3),
+      themeMode: ThemeMode.dark,
       home: Scaffold(
         body: syncService != null
             ? PTVideoPlayer(player, syncService!)
