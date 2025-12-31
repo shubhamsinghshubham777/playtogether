@@ -26,6 +26,9 @@ class SyncService {
   bool _isPeerOnline = false;
   bool get isPeerOnline => _isPeerOnline;
 
+  final _typingController = StreamController<TypingEvent>.broadcast();
+  Stream<TypingEvent> get typingStream => _typingController.stream;
+
   final _chatHistory = <ChatEvent>[];
   List<ChatEvent> get chatHistory => List.unmodifiable(_chatHistory);
 
@@ -44,6 +47,7 @@ class SyncService {
         .onBroadcast(event: SyncEventType.stateRequest, callback: _handleStateRequest)
         .onBroadcast(event: SyncEventType.stateResponse, callback: _handleStateResponse)
         .onBroadcast(event: SyncEventType.chat, callback: _handleChat)
+        .onBroadcast(event: SyncEventType.typing, callback: _handleTyping)
         .onPresenceSync(_handlePresenceSync)
         .subscribe((status, error) {
           if (status == RealtimeSubscribeStatus.subscribed) {
@@ -92,6 +96,24 @@ class SyncService {
     final event = ChatEvent.fromPayload(payload);
     _chatHistory.add(event);
     _chatController.add(event);
+  }
+
+  /// Broadcast typing status
+  Future<void> broadcastTyping(bool isTyping) async {
+    await _channel?.sendBroadcastMessage(
+      event: SyncEventType.typing,
+      payload: TypingEvent(
+        senderId: _clientId,
+        timestamp: DateTime.now().millisecondsSinceEpoch,
+        username: username,
+        isTyping: isTyping,
+      ).toPayload(),
+    );
+  }
+
+  void _handleTyping(Map<String, dynamic> payload) {
+    final event = TypingEvent.fromPayload(payload);
+    _typingController.add(event);
   }
 
   /// Broadcast a play action
@@ -221,6 +243,7 @@ class SyncService {
   void dispose() {
     _chatController.close();
     _peerOnlineController.close();
+    _typingController.close();
     disconnect();
   }
 }

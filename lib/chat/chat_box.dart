@@ -20,6 +20,9 @@ class _ChatBoxState extends State<ChatBox> {
   final _scrollController = ScrollController();
   final _focusNode = FocusNode();
   StreamSubscription<ChatEvent>? _subscription;
+  StreamSubscription<TypingEvent>? _typingSubscription;
+  String? _peerTypingUsername;
+  bool _isTyping = false;
 
   @override
   void initState() {
@@ -27,7 +30,23 @@ class _ChatBoxState extends State<ChatBox> {
     // Load existing chat history
     _messages = List.from(widget.syncService.chatHistory);
     _subscription = widget.syncService.chatMessages.listen(_onMessage);
+    _typingSubscription = widget.syncService.typingStream.listen(_onTypingEvent);
+    _controller.addListener(_onTextChanged);
     _scrollToBottom();
+  }
+
+  void _onTypingEvent(TypingEvent event) {
+    setState(() {
+      _peerTypingUsername = event.isTyping ? event.username : null;
+    });
+  }
+
+  void _onTextChanged() {
+    final hasText = _controller.text.isNotEmpty;
+    if (hasText != _isTyping) {
+      _isTyping = hasText;
+      widget.syncService.broadcastTyping(hasText);
+    }
   }
 
   void _onMessage(ChatEvent event) {
@@ -53,6 +72,11 @@ class _ChatBoxState extends State<ChatBox> {
 
     _controller.clear();
     _focusNode.requestFocus();
+    // Broadcast that we stopped typing
+    if (_isTyping) {
+      _isTyping = false;
+      widget.syncService.broadcastTyping(false);
+    }
     final event = await widget.syncService.broadcastChat(text);
 
     // Add own message to the list immediately (already stored in service history)
@@ -65,6 +89,8 @@ class _ChatBoxState extends State<ChatBox> {
   @override
   void dispose() {
     _subscription?.cancel();
+    _typingSubscription?.cancel();
+    _controller.removeListener(_onTextChanged);
     _controller.dispose();
     _scrollController.dispose();
     _focusNode.dispose();
@@ -144,6 +170,30 @@ class _ChatBoxState extends State<ChatBox> {
             ),
           ),
 
+          // Typing indicator
+          if (_peerTypingUsername != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              child: Row(
+                children: [
+                  Text(
+                    '$_peerTypingUsername is typing',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: colors.onSurfaceVariant,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  SizedBox(
+                    width: 20,
+                    height: 12,
+                    child: _TypingDots(color: colors.onSurfaceVariant),
+                  ),
+                ],
+              ),
+            ),
+
           // Input
           Container(
             margin: EdgeInsetsGeometry.only(bottom: MediaQuery.of(context).viewPadding.bottom),
@@ -187,6 +237,59 @@ class _ChatBoxState extends State<ChatBox> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _TypingDots extends StatefulWidget {
+  const _TypingDots({required this.color});
+
+  final Color color;
+
+  @override
+  State<_TypingDots> createState() => _TypingDotsState();
+}
+
+class _TypingDotsState extends State<_TypingDots> with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: List.generate(3, (index) {
+            final delay = index * 0.2;
+            final t = (_controller.value + delay) % 1.0;
+            final opacity = (1 - (t - 0.5).abs() * 2).clamp(0.3, 1.0);
+            return Container(
+              width: 4,
+              height: 4,
+              decoration: BoxDecoration(
+                color: widget.color.withValues(alpha: opacity),
+                shape: BoxShape.circle,
+              ),
+            );
+          }),
+        );
+      },
     );
   }
 }

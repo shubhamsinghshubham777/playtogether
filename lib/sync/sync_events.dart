@@ -6,6 +6,7 @@ abstract class SyncEventType {
   static const String stateRequest = 'state_request';
   static const String stateResponse = 'state_response';
   static const String chat = 'chat';
+  static const String typing = 'typing';
 }
 
 /// Base class for all sync events
@@ -160,5 +161,34 @@ class ChatEvent extends SyncEvent {
         'timestamp': timestamp,
         'username': username,
         'message': message,
+      };
+}
+
+class TypingEvent extends SyncEvent {
+  final String username;
+  final bool isTyping;
+
+  const TypingEvent({
+    required super.senderId,
+    required super.timestamp,
+    required this.username,
+    required this.isTyping,
+  });
+
+  factory TypingEvent.fromPayload(Map<String, dynamic> payload) {
+    return TypingEvent(
+      senderId: payload['senderId'] as String,
+      timestamp: payload['timestamp'] as int,
+      username: payload['username'] as String,
+      isTyping: payload['isTyping'] as bool,
+    );
+  }
+
+  @override
+  Map<String, dynamic> toPayload() => {
+        'senderId': senderId,
+        'timestamp': timestamp,
+        'username': username,
+        'isTyping': isTyping,
       };
 }
