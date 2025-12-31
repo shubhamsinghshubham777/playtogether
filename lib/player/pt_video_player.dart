@@ -27,22 +27,29 @@ class _PTVideoPlayerState extends State<PTVideoPlayer> {
 
   bool _isChatOpen = false;
   int _unreadCount = 0;
+  bool _isPeerOnline = false;
   StreamSubscription? _chatSubscription;
+  StreamSubscription? _presenceSubscription;
 
   @override
   void initState() {
     super.initState();
     pickVideo();
+    _isPeerOnline = widget.syncService.isPeerOnline;
     _chatSubscription = widget.syncService.chatMessages.listen((_) {
       if (!_isChatOpen) {
         setState(() => _unreadCount++);
       }
+    });
+    _presenceSubscription = widget.syncService.peerOnlineStream.listen((isOnline) {
+      setState(() => _isPeerOnline = isOnline);
     });
   }
 
   @override
   void dispose() {
     _chatSubscription?.cancel();
+    _presenceSubscription?.cancel();
     super.dispose();
   }
 
@@ -67,6 +74,36 @@ class _PTVideoPlayerState extends State<PTVideoPlayer> {
                 controls: (_) => _PTVideoPlayerControls(widget.player, widget.syncService),
                 subtitleViewConfiguration: SubtitleViewConfiguration(padding: EdgeInsets.all(32)),
               ),
+              if (_isPeerOnline)
+                Positioned(
+                  top: 16,
+                  left: 16,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.black54,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 10,
+                          height: 10,
+                          decoration: const BoxDecoration(
+                            color: Colors.green,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        const Text(
+                          'Online',
+                          style: TextStyle(color: Colors.white, fontSize: 14),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               Positioned(
                 top: 16,
                 right: 0,

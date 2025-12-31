@@ -21,6 +21,11 @@ class SyncService {
   final _chatController = StreamController<ChatEvent>.broadcast();
   Stream<ChatEvent> get chatMessages => _chatController.stream;
 
+  final _peerOnlineController = StreamController<bool>.broadcast();
+  Stream<bool> get peerOnlineStream => _peerOnlineController.stream;
+  bool _isPeerOnline = false;
+  bool get isPeerOnline => _isPeerOnline;
+
   final _chatHistory = <ChatEvent>[];
   List<ChatEvent> get chatHistory => List.unmodifiable(_chatHistory);
 
@@ -39,11 +44,32 @@ class SyncService {
         .onBroadcast(event: SyncEventType.stateRequest, callback: _handleStateRequest)
         .onBroadcast(event: SyncEventType.stateResponse, callback: _handleStateResponse)
         .onBroadcast(event: SyncEventType.chat, callback: _handleChat)
+        .onPresenceSync(_handlePresenceSync)
         .subscribe((status, error) {
           if (status == RealtimeSubscribeStatus.subscribed) {
             _requestInitialState();
+            _channel?.track({'clientId': _clientId, 'username': username});
           }
         });
+  }
+
+  void _handlePresenceSync(RealtimePresenceSyncPayload payload) {
+    final presences = _channel?.presenceState();
+    if (presences == null) return;
+    // Count other users (exclude self)
+    int otherUserCount = 0;
+    for (final presence in presences) {
+      for (final p in presence.presences) {
+        if (p.payload['clientId'] != _clientId) {
+          otherUserCount++;
+        }
+      }
+    }
+    final isOnline = otherUserCount > 0;
+    if (_isPeerOnline != isOnline) {
+      _isPeerOnline = isOnline;
+      _peerOnlineController.add(isOnline);
+    }
   }
 
   /// Broadcast a chat message and store it in history
@@ -194,6 +220,7 @@ class SyncService {
 
   void dispose() {
     _chatController.close();
+    _peerOnlineController.close();
     disconnect();
   }
 }
