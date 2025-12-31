@@ -102,6 +102,9 @@ jobs:
         run: |
           echo "${{ secrets.ENV_FILE }}" > .env
 
+      - name: Install dependencies
+        run: flutter pub get
+
       - name: Install CocoaPods dependencies
         run: |
           cd macos
