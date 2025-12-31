@@ -96,10 +96,7 @@ class _PTVideoPlayerState extends State<PTVideoPlayer> {
                           ),
                         ),
                         const SizedBox(width: 8),
-                        const Text(
-                          'Online',
-                          style: TextStyle(color: Colors.white, fontSize: 14),
-                        ),
+                        const Text('Online', style: TextStyle(color: Colors.white, fontSize: 14)),
                       ],
                     ),
                   ),
@@ -127,6 +124,7 @@ class _PTVideoPlayerState extends State<PTVideoPlayer> {
             duration: const Duration(milliseconds: 300),
             curve: Curves.easeInOut,
             width: _isChatOpen ? screenWidth * 0.35 : 0,
+            constraints: BoxConstraints(maxWidth: 300),
             child: _isChatOpen
                 ? PopScope(
                     canPop: false,

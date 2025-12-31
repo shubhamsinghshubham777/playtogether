@@ -22,12 +22,12 @@ class UsernameDialog extends StatelessWidget {
         spacing: 12,
         children: [
           _UsernameOption(
-            name: 'Reet',
+            name: 'Reet (Shakti 🔥)',
             color: colors.secondaryContainer,
             onTap: () => Navigator.of(context).pop('Reet'),
           ),
           _UsernameOption(
-            name: 'Shubh',
+            name: 'Shubh (Shiv ☮️)',
             color: colors.primaryContainer,
             onTap: () => Navigator.of(context).pop('Shubh'),
           ),

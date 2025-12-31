@@ -58,7 +58,7 @@ jobs:
           flutter build windows --release
 
       - name: Build iss script
-        run: dart run inno_bundle:build --no-app --release --no-installer
+        run: dart run inno_bundle --no-app --release --no-installer
 
       - name: Build installer
         uses: Minionguyjpro/Inno-Setup-Action@v1.2.2
