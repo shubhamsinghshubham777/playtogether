@@ -5,9 +5,10 @@ import 'package:playtogether/sync/sync_events.dart';
 import 'package:playtogether/sync/sync_service.dart';
 
 class ChatBox extends StatefulWidget {
-  const ChatBox({super.key, required this.syncService});
+  const ChatBox({super.key, required this.syncService, required this.onClose});
 
   final SyncService syncService;
+  final VoidCallback onClose;
 
   @override
   State<ChatBox> createState() => _ChatBoxState();
@@ -87,11 +88,19 @@ class _ChatBoxState extends State<ChatBox> {
             decoration: BoxDecoration(
               border: Border(bottom: BorderSide(color: colors.outlineVariant)),
             ),
-            child: const Row(
+            child: Row(
+              mainAxisAlignment: .spaceBetween,
               children: [
-                Icon(Icons.chat_bubble_outline, size: 20),
-                SizedBox(width: 8),
-                Text('Chat', style: TextStyle(fontWeight: FontWeight.w600)),
+                Expanded(
+                  child: const Row(
+                    children: [
+                      Icon(Icons.chat_bubble_outline, size: 20),
+                      SizedBox(width: 8),
+                      Text('Chat', style: TextStyle(fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                ),
+                IconButton(onPressed: widget.onClose, icon: const Icon(Icons.close)),
               ],
             ),
           ),
@@ -100,7 +109,7 @@ class _ChatBoxState extends State<ChatBox> {
           Expanded(
             child: ListView.builder(
               controller: _scrollController,
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.all(8) + MediaQuery.viewPaddingOf(context),
               itemCount: _messages.length,
               itemBuilder: (context, index) {
                 final msg = _messages[index];
@@ -137,6 +146,7 @@ class _ChatBoxState extends State<ChatBox> {
 
           // Input
           Container(
+            margin: EdgeInsetsGeometry.only(bottom: MediaQuery.of(context).viewPadding.bottom),
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
               border: Border(top: BorderSide(color: colors.outlineVariant)),

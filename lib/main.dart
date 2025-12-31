@@ -45,6 +45,7 @@ class _MainAppState extends State<MainApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      debugShowCheckedModeBanner: false,
       darkTheme: ThemeData.dark(useMaterial3: true),
       themeMode: .dark,
       home: Scaffold(

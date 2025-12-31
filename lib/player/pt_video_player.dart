@@ -60,24 +60,45 @@ class _PTVideoPlayerState extends State<PTVideoPlayer> {
     return Row(
       children: [
         Expanded(
-          child: Video(
-            controller: controller,
-            controls: (_) => _PTVideoPlayerControls(
-              widget.player,
-              widget.syncService,
-              onChatToggle: _toggleChat,
-              unreadCount: _unreadCount,
-              isChatOpen: _isChatOpen,
-            ),
-            subtitleViewConfiguration: SubtitleViewConfiguration(padding: EdgeInsets.all(32)),
+          child: Stack(
+            children: [
+              Video(
+                controller: controller,
+                controls: (_) => _PTVideoPlayerControls(widget.player, widget.syncService),
+                subtitleViewConfiguration: SubtitleViewConfiguration(padding: EdgeInsets.all(32)),
+              ),
+              Positioned(
+                top: 16,
+                right: 0,
+                child: Padding(
+                  padding: const EdgeInsets.only(right: 16),
+                  child: Badge(
+                    isLabelVisible: _unreadCount > 0,
+                    label: Text('$_unreadCount'),
+                    child: IconButton.filled(
+                      onPressed: _toggleChat,
+                      icon: const Icon(Icons.chat_bubble_outline),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
         ClipRect(
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 300),
             curve: Curves.easeInOut,
-            width: _isChatOpen ? screenWidth * 0.25 : 0,
-            child: _isChatOpen ? ChatBox(syncService: widget.syncService) : null,
+            width: _isChatOpen ? screenWidth * 0.4 : 0,
+            child: _isChatOpen
+                ? PopScope(
+                    canPop: false,
+                    onPopInvokedWithResult: (didPop, _) {
+                      if (!didPop) _toggleChat();
+                    },
+                    child: ChatBox(syncService: widget.syncService, onClose: _toggleChat),
+                  )
+                : null,
           ),
         ),
       ],
@@ -93,19 +114,10 @@ class _PTVideoPlayerState extends State<PTVideoPlayer> {
 }
 
 class _PTVideoPlayerControls extends StatefulWidget {
-  const _PTVideoPlayerControls(
-    this.player,
-    this.syncService, {
-    required this.onChatToggle,
-    required this.unreadCount,
-    required this.isChatOpen,
-  });
+  const _PTVideoPlayerControls(this.player, this.syncService);
 
   final Player player;
   final SyncService syncService;
-  final VoidCallback onChatToggle;
-  final int unreadCount;
-  final bool isChatOpen;
 
   @override
   State<_PTVideoPlayerControls> createState() => _PTVideoPlayerControlsState();
@@ -166,7 +178,7 @@ class _PTVideoPlayerControlsState extends State<_PTVideoPlayerControls> {
                   spacing: 16,
                   children: [
                     Row(
-                      mainAxisAlignment: .center,
+                      mainAxisAlignment: .spaceBetween,
                       spacing: 24,
                       children: [
                         // Audio Tracks Button
@@ -235,19 +247,6 @@ class _PTVideoPlayerControlsState extends State<_PTVideoPlayerControls> {
                             );
                           },
                         ),
-
-                        // Chat Toggle Button
-                        Badge(
-                          isLabelVisible: widget.unreadCount > 0,
-                          label: Text('${widget.unreadCount}'),
-                          child: IconButton(
-                            onPressed: widget.onChatToggle,
-                            icon: Icon(
-                              widget.isChatOpen ? Icons.chat_bubble : Icons.chat_bubble_outline,
-                            ),
-                            iconSize: 32,
-                          ),
-                        ),
                       ],
                     ),
                     ValueListenableBuilder(
@@ -268,8 +267,9 @@ class _PTVideoPlayerControlsState extends State<_PTVideoPlayerControls> {
                                 spacing: 8,
                                 children: [
                                   Icon(Icons.volume_up),
-                                  SizedBox(
+                                  Container(
                                     width: 150,
+                                    margin: EdgeInsets.only(right: 16),
                                     child: Slider(
                                       padding: EdgeInsets.zero,
                                       value: (volume / 100).clamp(0, 1),
@@ -291,23 +291,25 @@ class _PTVideoPlayerControlsState extends State<_PTVideoPlayerControls> {
             ),
     );
 
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: _isMobile
-          ? GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () => setState(() => showControls = !showControls),
-              child: controlsWidget,
-            )
-          : Focus(
-              autofocus: true,
-              onKeyEvent: handleKeyEvent,
-              child: MouseRegion(
-                onEnter: (_) => setState(() => showControls = true),
-                onExit: (_) => setState(() => showControls = false),
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: _isMobile
+            ? GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => setState(() => showControls = !showControls),
                 child: controlsWidget,
+              )
+            : Focus(
+                autofocus: true,
+                onKeyEvent: handleKeyEvent,
+                child: MouseRegion(
+                  onEnter: (_) => setState(() => showControls = true),
+                  onExit: (_) => setState(() => showControls = false),
+                  child: controlsWidget,
+                ),
               ),
-            ),
+      ),
     );
   }
 
