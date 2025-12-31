@@ -6,11 +6,13 @@ import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:playtogether/player/chooser_dialog.dart';
 import 'package:playtogether/player/progress_section.dart';
+import 'package:playtogether/sync/sync_service.dart';
 
 class PTVideoPlayer extends StatefulWidget {
-  const PTVideoPlayer(this.player, {super.key});
+  const PTVideoPlayer(this.player, this.syncService, {super.key});
 
   final Player player;
+  final SyncService syncService;
 
   @override
   State<PTVideoPlayer> createState() => _PTVideoPlayerState();
@@ -29,7 +31,7 @@ class _PTVideoPlayerState extends State<PTVideoPlayer> {
   Widget build(BuildContext context) {
     return Video(
       controller: controller,
-      controls: (_) => _PTVideoPlayerControls(widget.player),
+      controls: (_) => _PTVideoPlayerControls(widget.player, widget.syncService),
       subtitleViewConfiguration: SubtitleViewConfiguration(padding: EdgeInsets.all(32)),
     );
   }
@@ -43,9 +45,10 @@ class _PTVideoPlayerState extends State<PTVideoPlayer> {
 }
 
 class _PTVideoPlayerControls extends StatefulWidget {
-  const _PTVideoPlayerControls(this.player);
+  const _PTVideoPlayerControls(this.player, this.syncService);
 
   final Player player;
+  final SyncService syncService;
 
   @override
   State<_PTVideoPlayerControls> createState() => _PTVideoPlayerControlsState();
@@ -142,7 +145,14 @@ class _PTVideoPlayerControlsState extends State<_PTVideoPlayerControls> {
                                 valueListenable: playing,
                                 builder: (context, playing, _) {
                                   return IconButton(
-                                    onPressed: widget.player.playOrPause,
+                                    onPressed: () {
+                                      widget.player.playOrPause();
+                                      if (playing) {
+                                        widget.syncService.broadcastPause();
+                                      } else {
+                                        widget.syncService.broadcastPlay();
+                                      }
+                                    },
                                     icon: Icon(
                                       playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
                                     ),
@@ -184,7 +194,10 @@ class _PTVideoPlayerControlsState extends State<_PTVideoPlayerControls> {
                                 return ProgressSection(
                                   position: position,
                                   duration: duration,
-                                  onSeek: widget.player.seek,
+                                  onSeek: (newPosition) async {
+                                    await widget.player.seek(newPosition);
+                                    widget.syncService.broadcastSeek(newPosition);
+                                  },
                                   volumeSection: ValueListenableBuilder(
                                     valueListenable: volume,
                                     builder: (context, volume, _) => Row(
@@ -222,13 +235,23 @@ class _PTVideoPlayerControlsState extends State<_PTVideoPlayerControls> {
     if (event is KeyDownEvent) {
       switch (event.logicalKey) {
         case .space:
+        case .keyK:
           widget.player.playOrPause();
+          if (playing.value) {
+            widget.syncService.broadcastPause();
+          } else {
+            widget.syncService.broadcastPlay();
+          }
           break;
         case .arrowLeft:
-          widget.player.seek(position.value - Duration(seconds: 5));
+          final newPos = position.value - Duration(seconds: 5);
+          widget.player.seek(newPos);
+          widget.syncService.broadcastSeek(newPos);
           break;
         case .arrowRight:
-          widget.player.seek(position.value + Duration(seconds: 5));
+          final newPos = position.value + Duration(seconds: 5);
+          widget.player.seek(newPos);
+          widget.syncService.broadcastSeek(newPos);
           break;
         case .arrowUp:
           widget.player.setVolume(volume.value + 10);
@@ -236,14 +259,15 @@ class _PTVideoPlayerControlsState extends State<_PTVideoPlayerControls> {
         case .arrowDown:
           widget.player.setVolume(volume.value - 10);
           break;
-        case .keyK:
-          widget.player.playOrPause();
-          break;
         case .keyJ:
-          widget.player.seek(position.value - Duration(seconds: 10));
+          final newPos = position.value - Duration(seconds: 10);
+          widget.player.seek(newPos);
+          widget.syncService.broadcastSeek(newPos);
           break;
         case .keyL:
-          widget.player.seek(position.value + Duration(seconds: 10));
+          final newPos = position.value + Duration(seconds: 10);
+          widget.player.seek(newPos);
+          widget.syncService.broadcastSeek(newPos);
           break;
       }
       return .handled;
