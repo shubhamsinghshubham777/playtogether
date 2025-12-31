@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:media_kit/media_kit.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
@@ -16,6 +18,12 @@ class SyncService {
   bool _hasReceivedInitialState = false;
   bool _isApplyingRemoteAction = false;
 
+  final _chatController = StreamController<ChatEvent>.broadcast();
+  Stream<ChatEvent> get chatMessages => _chatController.stream;
+
+  final _chatHistory = <ChatEvent>[];
+  List<ChatEvent> get chatHistory => List.unmodifiable(_chatHistory);
+
   SyncService(this._player, {required this.username});
 
   /// Connect to the sync channel and start listening
@@ -30,11 +38,34 @@ class SyncService {
         .onBroadcast(event: SyncEventType.seek, callback: _handleSeek)
         .onBroadcast(event: SyncEventType.stateRequest, callback: _handleStateRequest)
         .onBroadcast(event: SyncEventType.stateResponse, callback: _handleStateResponse)
+        .onBroadcast(event: SyncEventType.chat, callback: _handleChat)
         .subscribe((status, error) {
           if (status == RealtimeSubscribeStatus.subscribed) {
             _requestInitialState();
           }
         });
+  }
+
+  /// Broadcast a chat message and store it in history
+  Future<ChatEvent> broadcastChat(String message) async {
+    final event = ChatEvent(
+      senderId: _clientId,
+      timestamp: DateTime.now().millisecondsSinceEpoch,
+      username: username,
+      message: message,
+    );
+    _chatHistory.add(event);
+    await _channel?.sendBroadcastMessage(
+      event: SyncEventType.chat,
+      payload: event.toPayload(),
+    );
+    return event;
+  }
+
+  void _handleChat(Map<String, dynamic> payload) {
+    final event = ChatEvent.fromPayload(payload);
+    _chatHistory.add(event);
+    _chatController.add(event);
   }
 
   /// Broadcast a play action
@@ -162,6 +193,7 @@ class SyncService {
   }
 
   void dispose() {
+    _chatController.close();
     disconnect();
   }
 }

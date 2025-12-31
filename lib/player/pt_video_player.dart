@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:fast_file_picker/fast_file_picker.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
+import 'package:playtogether/chat/chat_box.dart';
 import 'package:playtogether/player/chooser_dialog.dart';
 import 'package:playtogether/player/progress_section.dart';
 import 'package:playtogether/sync/sync_service.dart';
@@ -21,18 +24,62 @@ class PTVideoPlayer extends StatefulWidget {
 class _PTVideoPlayerState extends State<PTVideoPlayer> {
   late final controller = VideoController(widget.player);
 
+  bool _isChatOpen = false;
+  int _unreadCount = 0;
+  StreamSubscription? _chatSubscription;
+
   @override
   void initState() {
-    pickVideo();
     super.initState();
+    pickVideo();
+    _chatSubscription = widget.syncService.chatMessages.listen((_) {
+      if (!_isChatOpen) {
+        setState(() => _unreadCount++);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _chatSubscription?.cancel();
+    super.dispose();
+  }
+
+  void _toggleChat() {
+    setState(() {
+      _isChatOpen = !_isChatOpen;
+      if (_isChatOpen) _unreadCount = 0;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    return Video(
-      controller: controller,
-      controls: (_) => _PTVideoPlayerControls(widget.player, widget.syncService),
-      subtitleViewConfiguration: SubtitleViewConfiguration(padding: EdgeInsets.all(32)),
+    final screenWidth = MediaQuery.of(context).size.width;
+
+    return Row(
+      children: [
+        Expanded(
+          child: Video(
+            controller: controller,
+            controls: (_) => _PTVideoPlayerControls(
+              widget.player,
+              widget.syncService,
+              onChatToggle: _toggleChat,
+              unreadCount: _unreadCount,
+              isChatOpen: _isChatOpen,
+            ),
+            subtitleViewConfiguration: SubtitleViewConfiguration(padding: EdgeInsets.all(32)),
+          ),
+        ),
+        ClipRect(
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
+            width: _isChatOpen ? screenWidth * 0.25 : 0,
+            child: _isChatOpen ? ChatBox(syncService: widget.syncService) : null,
+          ),
+        ),
+      ],
     );
   }
 
@@ -45,10 +92,19 @@ class _PTVideoPlayerState extends State<PTVideoPlayer> {
 }
 
 class _PTVideoPlayerControls extends StatefulWidget {
-  const _PTVideoPlayerControls(this.player, this.syncService);
+  const _PTVideoPlayerControls(
+    this.player,
+    this.syncService, {
+    required this.onChatToggle,
+    required this.unreadCount,
+    required this.isChatOpen,
+  });
 
   final Player player;
   final SyncService syncService;
+  final VoidCallback onChatToggle;
+  final int unreadCount;
+  final bool isChatOpen;
 
   @override
   State<_PTVideoPlayerControls> createState() => _PTVideoPlayerControlsState();
@@ -183,6 +239,21 @@ class _PTVideoPlayerControlsState extends State<_PTVideoPlayerControls> {
                                     iconSize: 32,
                                   );
                                 },
+                              ),
+
+                              // Chat Toggle Button
+                              Badge(
+                                isLabelVisible: widget.unreadCount > 0,
+                                label: Text('${widget.unreadCount}'),
+                                child: IconButton(
+                                  onPressed: widget.onChatToggle,
+                                  icon: Icon(
+                                    widget.isChatOpen
+                                        ? Icons.chat_bubble
+                                        : Icons.chat_bubble_outline,
+                                  ),
+                                  iconSize: 32,
+                                ),
                               ),
                             ],
                           ),
