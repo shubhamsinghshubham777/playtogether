@@ -1,0 +1,86 @@
+name: Build App Installer (macOS)
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+
+# Cancel previous runs when a new commit is pushed
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  macos-dmg:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v6
+
+      - name: Get Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.38.1'
+          cache: true
+
+      - name: Cache Flutter build outputs
+        uses: actions/cache@v4
+        with:
+          path: |
+            build/macos
+            .dart_tool
+          key: ${{ runner.os }}-flutter-build-${{ hashFiles('**/pubspec.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-flutter-build-
+
+      - name: Create .env file
+        run: |
+          echo "${{ secrets.ENV_FILE }}" > .env
+
+      - name: Install CocoaPods dependencies
+        run: |
+          cd macos
+          pod install
+
+      - name: Build macOS App
+        run: |
+          flutter config --enable-macos-desktop
+          flutter build macos --release
+
+      - name: Extract version from pubspec.yaml
+        id: version
+        run: |
+          VERSION=$(grep '^version:' pubspec.yaml | cut -d ' ' -f 2 | cut -d '+' -f 1)
+          echo "APP_VERSION=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Install create-dmg
+        run: brew install create-dmg
+
+      - name: Create DMG
+        run: |
+          create-dmg \
+            --volname "PlayTogether" \
+            --window-pos 200 120 \
+            --window-size 800 400 \
+            --icon-size 100 \
+            --icon "PlayTogether.app" 200 190 \
+            --hide-extension "PlayTogether.app" \
+            --app-drop-link 600 185 \
+            "PlayTogether-${{ steps.version.outputs.APP_VERSION }}-macOS.dmg" \
+            "build/macos/Build/Products/Release/PlayTogether.app"
+
+      - name: Release DMG
+        uses: softprops/action-gh-release@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          files: |
+            ./PlayTogether-${{ steps.version.outputs.APP_VERSION }}-macOS.dmg
+          name: "${{ steps.version.outputs.APP_VERSION }}_${{ github.run_id }}"
+          target_commitish: "${{ github.sha }}"
+          tag_name: "v${{ steps.version.outputs.APP_VERSION }}_${{ github.run_id }}"
+          body: |
+            ## macOS Installation Notes
+
+            This build is unsigned. To run the app:
+            1. Open the DMG and drag PlayTogether to Applications
+            2. Right-click the app and select "Open" (first time only)
+            3. Or run: `xattr -cr /Applications/PlayTogether.app`
