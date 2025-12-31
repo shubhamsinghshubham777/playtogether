@@ -17,6 +17,7 @@ class _ChatBoxState extends State<ChatBox> {
   late final List<ChatEvent> _messages;
   final _controller = TextEditingController();
   final _scrollController = ScrollController();
+  final _focusNode = FocusNode();
   StreamSubscription<ChatEvent>? _subscription;
 
   @override
@@ -50,6 +51,7 @@ class _ChatBoxState extends State<ChatBox> {
     if (text.isEmpty) return;
 
     _controller.clear();
+    _focusNode.requestFocus();
     final event = await widget.syncService.broadcastChat(text);
 
     // Add own message to the list immediately (already stored in service history)
@@ -64,6 +66,7 @@ class _ChatBoxState extends State<ChatBox> {
     _subscription?.cancel();
     _controller.dispose();
     _scrollController.dispose();
+    _focusNode.dispose();
     super.dispose();
   }
 
@@ -143,6 +146,7 @@ class _ChatBoxState extends State<ChatBox> {
                 Expanded(
                   child: TextField(
                     controller: _controller,
+                    focusNode: _focusNode,
                     decoration: InputDecoration(
                       hintText: 'Type a message...',
                       isDense: true,
