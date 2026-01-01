@@ -52,6 +52,9 @@ jobs:
         run: |
           echo "${{ secrets.ENV_FILE }}" | Out-File -FilePath .env -Encoding utf8
 
+      - name: Install dependencies
+        run: flutter pub get
+
       - name: Build Windows App
         run: |
           flutter config --enable-windows-desktop
