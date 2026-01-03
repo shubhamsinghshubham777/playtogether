@@ -5,6 +5,7 @@ abstract class SyncEventType {
   static const String seek = 'seek';
   static const String stateRequest = 'state_request';
   static const String stateResponse = 'state_response';
+  static const String modeSwitch = 'mode_switch';
   static const String chat = 'chat';
   static const String typing = 'typing';
 }
@@ -25,6 +26,7 @@ sealed class SyncEvent {
       SyncEventType.seek => SeekEvent.fromPayload(payload),
       SyncEventType.stateRequest => StateRequestEvent.fromPayload(payload),
       SyncEventType.stateResponse => StateResponseEvent.fromPayload(payload),
+      SyncEventType.modeSwitch => ModeSwitchEvent.fromPayload(payload),
       _ => null,
     };
   }
@@ -41,10 +43,7 @@ class PlayEvent extends SyncEvent {
   }
 
   @override
-  Map<String, dynamic> toPayload() => {
-        'senderId': senderId,
-        'timestamp': timestamp,
-      };
+  Map<String, dynamic> toPayload() => {'senderId': senderId, 'timestamp': timestamp};
 }
 
 class PauseEvent extends SyncEvent {
@@ -58,20 +57,13 @@ class PauseEvent extends SyncEvent {
   }
 
   @override
-  Map<String, dynamic> toPayload() => {
-        'senderId': senderId,
-        'timestamp': timestamp,
-      };
+  Map<String, dynamic> toPayload() => {'senderId': senderId, 'timestamp': timestamp};
 }
 
 class SeekEvent extends SyncEvent {
   final int positionMs;
 
-  const SeekEvent({
-    required super.senderId,
-    required super.timestamp,
-    required this.positionMs,
-  });
+  const SeekEvent({required super.senderId, required super.timestamp, required this.positionMs});
 
   factory SeekEvent.fromPayload(Map<String, dynamic> payload) {
     return SeekEvent(
@@ -83,10 +75,10 @@ class SeekEvent extends SyncEvent {
 
   @override
   Map<String, dynamic> toPayload() => {
-        'senderId': senderId,
-        'timestamp': timestamp,
-        'positionMs': positionMs,
-      };
+    'senderId': senderId,
+    'timestamp': timestamp,
+    'positionMs': positionMs,
+  };
 }
 
 class StateRequestEvent extends SyncEvent {
@@ -100,21 +92,22 @@ class StateRequestEvent extends SyncEvent {
   }
 
   @override
-  Map<String, dynamic> toPayload() => {
-        'senderId': senderId,
-        'timestamp': timestamp,
-      };
+  Map<String, dynamic> toPayload() => {'senderId': senderId, 'timestamp': timestamp};
 }
 
 class StateResponseEvent extends SyncEvent {
   final bool playing;
   final int positionMs;
+  final String mode;
+  final String? youtubeUrl;
 
   const StateResponseEvent({
     required super.senderId,
     required super.timestamp,
     required this.playing,
     required this.positionMs,
+    required this.mode,
+    this.youtubeUrl,
   });
 
   factory StateResponseEvent.fromPayload(Map<String, dynamic> payload) {
@@ -123,16 +116,49 @@ class StateResponseEvent extends SyncEvent {
       timestamp: payload['timestamp'] as int,
       playing: payload['playing'] as bool,
       positionMs: payload['positionMs'] as int,
+      mode: payload['mode'] as String? ?? 'local',
+      youtubeUrl: payload['youtubeUrl'] as String?,
     );
   }
 
   @override
   Map<String, dynamic> toPayload() => {
-        'senderId': senderId,
-        'timestamp': timestamp,
-        'playing': playing,
-        'positionMs': positionMs,
-      };
+    'senderId': senderId,
+    'timestamp': timestamp,
+    'playing': playing,
+    'positionMs': positionMs,
+    'mode': mode,
+    'youtubeUrl': youtubeUrl,
+  };
+}
+
+class ModeSwitchEvent extends SyncEvent {
+  final String mode;
+  final String? youtubeUrl;
+
+  const ModeSwitchEvent({
+    required super.senderId,
+    required super.timestamp,
+    required this.mode,
+    this.youtubeUrl,
+  });
+
+  factory ModeSwitchEvent.fromPayload(Map<String, dynamic> payload) {
+    return ModeSwitchEvent(
+      senderId: payload['senderId'] as String,
+      timestamp: payload['timestamp'] as int,
+      mode: payload['mode'] as String,
+      youtubeUrl: payload['youtubeUrl'] as String?,
+    );
+  }
+
+  @override
+  Map<String, dynamic> toPayload() => {
+    'senderId': senderId,
+    'timestamp': timestamp,
+    'mode': mode,
+    'youtubeUrl': youtubeUrl,
+  };
 }
 
 class ChatEvent extends SyncEvent {
@@ -157,11 +183,11 @@ class ChatEvent extends SyncEvent {
 
   @override
   Map<String, dynamic> toPayload() => {
-        'senderId': senderId,
-        'timestamp': timestamp,
-        'username': username,
-        'message': message,
-      };
+    'senderId': senderId,
+    'timestamp': timestamp,
+    'username': username,
+    'message': message,
+  };
 }
 
 class TypingEvent extends SyncEvent {
@@ -186,9 +212,9 @@ class TypingEvent extends SyncEvent {
 
   @override
   Map<String, dynamic> toPayload() => {
-        'senderId': senderId,
-        'timestamp': timestamp,
-        'username': username,
-        'isTyping': isTyping,
-      };
+    'senderId': senderId,
+    'timestamp': timestamp,
+    'username': username,
+    'isTyping': isTyping,
+  };
 }

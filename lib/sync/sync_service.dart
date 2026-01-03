@@ -29,8 +29,20 @@ class SyncService {
   final _typingController = StreamController<TypingEvent>.broadcast();
   Stream<TypingEvent> get typingStream => _typingController.stream;
 
+  final _modeSwitchController = StreamController<ModeSwitchEvent>.broadcast();
+  Stream<ModeSwitchEvent> get modeSwitchStream => _modeSwitchController.stream;
+
   final _chatHistory = <ChatEvent>[];
   List<ChatEvent> get chatHistory => List.unmodifiable(_chatHistory);
+
+  // Callbacks for dual-player control (local vs YouTube)
+  void Function()? onRemotePlay;
+  void Function()? onRemotePause;
+  void Function(Duration)? onRemoteSeek;
+
+  // Track current playback state
+  String _currentMode = 'local';
+  String? _currentYoutubeUrl;
 
   SyncService(this._player, {required this.username});
 
@@ -46,6 +58,7 @@ class SyncService {
         .onBroadcast(event: SyncEventType.seek, callback: _handleSeek)
         .onBroadcast(event: SyncEventType.stateRequest, callback: _handleStateRequest)
         .onBroadcast(event: SyncEventType.stateResponse, callback: _handleStateResponse)
+        .onBroadcast(event: SyncEventType.modeSwitch, callback: _handleModeSwitch)
         .onBroadcast(event: SyncEventType.chat, callback: _handleChat)
         .onBroadcast(event: SyncEventType.typing, callback: _handleTyping)
         .onPresenceSync(_handlePresenceSync)
@@ -85,10 +98,7 @@ class SyncService {
       message: message,
     );
     _chatHistory.add(event);
-    await _channel?.sendBroadcastMessage(
-      event: SyncEventType.chat,
-      payload: event.toPayload(),
-    );
+    await _channel?.sendBroadcastMessage(event: SyncEventType.chat, payload: event.toPayload());
     return event;
   }
 
@@ -153,6 +163,26 @@ class SyncService {
     );
   }
 
+  /// Broadcast a mode switch action
+  Future<void> broadcastModeSwitch(String mode, String? youtubeUrl) async {
+    if (_isApplyingRemoteAction) return;
+    await _channel?.sendBroadcastMessage(
+      event: SyncEventType.modeSwitch,
+      payload: ModeSwitchEvent(
+        senderId: _clientId,
+        timestamp: DateTime.now().millisecondsSinceEpoch,
+        mode: mode,
+        youtubeUrl: youtubeUrl,
+      ).toPayload(),
+    );
+  }
+
+  /// Update the current playback state (called by PTVideoPlayer)
+  void updatePlaybackState(String mode, String? youtubeUrl) {
+    _currentMode = mode;
+    _currentYoutubeUrl = youtubeUrl;
+  }
+
   void _requestInitialState() {
     _channel?.sendBroadcastMessage(
       event: SyncEventType.stateRequest,
@@ -165,23 +195,47 @@ class SyncService {
 
   void _handlePlay(Map<String, dynamic> payload) {
     if (!_shouldApply(payload)) return;
-    _applyRemoteAction(() => _player.play());
+    _applyRemoteAction(() {
+      if (onRemotePlay != null) {
+        onRemotePlay!();
+      } else {
+        _player.play();
+      }
+    });
   }
 
   void _handlePause(Map<String, dynamic> payload) {
     if (!_shouldApply(payload)) return;
-    _applyRemoteAction(() => _player.pause());
+    _applyRemoteAction(() {
+      if (onRemotePause != null) {
+        onRemotePause!();
+      } else {
+        _player.pause();
+      }
+    });
   }
 
   void _handleSeek(Map<String, dynamic> payload) {
     if (!_shouldApply(payload)) return;
     final positionMs = payload['positionMs'] as int;
-    _applyRemoteAction(() => _player.seek(Duration(milliseconds: positionMs)));
+    _applyRemoteAction(() {
+      if (onRemoteSeek != null) {
+        onRemoteSeek!(Duration(milliseconds: positionMs));
+      } else {
+        _player.seek(Duration(milliseconds: positionMs));
+      }
+    });
+  }
+
+  void _handleModeSwitch(Map<String, dynamic> payload) {
+    if (!_shouldApply(payload)) return;
+    final event = ModeSwitchEvent.fromPayload(payload);
+    _modeSwitchController.add(event);
   }
 
   void _handleStateRequest(Map<String, dynamic> payload) {
-    // Only respond if we have a video loaded
-    if (_player.state.duration == Duration.zero) return;
+    // Only respond if we have a video loaded (local mode) or YouTube URL set
+    if (_player.state.duration == Duration.zero && _currentYoutubeUrl == null) return;
 
     _channel?.sendBroadcastMessage(
       event: SyncEventType.stateResponse,
@@ -190,6 +244,8 @@ class SyncService {
         timestamp: DateTime.now().millisecondsSinceEpoch,
         playing: _player.state.playing,
         positionMs: _player.state.position.inMilliseconds,
+        mode: _currentMode,
+        youtubeUrl: _currentYoutubeUrl,
       ).toPayload(),
     );
   }
@@ -199,15 +255,39 @@ class SyncService {
     if (_hasReceivedInitialState) return;
     _hasReceivedInitialState = true;
 
-    final positionMs = payload['positionMs'] as int;
-    final playing = payload['playing'] as bool;
+    final event = StateResponseEvent.fromPayload(payload);
 
+    // First, handle mode switch if needed
+    if (event.mode != 'local' || event.youtubeUrl != null) {
+      final modeSwitchEvent = ModeSwitchEvent(
+        senderId: event.senderId,
+        timestamp: event.timestamp,
+        mode: event.mode,
+        youtubeUrl: event.youtubeUrl,
+      );
+      _modeSwitchController.add(modeSwitchEvent);
+    }
+
+    // Then apply playback state
     _applyRemoteAction(() async {
-      await _player.seek(Duration(milliseconds: positionMs));
-      if (playing) {
-        await _player.play();
+      await Future.delayed(const Duration(milliseconds: 500)); // Wait for mode switch to complete
+      if (onRemoteSeek != null) {
+        onRemoteSeek!(Duration(milliseconds: event.positionMs));
       } else {
-        await _player.pause();
+        await _player.seek(Duration(milliseconds: event.positionMs));
+      }
+      if (event.playing) {
+        if (onRemotePlay != null) {
+          onRemotePlay!();
+        } else {
+          await _player.play();
+        }
+      } else {
+        if (onRemotePause != null) {
+          onRemotePause!();
+        } else {
+          await _player.pause();
+        }
       }
     });
   }
@@ -244,6 +324,7 @@ class SyncService {
     _chatController.close();
     _peerOnlineController.close();
     _typingController.close();
+    _modeSwitchController.close();
     disconnect();
   }
 }

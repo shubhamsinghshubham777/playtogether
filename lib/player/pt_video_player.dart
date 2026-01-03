@@ -9,8 +9,14 @@ import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:playtogether/chat/chat_box.dart';
 import 'package:playtogether/player/chooser_dialog.dart';
+import 'package:playtogether/player/mode_selection_dialog.dart';
 import 'package:playtogether/player/progress_section.dart';
+import 'package:playtogether/player/youtube_controls.dart';
+import 'package:playtogether/player/youtube_url_dialog.dart';
 import 'package:playtogether/sync/sync_service.dart';
+import 'package:youtube_player_flutter/youtube_player_flutter.dart' as yt;
+
+enum PlaybackMode { local, youtube }
 
 class PTVideoPlayer extends StatefulWidget {
   const PTVideoPlayer(this.player, this.syncService, {super.key});
@@ -31,10 +37,22 @@ class _PTVideoPlayerState extends State<PTVideoPlayer> {
   StreamSubscription? _chatSubscription;
   StreamSubscription? _presenceSubscription;
 
+  // YouTube mode state
+  PlaybackMode _currentMode = .local;
+  String? _currentYoutubeUrl;
+  yt.YoutubePlayerController? _youtubeController;
+  StreamSubscription? _modeSwitchSubscription;
+  bool _youtubeWasPlaying = false;
+  bool _isModeSelectionDialogOpen = false;
+  bool _isYouTubeUrlDialogOpen = false;
+
   @override
   void initState() {
     super.initState();
-    pickVideo();
+
+    // Show mode selection dialog on startup
+    WidgetsBinding.instance.addPostFrameCallback((_) => _showModeSelectionDialog());
+
     _isPeerOnline = widget.syncService.isPeerOnline;
     _chatSubscription = widget.syncService.chatMessages.listen((_) {
       if (!_isChatOpen) {
@@ -44,12 +62,94 @@ class _PTVideoPlayerState extends State<PTVideoPlayer> {
     _presenceSubscription = widget.syncService.peerOnlineStream.listen((isOnline) {
       setState(() => _isPeerOnline = isOnline);
     });
+
+    // Subscribe to mode switch events
+    _modeSwitchSubscription = widget.syncService.modeSwitchStream.listen((event) async {
+      // Close all open dialogs when receiving a remote mode switch
+      if (mounted) {
+        // If YouTube URL dialog is open, close it first (it's on top)
+        if (_isYouTubeUrlDialogOpen) {
+          Navigator.of(context).pop();
+          _isYouTubeUrlDialogOpen = false;
+        }
+        // Then close mode selection dialog if it's open (it's underneath)
+        if (_isModeSelectionDialogOpen) {
+          Navigator.of(context).pop();
+          _isModeSelectionDialogOpen = false;
+        }
+      }
+
+      final PlaybackMode mode = event.mode == 'youtube' ? .youtube : .local;
+      if (mode == .youtube && event.youtubeUrl != null) {
+        _switchToYouTubeMode(event.youtubeUrl!);
+      } else {
+        await _switchToLocalMode();
+      }
+    });
+
+    // Set up remote control callbacks
+    widget.syncService.onRemotePlay = () {
+      if (_currentMode == .youtube) {
+        _youtubeController?.play();
+      } else {
+        widget.player.play();
+      }
+    };
+
+    widget.syncService.onRemotePause = () {
+      if (_currentMode == .youtube) {
+        _youtubeController?.pause();
+      } else {
+        widget.player.pause();
+      }
+    };
+
+    widget.syncService.onRemoteSeek = (position) {
+      if (_currentMode == PlaybackMode.youtube) {
+        _youtubeController?.seekTo(position);
+        _youtubeController?.pause(); // Prevent auto-play after seek
+      } else {
+        widget.player.seek(position);
+      }
+    };
+  }
+
+  Future<void> _showModeSelectionDialog() async {
+    _isModeSelectionDialogOpen = true;
+    final mode = await showDialog<InitialMode>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => ModeSelectionDialog(),
+    );
+    _isModeSelectionDialogOpen = false;
+
+    if (!mounted) return;
+
+    if (mode == InitialMode.local) {
+      await pickVideo();
+      // No need to broadcast, already in local mode by default
+    } else if (mode == InitialMode.youtube) {
+      _isYouTubeUrlDialogOpen = true;
+      final url = await showDialog<String>(context: context, builder: (_) => YouTubeUrlDialog());
+      _isYouTubeUrlDialogOpen = false;
+      if (!mounted) return;
+
+      if (url != null) {
+        await _handleModeSwitch(.youtube, url);
+      } else if (_currentMode == .local) {
+        // User cancelled and mode hasn't been remotely switched, show dialog again
+        _showModeSelectionDialog();
+      }
+      // If mode is already youtube, a remote mode switch occurred, don't re-show dialog
+    }
   }
 
   @override
   void dispose() {
     _chatSubscription?.cancel();
     _presenceSubscription?.cancel();
+    _modeSwitchSubscription?.cancel();
+    _youtubeController?.dispose();
     super.dispose();
   }
 
@@ -58,6 +158,125 @@ class _PTVideoPlayerState extends State<PTVideoPlayer> {
       _isChatOpen = !_isChatOpen;
       if (_isChatOpen) _unreadCount = 0;
     });
+  }
+
+  String? _extractVideoId(String url) {
+    final patterns = [
+      RegExp(r'youtube\.com/watch\?v=([a-zA-Z0-9_-]{11})'),
+      RegExp(r'youtu\.be/([a-zA-Z0-9_-]{11})'),
+      RegExp(r'youtube\.com/embed/([a-zA-Z0-9_-]{11})'),
+      RegExp(r'm\.youtube\.com/watch\?v=([a-zA-Z0-9_-]{11})'),
+    ];
+
+    for (final pattern in patterns) {
+      final match = pattern.firstMatch(url);
+      if (match != null) return match.group(1);
+    }
+    return null;
+  }
+
+  Future<void> _switchToYouTubeMode(String url) async {
+    final videoId = _extractVideoId(url);
+    if (videoId == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Invalid YouTube URL')));
+      }
+      return;
+    }
+
+    setState(() {
+      _currentMode = .youtube;
+      _currentYoutubeUrl = url;
+
+      // Dispose old YouTube controller if exists
+      _youtubeController?.dispose();
+
+      // Create new YouTube controller
+      _youtubeController = yt.YoutubePlayerController(
+        initialVideoId: videoId,
+        flags: const yt.YoutubePlayerFlags(
+          autoPlay: false,
+          mute: false,
+          hideThumbnail: true,
+          enableCaption: true,
+          captionLanguage: 'English',
+          forceHD: true,
+        ),
+      );
+
+      // Listen to YouTube player state changes for sync
+      _youtubeController!.addListener(_onYouTubePlayerEvent);
+    });
+
+    // Update sync service with current state
+    widget.syncService.updatePlaybackState('youtube', url);
+  }
+
+  Future<void> _switchToLocalMode() async {
+    setState(() {
+      _currentMode = .local;
+      _currentYoutubeUrl = null;
+
+      // Dispose YouTube controller
+      _youtubeController?.dispose();
+      _youtubeController = null;
+    });
+
+    // Update sync service
+    widget.syncService.updatePlaybackState('local', null);
+
+    // Automatically prompt user to select a video file
+    await pickVideo();
+  }
+
+  void _onYouTubePlayerEvent() {
+    if (_youtubeController == null) return;
+
+    final state = _youtubeController!.value.playerState;
+    final isPlaying = state == .playing;
+
+    // Detect play/pause changes and broadcast
+    if (isPlaying && !_youtubeWasPlaying) {
+      _youtubeWasPlaying = true;
+      widget.syncService.broadcastPlay();
+    } else if (!isPlaying && _youtubeWasPlaying && state == .paused) {
+      _youtubeWasPlaying = false;
+      widget.syncService.broadcastPause();
+    }
+
+    // Handle errors
+    if (_youtubeController!.value.hasError) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to load YouTube video')));
+    }
+  }
+
+  Future<void> _handleModeSwitch(PlaybackMode targetMode, String? url) async {
+    if (targetMode == .youtube) {
+      if (url != null) {
+        await _switchToYouTubeMode(url);
+        widget.syncService.broadcastModeSwitch('youtube', url);
+      }
+    } else {
+      await _switchToLocalMode();
+      widget.syncService.broadcastModeSwitch('local', null);
+    }
+  }
+
+  Future<void> _handleChangeYouTubeUrl() async {
+    _isYouTubeUrlDialogOpen = true;
+    final url = await showDialog<String>(
+      context: context,
+      builder: (context) => YouTubeUrlDialog(),
+    );
+    _isYouTubeUrlDialogOpen = false;
+    if (!mounted) return;
+
+    if (url != null) {
+      await _switchToYouTubeMode(url);
+      widget.syncService.broadcastModeSwitch('youtube', url);
+    }
   }
 
   @override
@@ -69,11 +288,40 @@ class _PTVideoPlayerState extends State<PTVideoPlayer> {
         Expanded(
           child: Stack(
             children: [
-              Video(
-                controller: controller,
-                controls: (_) => _PTVideoPlayerControls(widget.player, widget.syncService),
-                subtitleViewConfiguration: SubtitleViewConfiguration(padding: EdgeInsets.all(32)),
-              ),
+              // Conditionally render local video player
+              if (_currentMode == .local)
+                Video(
+                  controller: controller,
+                  controls: (_) => _PTVideoPlayerControls(
+                    player: widget.player,
+                    syncService: widget.syncService,
+                    mode: .local,
+                    youtubeController: null,
+                    onModeSwitch: _handleModeSwitch,
+                    onSelectVideo: pickVideo,
+                  ),
+                  subtitleViewConfiguration: SubtitleViewConfiguration(padding: EdgeInsets.all(32)),
+                ),
+
+              // Conditionally render YouTube player
+              if (_currentMode == .youtube && _youtubeController != null)
+                yt.YoutubePlayer(
+                  key: ValueKey(_currentYoutubeUrl),
+                  controller: _youtubeController!,
+                  showVideoProgressIndicator: false,
+                  bottomActions: [],
+                  topActions: [],
+                ),
+
+              // Overlay custom YouTube controls for YouTube mode
+              if (_currentMode == .youtube && _youtubeController != null)
+                YouTubeControls(
+                  controller: _youtubeController!,
+                  syncService: widget.syncService,
+                  onSwitchToLocal: () => _handleModeSwitch(.local, null),
+                  onChangeUrl: _handleChangeYouTubeUrl,
+                ),
+
               if (_isPeerOnline)
                 Positioned(
                   top: 16,
@@ -149,10 +397,21 @@ class _PTVideoPlayerState extends State<PTVideoPlayer> {
 }
 
 class _PTVideoPlayerControls extends StatefulWidget {
-  const _PTVideoPlayerControls(this.player, this.syncService);
+  const _PTVideoPlayerControls({
+    required this.player,
+    required this.syncService,
+    required this.mode,
+    required this.youtubeController,
+    required this.onModeSwitch,
+    required this.onSelectVideo,
+  });
 
   final Player player;
   final SyncService syncService;
+  final PlaybackMode mode;
+  final yt.YoutubePlayerController? youtubeController;
+  final Future<void> Function(PlaybackMode mode, String? url) onModeSwitch;
+  final VoidCallback onSelectVideo;
 
   @override
   State<_PTVideoPlayerControls> createState() => _PTVideoPlayerControlsState();
@@ -167,6 +426,8 @@ class _PTVideoPlayerControlsState extends State<_PTVideoPlayerControls> {
   final audioTracks = ValueNotifier(<AudioTrack>[]);
   final subtitleTracks = ValueNotifier(<SubtitleTrack>[]);
 
+  final _subscriptions = <StreamSubscription>[];
+
   @override
   void initState() {
     super.initState();
@@ -178,14 +439,30 @@ class _PTVideoPlayerControlsState extends State<_PTVideoPlayerControls> {
     volume.value = state.volume;
 
     final stream = widget.player.stream;
-    stream.playing.listen((playing) => this.playing.value = playing);
-    stream.duration.listen((duration) => this.duration.value = duration);
-    stream.position.listen((position) => this.position.value = position);
-    stream.volume.listen((volume) => this.volume.value = volume);
-    stream.tracks.listen((tracks) {
-      audioTracks.value = tracks.audio;
-      subtitleTracks.value = tracks.subtitle;
-    });
+    _subscriptions.addAll([
+      stream.playing.listen((playing) => this.playing.value = playing),
+      stream.duration.listen((duration) => this.duration.value = duration),
+      stream.position.listen((position) => this.position.value = position),
+      stream.volume.listen((volume) => this.volume.value = volume),
+      stream.tracks.listen((tracks) {
+        audioTracks.value = tracks.audio;
+        subtitleTracks.value = tracks.subtitle;
+      }),
+    ]);
+  }
+
+  @override
+  void dispose() {
+    for (final s in _subscriptions) {
+      s.cancel();
+    }
+    playing.dispose();
+    duration.dispose();
+    position.dispose();
+    volume.dispose();
+    audioTracks.dispose();
+    subtitleTracks.dispose();
+    super.dispose();
   }
 
   bool get _isMobile =>
@@ -213,76 +490,144 @@ class _PTVideoPlayerControlsState extends State<_PTVideoPlayerControls> {
                   spacing: 16,
                   children: [
                     Row(
-                      mainAxisAlignment: .spaceBetween,
                       spacing: 24,
                       children: [
                         // Audio Tracks Button
-                        ValueListenableBuilder(
-                          valueListenable: audioTracks,
-                          builder: (context, audioTracks, _) {
-                            return IconButton(
-                              onPressed: audioTracks.isEmpty
-                                  ? null
-                                  : () => showDialog(
-                                      context: context,
-                                      builder: (context) => ChooserDialog(
-                                        type: 'Audio',
-                                        values: audioTracks,
-                                        onChosen: (track) async {
-                                          await widget.player.setAudioTrack(track);
-                                          if (context.mounted) Navigator.of(context).pop();
-                                        },
+                        Center(
+                          child: ValueListenableBuilder(
+                            valueListenable: audioTracks,
+                            builder: (context, audioTracks, _) {
+                              return IconButton(
+                                onPressed: audioTracks.isEmpty
+                                    ? null
+                                    : () => showDialog(
+                                        context: context,
+                                        builder: (context) => ChooserDialog(
+                                          type: 'Audio',
+                                          values: audioTracks,
+                                          onChosen: (track) async {
+                                            await widget.player.setAudioTrack(track);
+                                            if (context.mounted) Navigator.of(context).pop();
+                                          },
+                                        ),
                                       ),
-                                    ),
-                              icon: Icon(Icons.audiotrack_rounded),
-                              iconSize: 32,
-                            );
-                          },
+                                icon: Icon(Icons.audiotrack_rounded),
+                                iconSize: 32,
+                              );
+                            },
+                          ),
+                        ),
+
+                        // Mode Switch Button
+                        Center(
+                          child: IconButton(
+                            onPressed: () async {
+                              if (widget.mode == .local) {
+                                // Switch TO YouTube - show URL dialog
+                                final url = await showDialog<String>(
+                                  context: context,
+                                  builder: (_) => YouTubeUrlDialog(),
+                                );
+                                if (url != null) await widget.onModeSwitch(.youtube, url);
+                              } else {
+                                // Switch TO local mode
+                                await widget.onModeSwitch(.local, null);
+                              }
+                            },
+                            icon: Icon(
+                              widget.mode == .local ? Icons.play_circle_outline : Icons.video_file,
+                            ),
+                            iconSize: 32,
+                          ),
                         ),
 
                         // Play/Pause Button
-                        ValueListenableBuilder(
-                          valueListenable: playing,
-                          builder: (context, playing, _) {
-                            return IconButton(
-                              onPressed: () {
-                                widget.player.playOrPause();
-                                if (playing) {
-                                  widget.syncService.broadcastPause();
-                                } else {
-                                  widget.syncService.broadcastPlay();
-                                }
-                              },
-                              icon: Icon(playing ? Icons.pause_rounded : Icons.play_arrow_rounded),
-                              iconSize: 64,
-                            );
-                          },
+                        Center(
+                          child: ValueListenableBuilder(
+                            valueListenable: playing,
+                            builder: (context, playing, _) {
+                              // Determine if YouTube is playing
+                              final isYoutubePlaying =
+                                  widget.mode == .youtube &&
+                                  widget.youtubeController?.value.playerState == .playing;
+                              final isPlaying = widget.mode == .youtube
+                                  ? isYoutubePlaying
+                                  : playing;
+
+                              return IconButton(
+                                onPressed: () {
+                                  if (widget.mode == .youtube) {
+                                    final controller = widget.youtubeController;
+                                    if (controller != null) {
+                                      final currentPosition = controller.value.position;
+                                      if (controller.value.playerState == .playing) {
+                                        controller.pause();
+                                        widget.syncService.broadcastPause();
+                                        widget.syncService.broadcastSeek(currentPosition);
+                                      } else {
+                                        controller.play();
+                                        widget.syncService.broadcastPlay();
+                                        widget.syncService.broadcastSeek(currentPosition);
+                                      }
+                                    }
+                                  } else {
+                                    final currentPosition = widget.player.state.position;
+                                    widget.player.playOrPause();
+                                    if (playing) {
+                                      widget.syncService.broadcastPause();
+                                      widget.syncService.broadcastSeek(currentPosition);
+                                    } else {
+                                      widget.syncService.broadcastPlay();
+                                      widget.syncService.broadcastSeek(currentPosition);
+                                    }
+                                  }
+                                },
+                                icon: Icon(
+                                  isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                                ),
+                                iconSize: 64,
+                              );
+                            },
+                          ),
                         ),
 
                         // Subtitle Tracks Button
-                        ValueListenableBuilder(
-                          valueListenable: subtitleTracks,
-                          builder: (context, subtitleTracks, _) {
-                            return IconButton(
-                              onPressed: subtitleTracks.isEmpty
-                                  ? null
-                                  : () => showDialog(
-                                      context: context,
-                                      builder: (context) => ChooserDialog(
-                                        type: 'Subtitle',
-                                        values: subtitleTracks,
-                                        onChosen: (track) async {
-                                          await widget.player.setSubtitleTrack(track);
-                                          if (context.mounted) Navigator.of(context).pop();
-                                        },
+                        Center(
+                          child: ValueListenableBuilder(
+                            valueListenable: subtitleTracks,
+                            builder: (context, subtitleTracks, _) {
+                              return IconButton(
+                                onPressed: subtitleTracks.isEmpty
+                                    ? null
+                                    : () => showDialog(
+                                        context: context,
+                                        builder: (context) => ChooserDialog(
+                                          type: 'Subtitle',
+                                          values: subtitleTracks,
+                                          onChosen: (track) async {
+                                            await widget.player.setSubtitleTrack(track);
+                                            if (context.mounted) Navigator.of(context).pop();
+                                          },
+                                        ),
                                       ),
-                                    ),
-                              icon: Icon(Icons.subtitles),
-                              iconSize: 32,
-                            );
-                          },
+                                icon: Icon(Icons.subtitles),
+                                iconSize: 32,
+                              );
+                            },
+                          ),
                         ),
-                      ],
+
+                        // Select Video Button (only in local mode)
+                        if (widget.mode == .local)
+                          Center(
+                            child: IconButton(
+                              onPressed: widget.onSelectVideo,
+                              icon: Icon(Icons.folder_open),
+                              iconSize: 32,
+                              tooltip: 'Select video file',
+                            ),
+                          ),
+                      ].map((child) => Expanded(child: child)).toList(),
                     ),
                     ValueListenableBuilder(
                       valueListenable: duration,
@@ -293,7 +638,11 @@ class _PTVideoPlayerControlsState extends State<_PTVideoPlayerControls> {
                             position: position,
                             duration: duration,
                             onSeek: (newPosition) async {
-                              await widget.player.seek(newPosition);
+                              if (widget.mode == .youtube) {
+                                widget.youtubeController?.seekTo(newPosition);
+                              } else {
+                                await widget.player.seek(newPosition);
+                              }
                               widget.syncService.broadcastSeek(newPosition);
                             },
                             volumeSection: ValueListenableBuilder(
@@ -356,11 +705,14 @@ class _PTVideoPlayerControlsState extends State<_PTVideoPlayerControls> {
     switch (event.logicalKey) {
       case LogicalKeyboardKey.space:
       case LogicalKeyboardKey.keyK:
+        final currentPosition = widget.player.state.position;
         widget.player.playOrPause();
         if (playing.value) {
           widget.syncService.broadcastPause();
+          widget.syncService.broadcastSeek(currentPosition);
         } else {
           widget.syncService.broadcastPlay();
+          widget.syncService.broadcastSeek(currentPosition);
         }
         return KeyEventResult.handled;
       case LogicalKeyboardKey.arrowLeft:
