@@ -1,0 +1,15 @@
+{
+  "dart.flutterSdkPath": ".fvm/versions/3.44.8",
+  // Prevents the IDE from scanning the directory during global searches
+  "search.exclude": {
+    "**/.fvm": true
+  },
+  // Crucial: Prevents VSCode from keeping active file system hooks on the SDK
+  "files.watcherExclude": {
+    "**/.fvm": true
+  },
+  // Hides the directory from the Explorer sidebar to keep things clean (Optional)
+  "files.exclude": {
+    "**/.fvm": true
+  }
+}
