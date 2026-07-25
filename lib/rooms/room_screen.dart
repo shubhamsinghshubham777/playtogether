@@ -54,8 +54,23 @@ class _RoomScreenState extends State<RoomScreen> {
   String? _youtubeUrl;
   yt.YoutubePlayerController? _youtubeController;
   bool _youtubeWasPlaying = false;
+  // YT sync uses an *intent* model: `seekTo` in youtube_player_flutter always
+  // calls play(), and iframe state transitions land 200-500 ms after commands
+  // (far outside SyncService's 100 ms settle window). `_ytIntendedPlaying` is
+  // the agreed play state; the player listener only broadcasts transitions
+  // that DIVERGE from it (i.e. the user acted on the iframe directly).
+  bool _ytIntendedPlaying = false;
+  // Remote commands that arrive before the iframe is ready are queued and
+  // flushed on the first ready event (late-joiner state_response).
+  Duration? _pendingYtSeek;
+  bool? _pendingYtPlay;
+  // Ignore the transient playing-blip caused by seekTo-then-pause.
+  DateTime _ytEventSuppressUntil = DateTime.fromMillisecondsSinceEpoch(0);
   bool _isModeSelectionDialogOpen = false;
   bool _isYouTubeUrlDialogOpen = false;
+  // A remote mode_switch popping the URL dialog must not trip the
+  // "cancelled and still idle: re-ask" fallback.
+  bool _urlDialogDismissedRemotely = false;
 
   bool _playing = false;
   Duration _position = Duration.zero;
@@ -95,14 +110,22 @@ class _RoomScreenState extends State<RoomScreen> {
       return;
     }
 
+    // A transient fetch failure must NOT be misread as "room ended" —
+    // only a missing/expired room gets the "That's a wrap!" treatment.
     Room? room;
+    var loadFailed = false;
     try {
       room = await RoomService.instance.fetchRoom(widget.roomId);
       await RoomService.instance.syncServerTime();
     } catch (_) {
-      room = null;
+      loadFailed = true;
     }
     if (!mounted) return;
+    if (loadFailed) {
+      _snack("Couldn't load the room — check your connection and try again.");
+      context.go('/lobby');
+      return;
+    }
     if (room == null ||
         room.endedAt != null ||
         room.expiresAt.isBefore(RoomService.instance.serverNow)) {
@@ -110,7 +133,15 @@ class _RoomScreenState extends State<RoomScreen> {
       return;
     }
 
-    _members = await RoomService.instance.fetchMembers(widget.roomId);
+    try {
+      _members = await RoomService.instance.fetchMembers(widget.roomId);
+    } catch (_) {
+      if (mounted) {
+        _snack("Couldn't load the room — check your connection and try again.");
+        context.go('/lobby');
+      }
+      return;
+    }
     final selfMembership = _members.where((m) => m.userId == profile.id).firstOrNull;
     if (selfMembership == null) {
       // RLS would have hidden the room if we weren't a member; defensive.
@@ -145,7 +176,12 @@ class _RoomScreenState extends State<RoomScreen> {
       sync.modeSwitchStream.listen(_onRemoteModeSwitch),
       sync.fileInfoStream.listen(_onRemoteFileInfo),
       sync.roomEndedStream.listen((_) => _onRoomEnded()),
-      sync.connectionStream.listen((up) => setState(() => _connected = up)),
+      sync.connectionStream.listen((up) {
+        final wasConnected = _connected;
+        setState(() => _connected = up);
+        // Backfill anything said during the outage — broadcasts don't replay.
+        if (up && !wasConnected) _reloadChatHistory();
+      }),
       widget.player.stream.playing.listen((playing) {
         if (_mode == .local) setState(() => _playing = playing);
       }),
@@ -165,10 +201,7 @@ class _RoomScreenState extends State<RoomScreen> {
     });
 
     await sync.connect();
-    sync.loadChatHistory().then((history) {
-      if (!mounted) return;
-      setState(() => _messages.insertAll(0, history));
-    }).catchError((_) {});
+    unawaited(_reloadChatHistory());
 
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (_) => _tickCountdown());
     _tickCountdown();
@@ -226,8 +259,15 @@ class _RoomScreenState extends State<RoomScreen> {
   // Remote playback routing (dual player)
   // ---------------------------------------------------------------------------
 
+  bool get _ytReady => _youtubeController?.value.isReady ?? false;
+
   void _remotePlay() {
     if (_mode == .youtube) {
+      _ytIntendedPlaying = true;
+      if (!_ytReady) {
+        _pendingYtPlay = true;
+        return;
+      }
       _youtubeController?.play();
     } else {
       widget.player.play();
@@ -236,6 +276,11 @@ class _RoomScreenState extends State<RoomScreen> {
 
   void _remotePause() {
     if (_mode == .youtube) {
+      _ytIntendedPlaying = false;
+      if (!_ytReady) {
+        _pendingYtPlay = false;
+        return;
+      }
       _youtubeController?.pause();
     } else {
       widget.player.pause();
@@ -244,16 +289,32 @@ class _RoomScreenState extends State<RoomScreen> {
 
   void _remoteSeek(Duration position) {
     if (_mode == .youtube) {
-      _youtubeController?.seekTo(position);
-      _youtubeController?.pause(); // prevent auto-play after seek
+      if (!_ytReady) {
+        _pendingYtSeek = position;
+        return;
+      }
+      _ytSeekKeepingPlayState(position);
     } else {
       widget.player.seek(position);
     }
   }
 
+  /// seekTo always play()s (youtube_player_flutter); restore the intended
+  /// pause and swallow the transient playing blip so it isn't re-broadcast.
+  void _ytSeekKeepingPlayState(Duration position) {
+    final controller = _youtubeController;
+    if (controller == null) return;
+    controller.seekTo(position);
+    if (!_ytIntendedPlaying) {
+      _ytEventSuppressUntil = DateTime.now().add(const Duration(milliseconds: 800));
+      controller.pause();
+    }
+  }
+
   void _remoteDriftCorrect(Duration position) {
     if (_mode == .youtube) {
-      _youtubeController?.seekTo(position); // no pause: playback continues
+      // No pause: drift correction only fires while both sides are playing.
+      if (_ytReady) _youtubeController?.seekTo(position);
     } else {
       widget.player.seek(position);
     }
@@ -267,6 +328,7 @@ class _RoomScreenState extends State<RoomScreen> {
     if (mounted) {
       // URL dialog sits on top of the source chooser; pop in that order.
       if (_isYouTubeUrlDialogOpen) {
+        _urlDialogDismissedRemotely = true;
         Navigator.of(context).pop();
         _isYouTubeUrlDialogOpen = false;
       }
@@ -297,6 +359,7 @@ class _RoomScreenState extends State<RoomScreen> {
       await _pickVideo();
     } else if (mode == InitialMode.youtube) {
       _isYouTubeUrlDialogOpen = true;
+      _urlDialogDismissedRemotely = false;
       final url = await showGlassDialog<String>(
         context: context,
         width: 440,
@@ -306,7 +369,9 @@ class _RoomScreenState extends State<RoomScreen> {
       if (!mounted) return;
       if (url != null) {
         await _handleModeSwitch(.youtube, url);
-      } else if (_mode == .local && widget.player.state.duration == Duration.zero) {
+      } else if (!_urlDialogDismissedRemotely &&
+          _mode == .local &&
+          widget.player.state.duration == Duration.zero) {
         _showModeSelectionDialog(); // cancelled and still idle: re-ask
       }
     }
@@ -340,6 +405,10 @@ class _RoomScreenState extends State<RoomScreen> {
       _playing = false;
       _position = Duration.zero;
       _duration = Duration.zero;
+      _youtubeWasPlaying = false;
+      _ytIntendedPlaying = false;
+      _pendingYtSeek = null;
+      _pendingYtPlay = null;
 
       _youtubeController?.dispose();
       _youtubeController = yt.YoutubePlayerController(
@@ -362,6 +431,10 @@ class _RoomScreenState extends State<RoomScreen> {
     setState(() {
       _mode = .local;
       _youtubeUrl = null;
+      _youtubeWasPlaying = false;
+      _ytIntendedPlaying = false;
+      _pendingYtSeek = null;
+      _pendingYtPlay = null;
       _youtubeController?.dispose();
       _youtubeController = null;
       _playing = widget.player.state.playing;
@@ -376,6 +449,8 @@ class _RoomScreenState extends State<RoomScreen> {
     final controller = _youtubeController;
     if (controller == null) return;
 
+    _flushPendingYtCommands(controller);
+
     final state = controller.value.playerState;
     final isPlaying = state == .playing;
 
@@ -386,16 +461,47 @@ class _RoomScreenState extends State<RoomScreen> {
       if (meta != Duration.zero) _duration = meta;
     });
 
+    // Broadcast only transitions that diverge from the agreed play state —
+    // those are direct iframe interactions. Everything triggered by _playPause
+    // or a remote event already matches _ytIntendedPlaying, so no echo and no
+    // double-broadcast, regardless of iframe latency.
+    final suppressed = DateTime.now().isBefore(_ytEventSuppressUntil);
     if (isPlaying && !_youtubeWasPlaying) {
       _youtubeWasPlaying = true;
-      _sync?.broadcastPlay();
+      if (!_ytIntendedPlaying && !suppressed) {
+        _ytIntendedPlaying = true;
+        _sync?.broadcastPlay();
+        _sync?.broadcastSeek(controller.value.position);
+      }
     } else if (!isPlaying && _youtubeWasPlaying && state == .paused) {
       _youtubeWasPlaying = false;
-      _sync?.broadcastPause();
+      if (_ytIntendedPlaying && !suppressed) {
+        _ytIntendedPlaying = false;
+        _sync?.broadcastPause();
+      }
     }
 
     if (controller.value.hasError) {
       _snack('Failed to load that YouTube video.');
+    }
+  }
+
+  /// Late joiners get the room's position/play state before the iframe can
+  /// accept commands; apply the queued state on the first ready tick.
+  void _flushPendingYtCommands(yt.YoutubePlayerController controller) {
+    if (!controller.value.isReady) return;
+    final seek = _pendingYtSeek;
+    final play = _pendingYtPlay;
+    if (seek == null && play == null) return;
+    _pendingYtSeek = null;
+    _pendingYtPlay = null;
+    if (seek != null) {
+      _ytSeekKeepingPlayState(seek);
+    }
+    if (play == true) {
+      controller.play();
+    } else if (play == false && seek == null) {
+      controller.pause();
     }
   }
 
@@ -476,12 +582,15 @@ class _RoomScreenState extends State<RoomScreen> {
   void _playPause() {
     if (_mode == .youtube) {
       final controller = _youtubeController;
-      if (controller == null) return;
+      if (controller == null || !_ytReady) return;
       final currentPosition = controller.value.position;
-      if (controller.value.playerState == .playing) {
+      // Toggle on intent, not iframe state — the iframe lags behind commands.
+      if (_ytIntendedPlaying) {
+        _ytIntendedPlaying = false;
         controller.pause();
         _sync?.broadcastPause();
       } else {
+        _ytIntendedPlaying = true;
         controller.play();
         _sync?.broadcastPlay();
       }
@@ -499,7 +608,8 @@ class _RoomScreenState extends State<RoomScreen> {
         ? Duration.zero
         : (_duration != Duration.zero && position > _duration ? _duration : position);
     if (_mode == .youtube) {
-      _youtubeController?.seekTo(clamped);
+      if (!_ytReady) return;
+      _ytSeekKeepingPlayState(clamped);
     } else {
       widget.player.seek(clamped);
     }
@@ -569,6 +679,15 @@ class _RoomScreenState extends State<RoomScreen> {
     _ended = true;
     _countdownTimer?.cancel();
     _remotePause();
+    // Unpublish mic/cam right away — not when the user finally taps
+    // "Back to lobby".
+    final av = _av;
+    if (mounted) {
+      setState(() => _av = null);
+    } else {
+      _av = null;
+    }
+    av?.dispose();
     await _sync?.disconnect();
     if (mounted) _showEndedDialog();
   }
@@ -581,7 +700,11 @@ class _RoomScreenState extends State<RoomScreen> {
       context: context,
       barrierDismissible: false,
       width: isMobile ? 370 : 390,
-      builder: (dialogContext) => Column(
+      // canPop false: Esc/back would otherwise strand the user on a dead room
+      // screen with no way to re-show this dialog.
+      builder: (dialogContext) => PopScope(
+        canPop: false,
+        child: Column(
         mainAxisSize: .min,
         children: [
           Container(
@@ -612,6 +735,7 @@ class _RoomScreenState extends State<RoomScreen> {
             },
           ),
         ],
+        ),
       ),
     );
   }
@@ -665,7 +789,28 @@ class _RoomScreenState extends State<RoomScreen> {
 
   Future<void> _sendChat(String text) async {
     final message = await _sync?.sendChat(text);
-    if (message != null) setState(() => _messages.add(message));
+    if (message != null && mounted) setState(() => _messages.add(message));
+  }
+
+  Future<void> _reloadChatHistory() async {
+    try {
+      final history = await _sync?.loadChatHistory();
+      if (history == null || !mounted) return;
+      setState(() => _mergeChatHistory(history));
+    } catch (_) {}
+  }
+
+  /// History rows carry DB timestamps while live broadcasts carry sender-clock
+  /// timestamps, so exact keys don't exist — fuzzy-match to dedupe.
+  void _mergeChatHistory(List<ChatMessage> history) {
+    bool same(ChatMessage a, ChatMessage b) =>
+        a.senderId == b.senderId &&
+        a.content == b.content &&
+        a.sentAt.difference(b.sentAt).abs() <= const Duration(seconds: 10);
+    for (final h in history) {
+      if (!_messages.any((m) => same(m, h))) _messages.add(h);
+    }
+    _messages.sort((a, b) => a.sentAt.compareTo(b.sentAt));
   }
 
   void _openOverflowMenu() {
@@ -843,7 +988,10 @@ class _RoomScreenState extends State<RoomScreen> {
         PTBanner(
           kind: .warning,
           icon: Symbols.timer_rounded,
-          title: '${_timeLeft.inMinutes + 1} minutes left',
+          title: () {
+            final mins = (_timeLeft.inSeconds / 60).ceil();
+            return '$mins minute${mins == 1 ? '' : 's'} left';
+          }(),
           subtitle: 'Time to wrap up — this room ends at $_endsAtLabel.',
           onDismiss: () => setState(() => _warningDismissed = true),
         ),

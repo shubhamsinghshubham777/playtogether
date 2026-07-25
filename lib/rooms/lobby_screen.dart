@@ -31,7 +31,12 @@ class _LobbyScreenState extends State<LobbyScreen> {
   void initState() {
     super.initState();
     if (ProfileService.instance.profile == null) {
-      ProfileService.instance.load().then((_) => _consumePendingJoin());
+      // Consume the parked invite even if the profile fetch fails — the join
+      // itself doesn't need the profile.
+      ProfileService.instance
+          .load()
+          .catchError((_) => null)
+          .whenComplete(_consumePendingJoin);
     } else {
       WidgetsBinding.instance.addPostFrameCallback((_) => _consumePendingJoin());
     }

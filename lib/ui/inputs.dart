@@ -286,70 +286,88 @@ class PTSlider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final width = constraints.maxWidth;
-        final clamped = value.clamp(0.0, 1.0);
-        void update(Offset local, {bool end = false}) {
-          final v = (local.dx / width).clamp(0.0, 1.0);
-          onChanged(v);
-          if (end) onChangeEnd?.call(v);
-        }
+    final clamped = value.clamp(0.0, 1.0);
+    // No LayoutBuilder here: it can't answer intrinsic-size queries, so it
+    // would crash inside IntrinsicHeight (e.g. the lobby's equal-height cards).
+    void update(Offset local, {bool end = false}) {
+      final width = context.size?.width ?? 0;
+      if (width <= 0) return;
+      final v = (local.dx / width).clamp(0.0, 1.0);
+      onChanged(v);
+      if (end) onChangeEnd?.call(v);
+    }
 
-        return MouseRegion(
-          cursor: SystemMouseCursors.click,
-          child: GestureDetector(
-            behavior: .opaque,
-            onTapDown: (d) => update(d.localPosition),
-            onTapUp: (d) => update(d.localPosition, end: true),
-            onHorizontalDragUpdate: (d) => update(d.localPosition),
-            onHorizontalDragEnd: (_) => onChangeEnd?.call(clamped),
-            child: SizedBox(
-              height: 20,
-              child: Stack(
-                alignment: .centerLeft,
-                children: [
-                  Container(
-                    height: trackHeight,
-                    decoration: BoxDecoration(
-                      color: PTColors.white(0.13),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                  ),
-                  FractionallySizedBox(
-                    widthFactor: clamped,
-                    child: Container(
-                      height: trackHeight,
-                      decoration: BoxDecoration(
-                        gradient: PTColors.barGradient,
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    left: (clamped * width - thumbRadius).clamp(0, width - thumbRadius * 2),
-                    child: Container(
-                      width: thumbRadius * 2,
-                      height: thumbRadius * 2,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE9DCFF),
-                        shape: .circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: PTColors.primary.withValues(alpha: 0.7),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        behavior: .opaque,
+        onTapDown: (d) => update(d.localPosition),
+        onTapUp: (d) => update(d.localPosition, end: true),
+        onHorizontalDragUpdate: (d) => update(d.localPosition),
+        onHorizontalDragEnd: (_) => onChangeEnd?.call(clamped),
+        child: SizedBox(
+          height: 20,
+          width: double.infinity,
+          child: CustomPaint(
+            painter: _PTSliderPainter(
+              value: clamped,
+              trackHeight: trackHeight,
+              thumbRadius: thumbRadius,
             ),
           ),
-        );
-      },
+        ),
+      ),
     );
   }
+}
+
+class _PTSliderPainter extends CustomPainter {
+  const _PTSliderPainter({
+    required this.value,
+    required this.trackHeight,
+    required this.thumbRadius,
+  });
+
+  final double value;
+  final double trackHeight;
+  final double thumbRadius;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const radius = Radius.circular(999);
+    final trackTop = (size.height - trackHeight) / 2;
+
+    final trackRect = Rect.fromLTWH(0, trackTop, size.width, trackHeight);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(trackRect, radius),
+      Paint()..color = PTColors.white(0.13),
+    );
+
+    if (value > 0) {
+      final fillRect = Rect.fromLTWH(0, trackTop, size.width * value, trackHeight);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(fillRect, radius),
+        Paint()..shader = PTColors.barGradient.createShader(fillRect),
+      );
+    }
+
+    final center = Offset(
+      (value * size.width).clamp(thumbRadius, size.width - thumbRadius),
+      size.height / 2,
+    );
+    canvas.drawCircle(
+      center.translate(0, 2),
+      thumbRadius,
+      Paint()
+        ..color = PTColors.primary.withValues(alpha: 0.7)
+        ..maskFilter = MaskFilter.blur(.normal, Shadow.convertRadiusToSigma(8)),
+    );
+    canvas.drawCircle(center, thumbRadius, Paint()..color = const Color(0xFFE9DCFF));
+  }
+
+  @override
+  bool shouldRepaint(_PTSliderPainter oldDelegate) =>
+      oldDelegate.value != value ||
+      oldDelegate.trackHeight != trackHeight ||
+      oldDelegate.thumbRadius != thumbRadius;
 }

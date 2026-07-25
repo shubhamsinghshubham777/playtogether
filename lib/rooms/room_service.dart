@@ -70,7 +70,7 @@ class RoomService extends ChangeNotifier {
         .select()
         .eq('created_by', uid)
         .filter('ended_at', 'is', null)
-        .gt('expires_at', DateTime.now().toUtc().toIso8601String())
+        .gt('expires_at', serverNow.toUtc().toIso8601String())
         .order('created_at', ascending: false)
         .limit(1);
     return rows.isEmpty ? null : Room.fromJson(rows.first);

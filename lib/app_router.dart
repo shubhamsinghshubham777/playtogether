@@ -30,7 +30,11 @@ GoRouter buildRouter(Player player) {
       GoRoute(path: '/profile', builder: (context, state) => const ProfileScreen()),
       GoRoute(
         path: '/room/:id',
+        // Keyed by room id: go_router reuses the page for /room/A → /room/B
+        // (same route pattern), and without the key the old room's State —
+        // sync channel, countdown, chat — would survive the navigation.
         builder: (context, state) => RoomScreen(
+          key: ValueKey(state.pathParameters['id']!),
           roomId: state.pathParameters['id']!,
           player: player,
         ),

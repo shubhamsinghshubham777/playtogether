@@ -110,15 +110,20 @@ class SyncService {
   int? _currentFileDurationMs;
 
   int _reconnectAttempts = 0;
+  Timer? _reconnectTimer;
   bool _disposed = false;
+  // Intentional teardown (eviction/leave). unsubscribe() surfaces as a `closed`
+  // status in the subscribe callback, which must NOT schedule a reconnect then.
+  bool _tearingDown = false;
 
   Future<void> connect() async {
-    _channel = _client.channel(
+    final channel = _client.channel(
       'room:${room.id}',
       opts: const RealtimeChannelConfig(self: false, private: true),
     );
+    _channel = channel;
 
-    _channel!
+    channel
         .onBroadcast(event: SyncEventType.play, callback: _handlePlay)
         .onBroadcast(event: SyncEventType.pause, callback: _handlePause)
         .onBroadcast(event: SyncEventType.seek, callback: _handleSeek)
@@ -129,10 +134,11 @@ class SyncService {
         .onBroadcast(event: SyncEventType.typing, callback: _handleTyping)
         .onBroadcast(event: SyncEventType.positionSync, callback: _handlePositionSync)
         .onBroadcast(event: SyncEventType.fileInfo, callback: _handleFileInfo)
-        .onBroadcast(event: SyncEventType.roomEnded, callback: (_) => _roomEndedController.add(null))
+        .onBroadcast(event: SyncEventType.roomEnded, callback: _handleRoomEnded)
         .onPresenceSync(_handlePresenceSync)
         .subscribe((status, error) {
-          if (_disposed) return;
+          // Statuses from a superseded channel (reconnect replaced it) are stale.
+          if (_disposed || _tearingDown || !identical(channel, _channel)) return;
           switch (status) {
             case RealtimeSubscribeStatus.subscribed:
               _reconnectAttempts = 0;
@@ -149,20 +155,30 @@ class SyncService {
           }
         });
 
+    _driftTimer?.cancel();
     _driftTimer = Timer.periodic(const Duration(seconds: 10), (_) => _broadcastPositionSync());
   }
 
   void _scheduleReconnect() {
-    if (_disposed) return;
+    if (_disposed || _tearingDown) return;
+    if (_reconnectTimer?.isActive ?? false) return;
     final delay = Duration(seconds: (1 << _reconnectAttempts.clamp(0, 4)));
     _reconnectAttempts++;
-    Timer(delay, () async {
-      if (_disposed) return;
-      await _channel?.unsubscribe();
+    _reconnectTimer = Timer(delay, () async {
+      if (_disposed || _tearingDown) return;
+      // Detach before unsubscribing so the old channel's `closed` is ignored.
+      final old = _channel;
+      _channel = null;
+      await old?.unsubscribe();
       // A fresh joiner state-request after resubscribe re-aligns playback.
       _hasReceivedInitialState = false;
       await connect();
     });
+  }
+
+  void _handleRoomEnded(Map<String, dynamic> payload) {
+    if (_disposed) return;
+    _roomEndedController.add(null);
   }
 
   DateTime? _membershipJoinedAt;
@@ -199,6 +215,7 @@ class SyncService {
   }
 
   void _handlePresenceSync(RealtimePresenceSyncPayload payload) {
+    if (_disposed) return;
     final states = _channel?.presenceState();
     if (states == null) return;
     // A user with two devices counts once (keyed by user_id).
@@ -251,26 +268,34 @@ class SyncService {
       content: content,
       sentAt: DateTime.now(),
     );
-    await _channel?.sendBroadcastMessage(
-      event: SyncEventType.chat,
-      payload: ChatEvent(
-        senderId: userId,
-        timestamp: message.sentAt.millisecondsSinceEpoch,
-        displayName: profile.displayName,
-        message: content,
-      ).toPayload(),
-    );
-    unawaited(
-      _client.from('messages').insert({
-        'room_id': room.id,
-        'sender_id': userId,
-        'content': content,
-      }),
-    );
+    // Broadcast is best-effort fan-out; the DB row is the durable copy. Either
+    // may fail independently (mid-reconnect, room just expired) without
+    // crashing the send.
+    try {
+      await _channel?.sendBroadcastMessage(
+        event: SyncEventType.chat,
+        payload: ChatEvent(
+          senderId: userId,
+          timestamp: message.sentAt.millisecondsSinceEpoch,
+          displayName: profile.displayName,
+          message: content,
+        ).toPayload(),
+      );
+    } catch (_) {}
+    unawaited(() async {
+      try {
+        await _client.from('messages').insert({
+          'room_id': room.id,
+          'sender_id': userId,
+          'content': content,
+        });
+      } catch (_) {}
+    }());
     return message;
   }
 
   void _handleChat(Map<String, dynamic> payload) {
+    if (_disposed) return;
     final event = ChatEvent.fromPayload(payload);
     _chatController.add(
       ChatMessage(
@@ -295,6 +320,7 @@ class SyncService {
   }
 
   void _handleTyping(Map<String, dynamic> payload) {
+    if (_disposed) return;
     final event = TypingEvent.fromPayload(payload);
     _typingTimers.remove(event.senderId)?.cancel();
     if (event.isTyping) {
@@ -310,7 +336,10 @@ class SyncService {
     _emitTyping();
   }
 
-  void _emitTyping() => _typingController.add(_typingNames.values.toList());
+  void _emitTyping() {
+    if (_disposed) return;
+    _typingController.add(_typingNames.values.toList());
+  }
 
   // ---------------------------------------------------------------------------
   // Playback control (any member; last-action-wins resolves races)
@@ -465,6 +494,7 @@ class SyncService {
   }
 
   void _handleStateResponse(Map<String, dynamic> payload) {
+    if (_disposed) return;
     if (_hasReceivedInitialState) return;
     _hasReceivedInitialState = true;
     _stateRequestRetry?.cancel();
@@ -547,6 +577,7 @@ class SyncService {
   }
 
   void _handleFileInfo(Map<String, dynamic> payload) {
+    if (_disposed) return;
     _fileInfoController.add(FileInfoEvent.fromPayload(payload));
   }
 
@@ -581,7 +612,7 @@ class SyncService {
   }
 
   void _handleModeSwitch(Map<String, dynamic> payload) {
-    if (!_shouldApply(payload)) return;
+    if (_disposed || !_shouldApply(payload)) return;
     _modeSwitchController.add(ModeSwitchEvent.fromPayload(payload));
   }
 
@@ -605,10 +636,13 @@ class SyncService {
   }
 
   Future<void> disconnect() async {
+    _tearingDown = true;
+    _reconnectTimer?.cancel();
     _driftTimer?.cancel();
     _stateRequestRetry?.cancel();
-    await _channel?.unsubscribe();
+    final channel = _channel;
     _channel = null;
+    await channel?.unsubscribe();
   }
 
   void dispose() {

@@ -39,14 +39,35 @@ class _MainAppState extends State<MainApp> {
   void initState() {
     super.initState();
     _linkSub = _appLinks.uriLinkStream.listen(_onDeepLink);
+    // The native side replays the launch URL only to the FIRST stream
+    // subscriber — which is supabase_flutter (it subscribes inside
+    // Supabase.initialize, before runApp). Cold-start invite links must
+    // therefore be fetched explicitly; getInitialLink keeps returning the
+    // launch URL regardless of that replay.
+    _appLinks.getInitialLink().then((uri) {
+      if (uri != null) _onDeepLink(uri);
+    });
   }
 
-  /// playtogether://join/<code> — invite links. The auth callback URI is
-  /// consumed by supabase_flutter before it reaches this stream.
+  String? _lastLinkHandled;
+  DateTime _lastLinkHandledAt = DateTime.fromMillisecondsSinceEpoch(0);
+
+  /// playtogether://join/<code> — invite links. The auth callback URI also
+  /// flows through this stream (it's a broadcast shared with supabase_flutter);
+  /// the `join` host filter is what keeps it out of this handler.
   Future<void> _onDeepLink(Uri uri) async {
     if (uri.scheme != 'playtogether' || uri.host != 'join') return;
     final code = uri.pathSegments.isNotEmpty ? uri.pathSegments.first : null;
     if (code == null || code.isEmpty) return;
+
+    // A cold-start link can arrive via both getInitialLink and the stream.
+    final now = DateTime.now();
+    if (uri.toString() == _lastLinkHandled &&
+        now.difference(_lastLinkHandledAt) < const Duration(seconds: 5)) {
+      return;
+    }
+    _lastLinkHandled = uri.toString();
+    _lastLinkHandledAt = now;
 
     if (!AuthService.instance.isSignedIn) {
       // Parked; the lobby picks it up right after login/guest entry.
@@ -56,6 +77,17 @@ class _MainAppState extends State<MainApp> {
     }
     try {
       final room = await RoomService.instance.joinRoom(code);
+      // Invited into a different room while already in one: leave the old
+      // room's membership, or it counts against caps and authority election.
+      final currentPath = router.routerDelegate.currentConfiguration.uri.path;
+      if (currentPath.startsWith('/room/')) {
+        final currentId = currentPath.substring('/room/'.length);
+        if (currentId.isNotEmpty && currentId != room.id) {
+          try {
+            await RoomService.instance.leaveRoom(currentId);
+          } catch (_) {}
+        }
+      }
       router.go('/room/${room.id}');
     } catch (e) {
       final message = RoomErrorCode.fromError(e).message;
