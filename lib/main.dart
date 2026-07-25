@@ -7,16 +7,20 @@ import 'package:media_kit/media_kit.dart';
 import 'package:playtogether/app_router.dart';
 import 'package:playtogether/auth/auth_service.dart';
 import 'package:playtogether/env.dart';
+import 'package:playtogether/platform.dart';
 import 'package:playtogether/rooms/room_models.dart';
 import 'package:playtogether/rooms/room_service.dart';
 import 'package:playtogether/ui/pt_theme.dart';
 import 'package:playtogether/ui/responsive.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:window_manager/window_manager.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: ".env");
   MediaKit.ensureInitialized();
+  // OS-window fullscreen (F key in a room) needs the manager ready up front.
+  if (isDesktop) await windowManager.ensureInitialized();
   await Supabase.initialize(url: Env.supabaseUrl, publishableKey: Env.supabasePublishableKey);
   runApp(const MainApp());
 }

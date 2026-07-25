@@ -108,70 +108,74 @@ Mechanisms added by `3d13aab` that follow-ups build on:
 > `[?]` needs repro/logs · `[G]` blocked on a §4 decision.
 
 ### A — Playback interaction
-- [G] **A1. Double-tap side zones to skip ±10 s (touch layouts).** Left/right
-  thirds of the video surface skip -10/+10 s with a ripple/label flash.
-  HAZARD: the video `GestureDetector` in `_desktop()`/`_landscape()` uses
-  `onTap: _toggleControlsVisible`; adding `onDoubleTap` to the same detector
-  delays single-tap recognition by the double-tap window (~300 ms), lagging
-  the controls toggle. Decide per §4 Q1 whether desktop gets it at all.
-  Portrait video (`AspectRatio` in `_portrait()`) currently has NO gesture
-  detector — add one there for touch. Route through `_skip()` so it broadcasts.
-- [ ] **A2. Seek-preview tooltip on slider hover (desktop).** Hovering
-  `PTSlider` in the control bar shows the timestamp under the cursor before
-  committing. Needs a hover callback on `PTSlider` (`lib/ui/inputs.dart` —
-  it has a `MouseRegion` already but no onHover plumbing) surfacing the
-  normalized x; `RoomControlBar` renders the label (glass chip above thumb).
-- [ ] **A3. Buffering indicator.** No visual exists for a stalled player.
-  Local: `widget.player.stream.buffering` (media_kit) — subscribe alongside
-  the other streams in `_init()`. YouTube: `playerState == .buffering` in
-  `_onYouTubePlayerEvent`. Show a centered spinner over the video (dark
-  scrim, `PTColors.primary`), suppressed while paused.
-- [G] **A4. Fullscreen toggle (F / double-click, desktop).** Scope per §4 Q2:
-  in-app immersive (hide facecams/banners too) vs OS window fullscreen (needs
-  a pinned package, e.g. `window_manager` — remember exact version pins).
-  Wire F into `_handleKeyEvent`; keep Esc precedence order (text field →
-  chat close → fullscreen exit).
+- [x] **A1. Double-tap side zones to skip ±10 s (touch layouts).** DONE
+  (Q1=A, touch only). `_skipZones()` wraps `_video()` in `_portrait()` and
+  `_landscape()`; a `LayoutBuilder`+`onDoubleTapDown/onDoubleTap` splits the
+  width into thirds, left/right → `_skip(∓10s)` (broadcasts) + `_flashSkip()`
+  (a 650 ms `_skipFlashBadge` over the video), middle ignored. Desktop's own
+  `GestureDetector` is UNCHANGED — single-tap stays instant (no lag), per Q1.
+- [x] **A2. Seek-preview tooltip on slider hover (desktop).** DONE. Added
+  `onHover` (normalized 0–1, null on exit; self-gating — touch never hovers)
+  to `PTSlider` via its `MouseRegion`. `RoomControlBar` tracks `_hoverValue`
+  and floats a `_previewChip` through a `CompositedTransformFollower` in an
+  unclipped outer `Stack` (the chip must escape `GlassPanel`'s ClipRRect,
+  anchored to the slider by a `LayerLink`). Hidden while dragging / duration 0.
+- [x] **A3. Buffering indicator.** DONE. `_buffering` subscribes to
+  `widget.player.stream.buffering` (local) and reads `state == .buffering` in
+  `_onYouTubePlayerEvent` (YT); reset on both mode switches. `_showBuffering`
+  gates on intent (`_ytIntendedPlaying` for YT, `_playing` for local) so a
+  paused buffer shows nothing. Centered spinner + dark scrim in `_video()`.
+- [x] **A4. Fullscreen toggle (F, desktop).** DONE (Q2=B, OS window). Added
+  `window_manager: 0.5.2` (exact pin), `windowManager.ensureInitialized()` on
+  desktop in `main.dart`, new `lib/platform.dart` (`isDesktop`). `_RoomScreenState`
+  is a `WindowListener`; F → `_toggleFullscreen()`, Esc order text→chat→
+  `_exitFullscreen()`. `onWindowEnter/LeaveFullScreen` keep `_fullscreen` synced.
+  NOTE: double-click binding intentionally OMITTED — it would reintroduce the
+  ~300 ms desktop single-tap lag Q1 rejected. F + Esc only.
 
 ### B — Social awareness
-- [G] **B1. Remote-action attribution toast.** When a remote member
-  seeks/pauses/plays, show "«name» jumped to 12:40" briefly so playback jumps
-  don't read as glitches. Sender: extend `sync.onRemotePlay/Pause/Seek`
-  callbacks to pass the event's `senderId` (already in every event payload —
-  no protocol change), resolve name via `_present`. MUST ignore
-  `position_sync` drift corrections and `state_response` application — only
-  user-initiated events. Debounce per §4 Q3.
-- [G] **B2. Ephemeral chat overlay when the panel is closed.** Float the
-  latest message(s) near the bottom-left of the video for a few seconds
-  (desktop/landscape; portrait chat is always visible — skip it). Data is
-  already there: `sync.chatMessages` listener in `_init()` increments
-  `_unread` when `!_chatOpen` — same branch triggers the overlay. Style/count
-  per §4 Q4.
+- [x] **B1. Remote-action attribution toast.** DONE (Q3=B, seeks+play/pause).
+  Rather than thread `senderId` through the routing callbacks (state_response
+  reuses them — would toast on late-join), added a dedicated
+  `Stream<RemoteAction> remoteActions` emitted ONLY from `_handlePlay/Pause/
+  Seek` (never state_response/position_sync). `_onRemoteAction` resolves the
+  name via `_present`/`_members` and shows a 3 s fading `GlassPill`
+  ("«name» jumped to 12:40" / "hit play" / "paused") top-center of `_video()`.
+- [x] **B2. Ephemeral chat overlay when the panel is closed.** DONE (Q4=B,
+  last 3). `sync.chatMessages` listener calls `_pushOverlayChat` when
+  `!_chatOpen`; `_overlayChat` holds ≤3, each self-expiring after 5 s (timers
+  tracked, cancelled on open/dispose). `_chatOverlay()` renders bottom-left
+  chat-bubble stack (fade+rise entry) in `_desktop()`+`_landscape()` only.
 
 ### C — Chat ergonomics
-- [ ] **C1. Auto-focus chat input when opening the panel (desktop only).**
-  Focus clash is solved, so opening chat should focus the `TextField` in
-  `RoomChatPanel`. Add an `autofocus`-style flag; MUST stay false for
-  `embedded` (portrait) — autofocus there pops the soft keyboard on room
-  entry. Verify Esc still hands focus back and closing chat refocuses
-  `_shortcutFocus` (`_toggleChat`).
+- [x] **C1. Auto-focus chat input when opening the panel (desktop only).**
+  DONE. Added `autofocus` flag to `RoomChatPanel` (TextField `autofocus:`);
+  passed `true` ONLY in `_desktop()`. Stays false for `embedded` (portrait)
+  and the touch `_landscape()` overlay — no soft-keyboard pop. Esc/close
+  focus handoff unchanged (`_toggleChat` → `_shortcutFocus`).
+- [x] **C2. Eased enter/exit for the chat panel overlay.** DONE (user-requested,
+  session 3). One `AnimationController` `_chatAnim` (250 ms, easeOutCubic in /
+  easeInCubic out) drives both halves of the swap: `_chatRevealed()` slides the
+  panel in from off the right edge (Stack clips the overshoot) and unmounts it
+  at rest; `_chatDisplaced()` cross-fades what it covers (landscape facecam
+  rail, floating bubbles). Desktop banner inset became `AnimatedPositioned` on
+  the same curve. Panel is slid, NOT faded — an `Opacity` layer around
+  `GlassPanel`'s `BackdropFilter` makes the blur sample an empty layer.
 
 ---
 
 ## 4. Open decisions to grill (resolve WITH the user before gated items)
 
-- **Q1.** Double-tap skip on which layouts? — options: A) touch only
-  (portrait+landscape), desktop keeps instant single-tap controls toggle
-  (recommended) B) everywhere, accepting ~300 ms tap lag on desktop
-  C) everywhere, desktop single-tap becomes play/pause like YouTube — gates: A1
-- **Q2.** Fullscreen meaning? — options: A) in-app immersive (hide all chrome
-  incl. facecams; no new dependency) B) OS window fullscreen via new pinned
-  package C) both, F cycles — gates: A4
-- **Q3.** Attribution toasts for which events? — options: A) seeks only
-  (jumps are the confusing ones) B) seeks + play/pause C) all, capped at one
-  toast per sender per ~5 s — gates: B1
-- **Q4.** Ephemeral chat overlay shape? — options: A) single latest message,
-  ~4 s fade B) stack of last 3, chat-bubble styling C) skip the feature
-  (unread badge is enough) — gates: B2
+> ALL RESOLVED 2026-07-25 (session 2). Answers below.
+
+- **Q1.** Double-tap skip on which layouts? → **A) touch only** (portrait +
+  landscape); desktop keeps instant single-tap controls toggle. — gated: A1 ✓
+- **Q2.** Fullscreen meaning? → **B) OS window fullscreen** via new pinned
+  package (`window_manager: 0.5.2`). — gated: A4 ✓
+- **Q3.** Attribution toasts for which events? → **B) seeks + play/pause**
+  (not drift/state_response). — gated: B1 ✓
+- **Q4.** Ephemeral chat overlay shape? → **B) stack of last 3**, chat-bubble
+  styling. — gated: B2 ✓
 
 ---
 
@@ -212,6 +216,15 @@ Mechanisms added by `3d13aab` that follow-ups build on:
 ### R-B2. Chat overlay
 1. macOS, chat closed, send message from phone → overlay appears + fades;
    unread badge still increments; open chat → no duplicate.
+
+### R-C2. Chat panel transition
+1. macOS, toggle chat repeatedly (button + Esc) → panel slides in/out smoothly,
+   glass blur never flattens mid-slide, banners follow without a snap.
+2. Toggle mid-animation → no flicker, no stuck half-open panel; caret lands in
+   the input on every open (autofocus re-fires because the panel unmounts).
+3. Chat closed with bubbles on screen → open: bubbles fade out under the panel,
+   then clear. Click through the closed panel's slot (video area) still works.
+4. Android landscape: facecam rail cross-fades against the panel, not a pop.
 
 ### R-C1. Chat autofocus
 1. macOS, open chat → caret in input, typing works immediately, space types
@@ -269,3 +282,59 @@ NEXT: <the single next action>. Follow §1 working agreement.
   Q4 (chat overlay shape). A2, A3, C1 are ungated.
 - NEXT: grill the user on Q1–Q4, then start with an ungated item — C1 is the
   smallest (chat autofocus), A3 (buffering indicator) the highest-value.
+
+### 2026-07-25 (session 2) — all seven items implemented
+- Grilled Q1–Q4 up front; user chose A/B/B/B (recorded in §4). Then built all
+  seven items in one session, order: C1 → A3 → A2 → B1 → B2 → A1 → A4.
+- Confirmed in code before building: state_response (`sync_service.dart` ~L524)
+  reuses `onRemoteSeek/Play/Pause`, so B1 could NOT toast from those callbacks
+  without firing on late-join — drove the dedicated `remoteActions` stream
+  design (emit only from `_handlePlay/Pause/Seek`). Drift uses the separate
+  `onRemoteDriftCorrect` path → naturally excluded. `GlassPanel` clips its
+  child (ClipRRect) → A2's hover chip needed a `CompositedTransformFollower`
+  in an outer unclipped `Stack`, not a plain `Positioned`.
+- Files touched: `lib/rooms/room_screen.dart` (most items), `room_control_bar.dart`
+  (A2), `room_chat_panel.dart` (C1), `lib/ui/inputs.dart` (A2 onHover),
+  `lib/sync/sync_service.dart` (B1 RemoteAction+stream), `lib/main.dart` +
+  new `lib/platform.dart` + `pubspec.yaml` (A4 window_manager 0.5.2).
+- JUDGMENT CALL (A4): omitted the double-click→fullscreen binding. Q1 had the
+  user explicitly keep desktop single-tap instant; onDoubleTap on that same
+  detector reintroduces the ~300 ms lag. F + Esc cover fullscreen instead.
+  Revisit if the user wants double-click after all (would accept the lag).
+- Test status: `fvm flutter analyze` CLEAN (whole project). `fvm flutter pub
+  get` resolved window_manager 0.5.2 (macOS target 10.15 ≥ its 10.11 req).
+  NO device runs yet — the §6 recipes (R-A1..R-C1) are ALL still pending.
+- DEVICE-VERIFY PENDING (do these before the PR):
+  · A4 is the riskiest: window_manager fullscreen was NOT run on macOS. Basic
+    `setFullScreen` should need no native subclassing, but VERIFY the F-toggle,
+    Esc-exit ordering (open chat + type, then Esc twice), and the green-button/
+    native-fullscreen path keeps `_fullscreen` synced via WindowListener.
+    Windows/Linux desktop registration is a build concern — confirm those build.
+  · A2 chip x-alignment uses `_sliderLink.leaderSize?.width` — eyeball that the
+    chip sits under the cursor across the track width (R-A2).
+  · A1 landscape single-tap now has the accepted ~300 ms lag — confirm it still
+    feels OK (R-A1 step 3). A3 buffering needs network throttling (R-A3).
+  · B1/B2 need two devices in a room (R-B1/R-B2): late-join must NOT toast;
+    opening chat must clear the overlay with no duplicate.
+- NEXT: run the §6 device recipes (start with A4 on macOS — highest risk). If
+  all pass, per §1.9 migrate any durable notes into README/CLAUDE.md, then
+  `git rm docs/room-ux-followups.md` BEFORE opening the branch PR. If A4
+  fails on a desktop target, that's the one item to fix or gate behind a flag.
+
+### 2026-07-25 (session 3) — C2 chat panel transition
+- User asked for eased enter/exit on the chat overlay. Added C2 (see §3):
+  one controller for the panel slide + the cross-fade of what it covers, so
+  both halves of the swap can't desync.
+- Two traps found while building, both encoded in the code comments:
+  1. `Opacity` around `GlassPanel` kills the `BackdropFilter` (blurs an empty
+     layer) → the panel slides only; only the non-glass chrome fades.
+  2. The panel's `Positioned` hands down TIGHT constraints, so the collapsed
+     `SizedBox.shrink()` still fills its slot and would eat clicks meant for
+     the video → the zero state is wrapped in `IgnorePointer`.
+- Opening chat no longer clears `_overlayChat` immediately (`_clearOverlayChat`
+  → `_cancelOverlayChatTimers`); bubbles fade under the panel and are cleared
+  by a status listener when the open animation completes. R-B2 step "opening
+  chat clears overlay" is now "clears AFTER the 250 ms transition".
+- Test status: `fvm flutter analyze` CLEAN (whole lib). NO device run — R-C2
+  (and everything from session 2) still pending.
+- NEXT: unchanged from session 2 — device recipes, R-C2 folded in.

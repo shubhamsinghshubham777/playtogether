@@ -66,6 +66,11 @@ class _RoomControlBarState extends State<RoomControlBar> {
   /// (and its room-wide broadcast) fires once, on release.
   double? _dragValue;
 
+  /// Normalized 0–1 position under a hovering cursor (desktop only); drives the
+  /// seek-preview chip. The chip escapes the glass panel's clip via [_sliderLink].
+  double? _hoverValue;
+  final _sliderLink = LayerLink();
+
   double get _progress => widget.duration.inMilliseconds == 0
       ? 0
       : widget.position.inMilliseconds / widget.duration.inMilliseconds;
@@ -79,8 +84,9 @@ class _RoomControlBarState extends State<RoomControlBar> {
   Widget build(BuildContext context) {
     final compact = widget.compact;
     final drag = _dragValue;
+    final hover = _hoverValue;
     final shownPosition = drag == null ? widget.position : widget.duration * drag;
-    return GlassPanel(
+    final panel = GlassPanel(
       radius: compact ? 20 : 24,
       opacity: 0.6,
       blur: 32,
@@ -95,12 +101,16 @@ class _RoomControlBarState extends State<RoomControlBar> {
             children: [
               Text(_fmt(shownPosition), style: PTText.mono.copyWith(fontSize: compact ? 11 : 13)),
               Expanded(
-                child: PTSlider(
-                  value: drag ?? _progress,
-                  trackHeight: compact ? 4 : 5,
-                  thumbRadius: compact ? 6 : 7,
-                  onChanged: (v) => setState(() => _dragValue = v),
-                  onChangeEnd: _endScrub,
+                child: CompositedTransformTarget(
+                  link: _sliderLink,
+                  child: PTSlider(
+                    value: drag ?? _progress,
+                    trackHeight: compact ? 4 : 5,
+                    thumbRadius: compact ? 6 : 7,
+                    onChanged: (v) => setState(() => _dragValue = v),
+                    onChangeEnd: _endScrub,
+                    onHover: (v) => setState(() => _hoverValue = v),
+                  ),
                 ),
               ),
               Text(
@@ -112,6 +122,48 @@ class _RoomControlBarState extends State<RoomControlBar> {
           compact ? _compactRow() : _fullRow(),
         ],
       ),
+    );
+
+    // The preview chip must escape the panel's ClipRRect, so it rides a
+    // CompositedTransformFollower in an unclipped outer Stack rather than
+    // living inside the panel. Hidden while scrubbing (the position text
+    // already previews the drag) and until a duration is known.
+    final showChip = hover != null && drag == null && widget.duration.inMilliseconds > 0;
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        panel,
+        if (showChip)
+          Positioned(
+            left: 0,
+            top: 0,
+            child: CompositedTransformFollower(
+              link: _sliderLink,
+              targetAnchor: Alignment.topLeft,
+              followerAnchor: Alignment.bottomLeft,
+              offset: Offset(hover * (_sliderLink.leaderSize?.width ?? 0), -8),
+              child: FractionalTranslation(
+                translation: const Offset(-0.5, 0),
+                child: IgnorePointer(child: _previewChip(widget.duration * hover)),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _previewChip(Duration position) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: PTColors.glassBase,
+        borderRadius: BorderRadius.circular(9),
+        border: Border.all(color: PTColors.white(0.14)),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha: 0.45), blurRadius: 14, offset: const Offset(0, 5)),
+        ],
+      ),
+      child: Text(_fmt(position), style: PTText.mono.copyWith(fontSize: 12)),
     );
   }
 

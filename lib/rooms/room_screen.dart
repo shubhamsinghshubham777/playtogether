@@ -9,6 +9,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:playtogether/av/livekit_service.dart';
+import 'package:playtogether/platform.dart';
 import 'package:playtogether/player/chooser_dialog.dart';
 import 'package:playtogether/player/mode_selection_dialog.dart';
 import 'package:playtogether/player/youtube_url_dialog.dart';
@@ -26,6 +27,7 @@ import 'package:playtogether/ui/glass.dart';
 import 'package:playtogether/ui/identity.dart';
 import 'package:playtogether/ui/pt_theme.dart';
 import 'package:playtogether/ui/responsive.dart';
+import 'package:window_manager/window_manager.dart';
 import 'package:youtube_player_flutter/youtube_player_flutter.dart' as yt;
 
 enum PlaybackMode { local, youtube }
@@ -40,7 +42,8 @@ class RoomScreen extends StatefulWidget {
   State<RoomScreen> createState() => _RoomScreenState();
 }
 
-class _RoomScreenState extends State<RoomScreen> {
+class _RoomScreenState extends State<RoomScreen>
+    with WindowListener, SingleTickerProviderStateMixin {
   late final controller = VideoController(widget.player);
 
   Room? _room;
@@ -73,6 +76,7 @@ class _RoomScreenState extends State<RoomScreen> {
   bool _urlDialogDismissedRemotely = false;
 
   bool _playing = false;
+  bool _buffering = false;
   Duration _position = Duration.zero;
   Duration _duration = Duration.zero;
   double _volume = 1.0;
@@ -82,6 +86,44 @@ class _RoomScreenState extends State<RoomScreen> {
   bool _chatOpen = false;
   int _unread = 0;
   bool _camsVisible = true;
+
+  // Drives the chat panel's slide+fade in the overlay layouts *and* the
+  // cross-fade of what it covers (facecam rail, floating bubbles), so the two
+  // halves of the swap stay in lockstep. `_chatOpen` flips immediately; the
+  // panel is what lags behind it.
+  static const _chatMotion = Durations.medium1;
+  late final AnimationController _chatAnim = AnimationController(
+    vsync: this,
+    duration: _chatMotion,
+  );
+  late final CurvedAnimation _chatCurve = CurvedAnimation(
+    parent: _chatAnim,
+    curve: Curves.easeOutCubic,
+    reverseCurve: Curves.easeInCubic,
+  );
+
+  // Attribution toast for remote play/pause/seek ("«name» jumped to 12:40") so
+  // playback jumps don't read as glitches. Kept mounted (text persists) while
+  // it fades so the fade-out actually renders.
+  String _actionToastText = '';
+  bool _actionToastVisible = false;
+  Timer? _actionToastTimer;
+
+  // Floating chat bubbles (last 3) shown over the video while the panel is
+  // closed (desktop/landscape only — portrait chat is always visible). Each
+  // self-expires; timers are tracked so they can be cancelled on dispose, and
+  // on open (where the bubbles instead fade out under the arriving panel).
+  final _overlayChat = <ChatMessage>[];
+  final _overlayChatTimers = <Timer>{};
+
+  // Double-tap skip feedback (touch layouts): -1 flashes the left −10s label,
+  // 1 the right +10s, 0 none.
+  int _skipFlash = 0;
+  Timer? _skipFlashTimer;
+
+  // OS-window fullscreen (desktop only). Kept in sync with the actual window
+  // via WindowListener so Esc/toggle never desync from a native fullscreen.
+  bool _fullscreen = false;
 
   // Floating chrome (topbar + control bar) auto-hides while playing; tap the
   // video to toggle it manually. Only applies to the overlay layouts
@@ -98,6 +140,10 @@ class _RoomScreenState extends State<RoomScreen> {
   bool _connected = true;
   bool _ended = false;
   Timer? _idleSourceTimer;
+  // True until the first source decision lands (the chooser opens, or a remote
+  // mode_switch beats it): keeps the video area in its loading state instead of
+  // showing an empty black frame for the whole state-sync window. One-shot.
+  bool _awaitingFirstSource = true;
 
   ({String name, Duration duration})? _roomFile;
   String? _localFileName;
@@ -108,8 +154,21 @@ class _RoomScreenState extends State<RoomScreen> {
   @override
   void initState() {
     super.initState();
+    if (isDesktop) windowManager.addListener(this);
+    // Bubbles are kept alive (fading) until the panel has fully covered them.
+    _chatAnim.addStatusListener((status) {
+      if (status == AnimationStatus.completed && _overlayChat.isNotEmpty) {
+        setState(_overlayChat.clear);
+      }
+    });
     _init();
   }
+
+  @override
+  void onWindowEnterFullScreen() => setState(() => _fullscreen = true);
+
+  @override
+  void onWindowLeaveFullScreen() => setState(() => _fullscreen = false);
 
   Future<void> _init() async {
     final profile =
@@ -179,9 +238,11 @@ class _RoomScreenState extends State<RoomScreen> {
           _messages.add(message);
           if (!_chatOpen) _unread++;
         });
+        if (!_chatOpen) _pushOverlayChat(message);
       }),
       sync.typingStream.listen((names) => setState(() => _typingNames = names)),
       sync.presenceStream.listen(_onPresenceChanged),
+      sync.remoteActions.listen(_onRemoteAction),
       sync.modeSwitchStream.listen(_onRemoteModeSwitch),
       sync.fileInfoStream.listen(_onRemoteFileInfo),
       sync.roomEndedStream.listen((_) => _onRoomEnded()),
@@ -203,6 +264,9 @@ class _RoomScreenState extends State<RoomScreen> {
       widget.player.stream.duration.listen((duration) {
         if (_mode == .local) setState(() => _duration = duration);
       }),
+      widget.player.stream.buffering.listen((buffering) {
+        if (_mode == .local) setState(() => _buffering = buffering);
+      }),
       widget.player.stream.volume.listen((volume) => setState(() => _volume = volume / 100)),
     ]);
 
@@ -221,7 +285,9 @@ class _RoomScreenState extends State<RoomScreen> {
     // If the state-sync window closes with no media, we're first in — ask
     // what to watch.
     _idleSourceTimer = Timer(const Duration(milliseconds: 4500), () {
-      if (!mounted || _ended) return;
+      if (!mounted) return;
+      setState(() => _awaitingFirstSource = false);
+      if (_ended) return;
       final hasMedia = widget.player.state.duration != Duration.zero || _youtubeUrl != null;
       if (!hasMedia && !_isModeSelectionDialogOpen && !_isYouTubeUrlDialogOpen) {
         _showModeSelectionDialog();
@@ -237,13 +303,21 @@ class _RoomScreenState extends State<RoomScreen> {
 
   @override
   void dispose() {
+    if (isDesktop) windowManager.removeListener(this);
     for (final s in _subscriptions) {
       s.cancel();
     }
     _countdownTimer?.cancel();
     _idleSourceTimer?.cancel();
     _controlsHideTimer?.cancel();
+    _actionToastTimer?.cancel();
+    _skipFlashTimer?.cancel();
+    for (final t in _overlayChatTimers) {
+      t.cancel();
+    }
     _shortcutFocus.dispose();
+    _chatCurve.dispose();
+    _chatAnim.dispose();
     _youtubeController?.dispose();
     _sync?.dispose();
     _av?.dispose();
@@ -269,11 +343,63 @@ class _RoomScreenState extends State<RoomScreen> {
 
   Set<String> get _onlineIds => _present.map((m) => m.userId).toSet();
 
+  void _onRemoteAction(RemoteAction action) {
+    final name = _present.where((m) => m.userId == action.senderId).firstOrNull?.displayName ??
+        _members.where((m) => m.userId == action.senderId).firstOrNull?.displayName ??
+        'Someone';
+    final text = switch (action.kind) {
+      RemoteActionKind.seek => '$name jumped to ${_clock(action.position ?? Duration.zero)}',
+      RemoteActionKind.play => '$name hit play',
+      RemoteActionKind.pause => '$name paused',
+    };
+    setState(() {
+      _actionToastText = text;
+      _actionToastVisible = true;
+    });
+    _actionToastTimer?.cancel();
+    _actionToastTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted) setState(() => _actionToastVisible = false);
+    });
+  }
+
+  static String _clock(Duration d) {
+    final h = d.inHours;
+    final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return h > 0 ? '$h:$m:$s' : '$m:$s';
+  }
+
+  void _pushOverlayChat(ChatMessage message) {
+    setState(() {
+      _overlayChat.add(message);
+      if (_overlayChat.length > 3) _overlayChat.removeAt(0);
+    });
+    late final Timer timer;
+    timer = Timer(const Duration(seconds: 5), () {
+      _overlayChatTimers.remove(timer);
+      if (mounted) setState(() => _overlayChat.remove(message));
+    });
+    _overlayChatTimers.add(timer);
+  }
+
+  void _cancelOverlayChatTimers() {
+    for (final t in _overlayChatTimers) {
+      t.cancel();
+    }
+    _overlayChatTimers.clear();
+  }
+
   // ---------------------------------------------------------------------------
   // Remote playback routing (dual player)
   // ---------------------------------------------------------------------------
 
   bool get _ytReady => _youtubeController?.value.isReady ?? false;
+
+  /// Spinner shows only while the player is stalled AND meant to be playing —
+  /// a buffer that fills behind a paused frame needs no indicator. YouTube's
+  /// state reads `buffering` (not `playing`) mid-stall, so gate it on intent.
+  bool get _showBuffering =>
+      _buffering && (_mode == .youtube ? _ytIntendedPlaying : _playing);
 
   void _remotePlay() {
     if (_mode == .youtube) {
@@ -340,6 +466,7 @@ class _RoomScreenState extends State<RoomScreen> {
 
   Future<void> _onRemoteModeSwitch(dynamic event) async {
     if (mounted) {
+      if (_awaitingFirstSource) setState(() => _awaitingFirstSource = false);
       // URL dialog sits on top of the source chooser; pop in that order.
       if (_isYouTubeUrlDialogOpen) {
         _urlDialogDismissedRemotely = true;
@@ -361,6 +488,7 @@ class _RoomScreenState extends State<RoomScreen> {
 
   Future<void> _showModeSelectionDialog() async {
     _isModeSelectionDialogOpen = true;
+    if (_awaitingFirstSource) setState(() => _awaitingFirstSource = false);
     final mode = await showGlassDialog<InitialMode>(
       context: context,
       barrierDismissible: false,
@@ -417,6 +545,7 @@ class _RoomScreenState extends State<RoomScreen> {
       _roomFile = null;
       _localFileName = null;
       _playing = false;
+      _buffering = false;
       _position = Duration.zero;
       _duration = Duration.zero;
       _youtubeWasPlaying = false;
@@ -452,6 +581,7 @@ class _RoomScreenState extends State<RoomScreen> {
       _youtubeController?.dispose();
       _youtubeController = null;
       _playing = widget.player.state.playing;
+      _buffering = widget.player.state.buffering;
       _position = widget.player.state.position;
       _duration = widget.player.state.duration;
     });
@@ -471,6 +601,7 @@ class _RoomScreenState extends State<RoomScreen> {
     final wasPlaying = _playing;
     setState(() {
       _playing = isPlaying;
+      _buffering = state == .buffering;
       _position = controller.value.position;
       final meta = controller.metadata.duration;
       if (meta != Duration.zero) _duration = meta;
@@ -636,6 +767,24 @@ class _RoomScreenState extends State<RoomScreen> {
 
   void _skip(Duration delta) => _seek(_position + delta);
 
+  void _flashSkip(int direction) {
+    setState(() => _skipFlash = direction);
+    _skipFlashTimer?.cancel();
+    _skipFlashTimer = Timer(const Duration(milliseconds: 650), () {
+      if (mounted) setState(() => _skipFlash = 0);
+    });
+  }
+
+  Future<void> _toggleFullscreen() async {
+    if (!isDesktop) return;
+    await windowManager.setFullScreen(!await windowManager.isFullScreen());
+  }
+
+  Future<void> _exitFullscreen() async {
+    if (!isDesktop) return;
+    await windowManager.setFullScreen(false);
+  }
+
   void _setVolume(double v) {
     if (_mode == .youtube) {
       _youtubeController?.setVolume((v * 100).round());
@@ -688,9 +837,15 @@ class _RoomScreenState extends State<RoomScreen> {
         _setVolume((_volume - 0.1).clamp(0, 1));
       case LogicalKeyboardKey.keyM:
         _toggleMute();
+      case LogicalKeyboardKey.keyF:
+        _toggleFullscreen();
       case LogicalKeyboardKey.escape:
+        // Ordered: text-field unfocus (handled above) → chat close →
+        // fullscreen exit → let Esc bubble.
         if (_chatOpen) {
           _toggleChat();
+        } else if (_fullscreen) {
+          _exitFullscreen();
         } else {
           handled = false;
         }
@@ -891,8 +1046,16 @@ class _RoomScreenState extends State<RoomScreen> {
   void _toggleChat() {
     setState(() {
       _chatOpen = !_chatOpen;
-      if (_chatOpen) _unread = 0;
+      if (_chatOpen) {
+        _unread = 0;
+        _cancelOverlayChatTimers();
+      }
     });
+    if (_chatOpen) {
+      _chatAnim.forward();
+    } else {
+      _chatAnim.reverse();
+    }
     // Closing chat may leave a disposed TextField as primary focus; reclaim it
     // so playback shortcuts work again.
     if (!_chatOpen) _shortcutFocus.requestFocus();
@@ -1026,6 +1189,35 @@ class _RoomScreenState extends State<RoomScreen> {
     );
   }
 
+  /// Wraps the video for touch layouts: double-tapping the left/right third
+  /// skips ∓10 s (broadcast via [_skip]) with a label flash; a middle
+  /// double-tap is ignored. `onTap` still toggles the chrome — accepting the
+  /// ~300 ms single-tap delay the double-tap recognizer imposes (touch only).
+  Widget _skipZones({required Widget child, VoidCallback? onTap}) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        TapDownDetails? down;
+        return GestureDetector(
+          behavior: .opaque,
+          onTap: onTap,
+          onDoubleTapDown: (d) => down = d,
+          onDoubleTap: () {
+            final dx = down?.localPosition.dx ?? width / 2;
+            if (dx < width / 3) {
+              _skip(const Duration(seconds: -10));
+              _flashSkip(-1);
+            } else if (dx > width * 2 / 3) {
+              _skip(const Duration(seconds: 10));
+              _flashSkip(1);
+            }
+          },
+          child: child,
+        );
+      },
+    );
+  }
+
   Widget _video() {
     return Stack(
       fit: .expand,
@@ -1059,7 +1251,92 @@ class _RoomScreenState extends State<RoomScreen> {
             ),
           ),
         ),
+        if (_showBuffering || _awaitingFirstSource)
+          ColoredBox(
+            color: const Color(0x59000000),
+            child: Center(
+              child: Column(
+                mainAxisSize: .min,
+                children: [
+                  const SizedBox.square(
+                    dimension: 44,
+                    child: CircularProgressIndicator(color: PTColors.primary, strokeWidth: 3),
+                  ),
+                  if (_awaitingFirstSource) ...[
+                    const SizedBox(height: 18),
+                    Text('Setting up the room…', style: PTText.caption),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        if (_skipFlash != 0)
+          Positioned.fill(
+            child: IgnorePointer(
+              child: Align(
+                alignment: _skipFlash < 0 ? const Alignment(-0.55, 0) : const Alignment(0.55, 0),
+                child: _skipFlashBadge(_skipFlash < 0),
+              ),
+            ),
+          ),
+        Positioned(
+          top: 72,
+          left: 0,
+          right: 0,
+          child: IgnorePointer(
+            child: Center(
+              child: AnimatedOpacity(
+                opacity: _actionToastVisible ? 1 : 0,
+                duration: Durations.short4,
+                child: GlassPill(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+                  child: Row(
+                    mainAxisSize: .min,
+                    spacing: 8,
+                    children: [
+                      const Icon(Symbols.sync_alt_rounded, size: 16, color: PTColors.textAccent),
+                      Text(
+                        _actionToastText,
+                        style: PTText.body.copyWith(fontSize: 13, color: PTColors.white(0.85)),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
       ],
+    );
+  }
+
+  Widget _skipFlashBadge(bool backward) {
+    return TweenAnimationBuilder<double>(
+      key: ValueKey(_skipFlashTimer),
+      tween: Tween(begin: 1, end: 0),
+      duration: const Duration(milliseconds: 650),
+      curve: Curves.easeIn,
+      builder: (_, t, child) => Opacity(opacity: t, child: child),
+      child: Container(
+        width: 84,
+        height: 84,
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.42),
+          shape: .circle,
+        ),
+        child: Column(
+          mainAxisAlignment: .center,
+          spacing: 2,
+          children: [
+            Icon(
+              backward ? Symbols.replay_10_rounded : Symbols.forward_10_rounded,
+              size: 32,
+              color: Colors.white,
+            ),
+            Text('10s', style: PTText.mono.copyWith(fontSize: 12, color: Colors.white)),
+          ],
+        ),
+      ),
     );
   }
 
@@ -1134,6 +1411,121 @@ class _RoomScreenState extends State<RoomScreen> {
     ];
   }
 
+  /// Floating stack of the last few incoming messages, shown while the chat
+  /// panel is closed (desktop/landscape). Bottom-aligned so new bubbles push up.
+  Widget _chatOverlay() {
+    return IgnorePointer(
+      child: Column(
+        mainAxisSize: .min,
+        mainAxisAlignment: .end,
+        crossAxisAlignment: .start,
+        children: [
+          for (final message in _overlayChat)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: TweenAnimationBuilder<double>(
+                key: ValueKey(message),
+                tween: Tween(begin: 0, end: 1),
+                duration: Durations.medium2,
+                curve: Curves.easeOut,
+                builder: (_, t, child) => Opacity(
+                  opacity: t,
+                  child: Transform.translate(offset: Offset(0, (1 - t) * 8), child: child),
+                ),
+                child: _overlayBubble(message),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _overlayBubble(ChatMessage message) {
+    return Row(
+      mainAxisSize: .min,
+      crossAxisAlignment: .end,
+      spacing: 8,
+      children: [
+        PTAvatar(userId: message.senderId, displayName: message.displayName, size: 26),
+        Flexible(
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 260),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: const Color(0xFF141022).withValues(alpha: 0.74),
+              border: Border.all(color: PTColors.white(0.1)),
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(14),
+                topRight: Radius.circular(14),
+                bottomRight: Radius.circular(14),
+                bottomLeft: Radius.circular(4),
+              ),
+            ),
+            child: Column(
+              mainAxisSize: .min,
+              crossAxisAlignment: .start,
+              spacing: 2,
+              children: [
+                Text(
+                  message.displayName,
+                  style: const TextStyle(
+                    fontFamily: PTFonts.body,
+                    fontSize: 11,
+                    fontWeight: .w600,
+                    color: PTColors.textAccent,
+                  ),
+                ),
+                Text(message.content, style: PTText.body.copyWith(fontSize: 13)),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// The chat panel itself: slides in from off the right edge (the Stack clips
+  /// it on the way past) and unmounts at rest, so the panel and its autofocused
+  /// input only exist while it's on screen. Deliberately *not* faded — the
+  /// panel is a GlassPanel, and an Opacity layer around a BackdropFilter leaves
+  /// it sampling an empty layer, i.e. the glass goes flat mid-animation.
+  Widget _chatRevealed({required double offscreen, required Widget panel}) {
+    return AnimatedBuilder(
+      animation: _chatCurve,
+      child: panel,
+      builder: (_, child) {
+        final t = _chatCurve.value;
+        // IgnorePointer even when empty: the Positioned parent hands down tight
+        // constraints, so a bare SizedBox still fills (and blocks) the slot.
+        if (t == 0) return const IgnorePointer(child: SizedBox.shrink());
+        return IgnorePointer(
+          ignoring: _chatAnim.status == AnimationStatus.reverse,
+          child: Transform.translate(
+            offset: Offset((1 - t) * offscreen, 0),
+            child: child,
+          ),
+        );
+      },
+    );
+  }
+
+  /// Chrome the open panel takes the place of (facecam rail, floating
+  /// bubbles): cross-fades out against the panel's arrival instead of popping.
+  Widget _chatDisplaced(Widget displaced) {
+    return AnimatedBuilder(
+      animation: _chatCurve,
+      child: displaced,
+      builder: (_, child) {
+        final t = _chatCurve.value;
+        if (t == 1) return const SizedBox.shrink();
+        return IgnorePointer(
+          ignoring: t > 0,
+          child: Opacity(opacity: (1 - t).clamp(0.0, 1.0), child: child),
+        );
+      },
+    );
+  }
+
   Widget _chatToggleButton() {
     return UnreadBadge(
       count: _unread,
@@ -1183,7 +1575,9 @@ class _RoomScreenState extends State<RoomScreen> {
             ),
           ),
         ),
-        Positioned(
+        AnimatedPositioned(
+          duration: _chatMotion,
+          curve: _chatOpen ? Curves.easeOutCubic : Curves.easeInCubic,
           top: 90,
           left: 240,
           right: _chatOpen ? 378 : 240,
@@ -1214,20 +1608,32 @@ class _RoomScreenState extends State<RoomScreen> {
               onTap: () => setState(() => _camsVisible = true),
             ),
           ),
-        if (_chatOpen && _sync != null)
+        if (_sync != null)
           Positioned(
             top: 84,
             right: 24,
             bottom: 178,
             width: 330,
-            child: RoomChatPanel(
-              sync: _sync!,
-              messages: _messages,
-              typingNames: _typingNames,
-              watchingCount: _present.length,
-              onClose: _toggleChat,
-              onSend: _sendChat,
+            child: _chatRevealed(
+              // Panel width + its right margin: starts fully off the edge.
+              offscreen: 354,
+              panel: RoomChatPanel(
+                sync: _sync!,
+                messages: _messages,
+                typingNames: _typingNames,
+                watchingCount: _present.length,
+                onClose: _toggleChat,
+                onSend: _sendChat,
+                autofocus: true,
+              ),
             ),
+          ),
+        if (_overlayChat.isNotEmpty)
+          Positioned(
+            left: 24,
+            bottom: 170,
+            width: 340,
+            child: _chatDisplaced(_chatOverlay()),
           ),
         Positioned(
           bottom: 24,
@@ -1297,7 +1703,7 @@ class _RoomScreenState extends State<RoomScreen> {
               ],
             ),
           ),
-          AspectRatio(aspectRatio: 16 / 9, child: _video()),
+          AspectRatio(aspectRatio: 16 / 9, child: _skipZones(child: _video())),
           if (_av != null)
             Padding(
               padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
@@ -1362,11 +1768,7 @@ class _RoomScreenState extends State<RoomScreen> {
     return Stack(
       children: [
         Positioned.fill(
-          child: GestureDetector(
-            behavior: .opaque,
-            onTap: _toggleControlsVisible,
-            child: _video(),
-          ),
+          child: _skipZones(onTap: _toggleControlsVisible, child: _video()),
         ),
         SafeArea(
           minimum: const EdgeInsets.symmetric(horizontal: 56),
@@ -1393,34 +1795,39 @@ class _RoomScreenState extends State<RoomScreen> {
                   ),
                 ),
               ),
-              if (_av != null && !_chatOpen)
+              if (_av != null)
                 Positioned(
                   top: 72,
                   right: 0,
                   child: SizedBox(
                     width: 104,
-                    child: FacecamRail(
-                      av: _av!,
-                      present: _present,
-                      selfId: _sync?.userId ?? '',
-                      layout: .miniStackRight,
-                      maxTiles: 3,
+                    child: _chatDisplaced(
+                      FacecamRail(
+                        av: _av!,
+                        present: _present,
+                        selfId: _sync?.userId ?? '',
+                        layout: .miniStackRight,
+                        maxTiles: 3,
+                      ),
                     ),
                   ),
                 ),
-              if (_chatOpen && _sync != null)
+              if (_sync != null)
                 Positioned(
                   top: 72,
                   right: 0,
                   bottom: 86,
                   width: 300,
-                  child: RoomChatPanel(
-                    sync: _sync!,
-                    messages: _messages,
-                    typingNames: _typingNames,
-                    watchingCount: _present.length,
-                    onClose: _toggleChat,
-                    onSend: _sendChat,
+                  child: _chatRevealed(
+                    offscreen: 300,
+                    panel: RoomChatPanel(
+                      sync: _sync!,
+                      messages: _messages,
+                      typingNames: _typingNames,
+                      watchingCount: _present.length,
+                      onClose: _toggleChat,
+                      onSend: _sendChat,
+                    ),
                   ),
                 ),
               Positioned(
@@ -1429,6 +1836,13 @@ class _RoomScreenState extends State<RoomScreen> {
                 width: 340,
                 child: Column(spacing: 8, children: _banners()),
               ),
+              if (_overlayChat.isNotEmpty)
+                Positioned(
+                  left: 0,
+                  bottom: 96,
+                  width: 300,
+                  child: _chatDisplaced(_chatOverlay()),
+                ),
               Positioned(
                 bottom: 22,
                 left: 0,

@@ -273,6 +273,7 @@ class PTSlider extends StatelessWidget {
     required this.value,
     required this.onChanged,
     this.onChangeEnd,
+    this.onHover,
     this.trackHeight = 5,
     this.thumbRadius = 8,
   });
@@ -281,6 +282,10 @@ class PTSlider extends StatelessWidget {
   final double value;
   final ValueChanged<double> onChanged;
   final ValueChanged<double>? onChangeEnd;
+
+  /// Reports the normalized (0–1) position under a hovering pointer, and null
+  /// when it leaves. Desktop-only in practice — touch never hovers.
+  final ValueChanged<double?>? onHover;
   final double trackHeight;
   final double thumbRadius;
 
@@ -297,8 +302,16 @@ class PTSlider extends StatelessWidget {
       if (end) onChangeEnd?.call(v);
     }
 
+    void hover(Offset local) {
+      final width = context.size?.width ?? 0;
+      if (width <= 0) return;
+      onHover?.call((local.dx / width).clamp(0.0, 1.0));
+    }
+
     return MouseRegion(
       cursor: SystemMouseCursors.click,
+      onHover: onHover == null ? null : (e) => hover(e.localPosition),
+      onExit: onHover == null ? null : (_) => onHover!(null),
       child: GestureDetector(
         behavior: .opaque,
         onTapDown: (d) => update(d.localPosition),

@@ -39,6 +39,20 @@ class ChatMessage {
   final DateTime sentAt;
 }
 
+enum RemoteActionKind { play, pause, seek }
+
+/// A user-initiated remote playback action, surfaced for attribution UI. Only
+/// emitted for genuine play/pause/seek broadcasts — never for mechanical
+/// `state_response` application or `position_sync` drift correction, so
+/// late-join and drift never read as someone touching the controls.
+class RemoteAction {
+  const RemoteAction({required this.senderId, required this.kind, this.position});
+
+  final String senderId;
+  final RemoteActionKind kind;
+  final Duration? position;
+}
+
 /// Room-scoped sync engine over a private Supabase Realtime channel
 /// (`room:<id>`). Created on room entry, disposed on leave.
 ///
@@ -90,6 +104,10 @@ class SyncService {
 
   final _roomEndedController = StreamController<void>.broadcast();
   Stream<void> get roomEndedStream => _roomEndedController.stream;
+
+  final _remoteActionController = StreamController<RemoteAction>.broadcast();
+  /// User-initiated remote play/pause/seek, for attribution toasts.
+  Stream<RemoteAction> get remoteActions => _remoteActionController.stream;
 
   final _connectionController = StreamController<bool>.broadcast();
   /// false while resubscribing after a drop ("Reconnecting…" banner).
@@ -587,6 +605,7 @@ class SyncService {
 
   void _handlePlay(Map<String, dynamic> payload) {
     if (!_shouldApply(payload)) return;
+    _emitRemoteAction(payload, RemoteActionKind.play);
     _applyRemoteAction(() {
       onRemotePlay != null ? onRemotePlay!() : _player.play();
     });
@@ -594,6 +613,7 @@ class SyncService {
 
   void _handlePause(Map<String, dynamic> payload) {
     if (!_shouldApply(payload)) return;
+    _emitRemoteAction(payload, RemoteActionKind.pause);
     _applyRemoteAction(() {
       onRemotePause != null ? onRemotePause!() : _player.pause();
     });
@@ -602,6 +622,7 @@ class SyncService {
   void _handleSeek(Map<String, dynamic> payload) {
     if (!_shouldApply(payload)) return;
     final positionMs = payload['positionMs'] as int;
+    _emitRemoteAction(payload, RemoteActionKind.seek, Duration(milliseconds: positionMs));
     _applyRemoteAction(() {
       if (onRemoteSeek != null) {
         onRemoteSeek!(Duration(milliseconds: positionMs));
@@ -609,6 +630,13 @@ class SyncService {
         _player.seek(Duration(milliseconds: positionMs));
       }
     });
+  }
+
+  void _emitRemoteAction(Map<String, dynamic> payload, RemoteActionKind kind, [Duration? position]) {
+    if (_disposed) return;
+    _remoteActionController.add(
+      RemoteAction(senderId: payload['senderId'] as String, kind: kind, position: position),
+    );
   }
 
   void _handleModeSwitch(Map<String, dynamic> payload) {
@@ -657,6 +685,7 @@ class SyncService {
     _fileInfoController.close();
     _roomEndedController.close();
     _connectionController.close();
+    _remoteActionController.close();
     disconnect();
   }
 }
