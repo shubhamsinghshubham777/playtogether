@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
+import 'package:playtogether/ui/buttons.dart';
+import 'package:playtogether/ui/inputs.dart';
+import 'package:playtogether/ui/pt_theme.dart';
 
+/// Body for [showGlassDialog]; pops the validated URL string.
 class YouTubeUrlDialog extends StatefulWidget {
   const YouTubeUrlDialog({super.key});
 
@@ -20,16 +25,13 @@ class _YouTubeUrlDialogState extends State<YouTubeUrlDialog> {
   void _submitUrl() {
     final url = _controller.text.trim();
     if (url.isEmpty) {
-      setState(() => _errorMessage = 'Please enter a URL');
+      setState(() => _errorMessage = 'Paste a link first.');
       return;
     }
-
-    // Validate YouTube URL format
     if (!_isValidYoutubeUrl(url)) {
-      setState(() => _errorMessage = 'Invalid YouTube URL');
+      setState(() => _errorMessage = "Hmm, that doesn't look like a YouTube link.");
       return;
     }
-
     Navigator.of(context).pop(url);
   }
 
@@ -45,55 +47,54 @@ class _YouTubeUrlDialogState extends State<YouTubeUrlDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final typography = Theme.of(context).textTheme;
-
-    return AlertDialog(
-      content: Container(
-        decoration: BoxDecoration(
-          color: colors.surfaceContainer,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        padding: EdgeInsets.all(16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          spacing: 16,
+    return Column(
+      mainAxisSize: .min,
+      crossAxisAlignment: .start,
+      spacing: 16,
+      children: [
+        Column(
+          crossAxisAlignment: .start,
+          spacing: 5,
           children: [
-            Text('Enter YouTube URL', style: typography.headlineSmall),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _controller,
-                    autofocus: true,
-                    decoration: InputDecoration(
-                      hintText: 'https://youtube.com/watch?v=...',
-                      errorText: _errorMessage,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                    onSubmitted: (_) => _submitUrl(),
-                    onChanged: (_) {
-                      if (_errorMessage != null) setState(() => _errorMessage = null);
-                    },
-                  ),
-                ),
-                SizedBox(width: 8),
-                IconButton(
-                  onPressed: _submitUrl,
-                  icon: Icon(Icons.arrow_forward),
-                  tooltip: 'Load video',
-                ),
-              ],
-            ),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton(onPressed: () => Navigator.of(context).pop(), child: Text('Cancel')),
-              ],
+            Text('Paste a YouTube link', style: PTText.screenTitle.copyWith(fontSize: 20)),
+            Text(
+              'It switches for everyone in the room.',
+              style: PTText.body.copyWith(fontSize: 13.5, color: PTColors.white(0.55)),
             ),
           ],
         ),
-      ),
+        PTTextField(
+          controller: _controller,
+          hint: 'youtube.com/watch?v=…',
+          prefixIcon: Symbols.link_rounded,
+          autofocus: true,
+          errorText: _errorMessage,
+          onChanged: (_) {
+            if (_errorMessage != null) setState(() => _errorMessage = null);
+          },
+          onSubmitted: (_) => _submitUrl(),
+        ),
+        Row(
+          mainAxisAlignment: .end,
+          spacing: 11,
+          children: [
+            PTButton(
+              label: 'Cancel',
+              variant: .secondary,
+              height: 46,
+              expand: false,
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+            PTButton(
+              label: 'Load video',
+              trailingIcon: Symbols.arrow_forward_rounded,
+              height: 46,
+              expand: false,
+              onPressed: _submitUrl,
+            ),
+          ],
+        ),
+      ],
     );
   }
 }

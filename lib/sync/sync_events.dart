@@ -8,9 +8,12 @@ abstract class SyncEventType {
   static const String modeSwitch = 'mode_switch';
   static const String chat = 'chat';
   static const String typing = 'typing';
+  static const String positionSync = 'position_sync';
+  static const String fileInfo = 'file_info';
+  static const String roomEnded = 'room_ended';
 }
 
-/// Base class for all sync events
+/// Base class for all sync events. `senderId` is the authenticated user id.
 sealed class SyncEvent {
   final String senderId;
   final int timestamp;
@@ -18,18 +21,6 @@ sealed class SyncEvent {
   const SyncEvent({required this.senderId, required this.timestamp});
 
   Map<String, dynamic> toPayload();
-
-  static SyncEvent? fromPayload(String event, Map<String, dynamic> payload) {
-    return switch (event) {
-      SyncEventType.play => PlayEvent.fromPayload(payload),
-      SyncEventType.pause => PauseEvent.fromPayload(payload),
-      SyncEventType.seek => SeekEvent.fromPayload(payload),
-      SyncEventType.stateRequest => StateRequestEvent.fromPayload(payload),
-      SyncEventType.stateResponse => StateResponseEvent.fromPayload(payload),
-      SyncEventType.modeSwitch => ModeSwitchEvent.fromPayload(payload),
-      _ => null,
-    };
-  }
 }
 
 class PlayEvent extends SyncEvent {
@@ -100,6 +91,8 @@ class StateResponseEvent extends SyncEvent {
   final int positionMs;
   final String mode;
   final String? youtubeUrl;
+  final String? fileName;
+  final int? fileDurationMs;
 
   const StateResponseEvent({
     required super.senderId,
@@ -108,6 +101,8 @@ class StateResponseEvent extends SyncEvent {
     required this.positionMs,
     required this.mode,
     this.youtubeUrl,
+    this.fileName,
+    this.fileDurationMs,
   });
 
   factory StateResponseEvent.fromPayload(Map<String, dynamic> payload) {
@@ -118,6 +113,8 @@ class StateResponseEvent extends SyncEvent {
       positionMs: payload['positionMs'] as int,
       mode: payload['mode'] as String? ?? 'local',
       youtubeUrl: payload['youtubeUrl'] as String?,
+      fileName: payload['fileName'] as String?,
+      fileDurationMs: payload['fileDurationMs'] as int?,
     );
   }
 
@@ -129,6 +126,8 @@ class StateResponseEvent extends SyncEvent {
     'positionMs': positionMs,
     'mode': mode,
     'youtubeUrl': youtubeUrl,
+    'fileName': fileName,
+    'fileDurationMs': fileDurationMs,
   };
 }
 
@@ -162,13 +161,13 @@ class ModeSwitchEvent extends SyncEvent {
 }
 
 class ChatEvent extends SyncEvent {
-  final String username;
+  final String displayName;
   final String message;
 
   const ChatEvent({
     required super.senderId,
     required super.timestamp,
-    required this.username,
+    required this.displayName,
     required this.message,
   });
 
@@ -176,7 +175,7 @@ class ChatEvent extends SyncEvent {
     return ChatEvent(
       senderId: payload['senderId'] as String,
       timestamp: payload['timestamp'] as int,
-      username: payload['username'] as String,
+      displayName: payload['displayName'] as String,
       message: payload['message'] as String,
     );
   }
@@ -185,19 +184,19 @@ class ChatEvent extends SyncEvent {
   Map<String, dynamic> toPayload() => {
     'senderId': senderId,
     'timestamp': timestamp,
-    'username': username,
+    'displayName': displayName,
     'message': message,
   };
 }
 
 class TypingEvent extends SyncEvent {
-  final String username;
+  final String displayName;
   final bool isTyping;
 
   const TypingEvent({
     required super.senderId,
     required super.timestamp,
-    required this.username,
+    required this.displayName,
     required this.isTyping,
   });
 
@@ -205,7 +204,7 @@ class TypingEvent extends SyncEvent {
     return TypingEvent(
       senderId: payload['senderId'] as String,
       timestamp: payload['timestamp'] as int,
-      username: payload['username'] as String,
+      displayName: payload['displayName'] as String,
       isTyping: payload['isTyping'] as bool,
     );
   }
@@ -214,7 +213,67 @@ class TypingEvent extends SyncEvent {
   Map<String, dynamic> toPayload() => {
     'senderId': senderId,
     'timestamp': timestamp,
-    'username': username,
+    'displayName': displayName,
     'isTyping': isTyping,
+  };
+}
+
+/// Host heartbeat while playing: members correct only if drift > 1.5 s.
+class PositionSyncEvent extends SyncEvent {
+  final int positionMs;
+  final bool playing;
+
+  const PositionSyncEvent({
+    required super.senderId,
+    required super.timestamp,
+    required this.positionMs,
+    required this.playing,
+  });
+
+  factory PositionSyncEvent.fromPayload(Map<String, dynamic> payload) {
+    return PositionSyncEvent(
+      senderId: payload['senderId'] as String,
+      timestamp: payload['timestamp'] as int,
+      positionMs: payload['positionMs'] as int,
+      playing: payload['playing'] as bool,
+    );
+  }
+
+  @override
+  Map<String, dynamic> toPayload() => {
+    'senderId': senderId,
+    'timestamp': timestamp,
+    'positionMs': positionMs,
+    'playing': playing,
+  };
+}
+
+/// Local-file identity (name + duration) so mismatched files get a banner.
+class FileInfoEvent extends SyncEvent {
+  final String fileName;
+  final int durationMs;
+
+  const FileInfoEvent({
+    required super.senderId,
+    required super.timestamp,
+    required this.fileName,
+    required this.durationMs,
+  });
+
+  factory FileInfoEvent.fromPayload(Map<String, dynamic> payload) {
+    return FileInfoEvent(
+      senderId: payload['senderId'] as String,
+      timestamp: payload['timestamp'] as int,
+      fileName: payload['fileName'] as String,
+      durationMs: payload['durationMs'] as int,
+    );
+  }
+
+  @override
+  Map<String, dynamic> toPayload() => {
+    'senderId': senderId,
+    'timestamp': timestamp,
+    'fileName': fileName,
+    'durationMs': durationMs,
   };
 }

@@ -49,3 +49,7 @@ app.*.map.json
 
 # FVM Version Cache
 .fvm/
+# Supabase (local secrets used for `config push` / `secrets set`)
+supabase/.env
+supabase/functions/.env
+supabase/.temp/

@@ -1,0 +1,97 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
+import 'package:livekit_client/livekit_client.dart' as lk;
+import 'package:playtogether/env.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+enum AvConnectionState { disconnected, connecting, connected, reconnecting }
+
+/// Voice/video layer per room. Identity = Supabase user id (the token minted
+/// by the livekit-token edge function enforces room membership server-side).
+class LiveKitService extends ChangeNotifier {
+  LiveKitService({required this.roomId});
+
+  final String roomId;
+
+  /// AV is available only when the client knows the LiveKit URL; without it
+  /// the whole facecam UI stays hidden.
+  static bool get isConfigured => (Env.livekitUrl ?? '').isNotEmpty;
+
+  lk.Room? _room;
+  lk.Room? get room => _room;
+
+  AvConnectionState _state = .disconnected;
+  AvConnectionState get state => _state;
+
+  bool get micEnabled => _room?.localParticipant?.isMicrophoneEnabled() ?? false;
+  bool get camEnabled => _room?.localParticipant?.isCameraEnabled() ?? false;
+
+  lk.LocalParticipant? get localParticipant => _room?.localParticipant;
+  List<lk.RemoteParticipant> get remoteParticipants =>
+      _room?.remoteParticipants.values.toList() ?? const [];
+
+  lk.EventsListener<lk.RoomEvent>? _listener;
+
+  Future<void> connect() async {
+    if (!isConfigured || _state == .connecting || _state == .connected) return;
+    _setState(.connecting);
+    try {
+      final response = await Supabase.instance.client.functions.invoke(
+        'livekit-token',
+        body: {'room_id': roomId},
+      );
+      final data = (response.data as Map).cast<String, dynamic>();
+      final token = data['token'] as String;
+      final url = (data['url'] as String?) ?? Env.livekitUrl!;
+
+      final room = lk.Room(
+        roomOptions: const lk.RoomOptions(
+          adaptiveStream: true,
+          dynacast: true,
+          defaultCameraCaptureOptions: lk.CameraCaptureOptions(
+            params: lk.VideoParametersPresets.h360_169,
+          ),
+        ),
+      );
+      _listener = room.createListener()
+        ..on<lk.RoomReconnectingEvent>((_) => _setState(.reconnecting))
+        ..on<lk.RoomReconnectedEvent>((_) => _setState(.connected))
+        ..on<lk.RoomDisconnectedEvent>((_) => _setState(.disconnected))
+        // Track/participant churn and speaking changes all surface as change
+        // notifications so tiles rebuild.
+        ..on<lk.RoomEvent>((_) => notifyListeners());
+
+      await room.connect(url, token);
+      _room = room;
+      _setState(.connected);
+    } catch (e) {
+      debugPrint('LiveKit connect failed: $e');
+      _setState(.disconnected);
+      rethrow;
+    }
+  }
+
+  Future<void> setMicEnabled(bool enabled) async {
+    await _room?.localParticipant?.setMicrophoneEnabled(enabled);
+    notifyListeners();
+  }
+
+  Future<void> setCamEnabled(bool enabled) async {
+    await _room?.localParticipant?.setCameraEnabled(enabled);
+    notifyListeners();
+  }
+
+  void _setState(AvConnectionState state) {
+    _state = state;
+    notifyListeners();
+  }
+
+  @override
+  Future<void> dispose() async {
+    await _listener?.dispose();
+    await _room?.disconnect();
+    await _room?.dispose();
+    super.dispose();
+  }
+}

@@ -7,18 +7,24 @@ environment:
   sdk: 3.12.2
 
 dependencies:
+  app_links: 7.2.1
   collection: 1.19.1
   fast_file_picker: 0.4.8
-  flex_color_scheme: 8.4.0
   file_selector: 1.1.0
   flutter:
     sdk: flutter
   flutter_dotenv: 6.0.0
+  flutter_inappwebview: 6.1.5
+  go_router: 17.3.0
+  image: 4.9.1
+  livekit_client: 2.8.1
+  material_symbols_icons: 4.2960.0
   media_kit: 1.2.6
   media_kit_video: 2.0.1
   media_kit_libs_video: 1.0.7
-  supabase_flutter: 2.12.0
-  uuid: 4.5.2
+  responsive_framework: 1.5.1
+  supabase_flutter: 2.16.0
+  uuid: 4.6.0
   youtube_player_flutter: 9.1.3
 
 dev_dependencies:
@@ -32,6 +38,35 @@ flutter:
   assets:
     - .env
     - assets/subfont.ttf
+  fonts:
+    - family: Space Grotesk
+      fonts:
+        - asset: assets/fonts/SpaceGrotesk-400.ttf
+          weight: 400
+        - asset: assets/fonts/SpaceGrotesk-500.ttf
+          weight: 500
+        - asset: assets/fonts/SpaceGrotesk-600.ttf
+          weight: 600
+        - asset: assets/fonts/SpaceGrotesk-700.ttf
+          weight: 700
+    - family: Outfit
+      fonts:
+        - asset: assets/fonts/Outfit-300.ttf
+          weight: 300
+        - asset: assets/fonts/Outfit-400.ttf
+          weight: 400
+        - asset: assets/fonts/Outfit-500.ttf
+          weight: 500
+        - asset: assets/fonts/Outfit-600.ttf
+          weight: 600
+        - asset: assets/fonts/Outfit-700.ttf
+          weight: 700
+    - family: JetBrains Mono
+      fonts:
+        - asset: assets/fonts/JetBrainsMono-400.ttf
+          weight: 400
+        - asset: assets/fonts/JetBrainsMono-500.ttf
+          weight: 500
 
 inno_bundle:
   id: a05680d0-e422-11f0-af00-4b68febb008b

@@ -28,5 +28,20 @@
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>NSCameraUsageDescription</key>
+	<string>PlayTogether uses your camera for facecams during watch parties.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>PlayTogether uses your microphone for voice chat during watch parties.</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.playtogether.deeplink</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>playtogether</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>
