@@ -17,6 +17,7 @@ class RoomControlBarActions {
     required this.onSwitchSource,
     required this.onOpenFile,
     required this.onVolume,
+    required this.onToggleMute,
   });
 
   final VoidCallback onPlayPause;
@@ -29,9 +30,10 @@ class RoomControlBarActions {
   final VoidCallback onSwitchSource;
   final VoidCallback? onOpenFile;
   final ValueChanged<double> onVolume;
+  final VoidCallback onToggleMute;
 }
 
-class RoomControlBar extends StatelessWidget {
+class RoomControlBar extends StatefulWidget {
   const RoomControlBar({
     super.key,
     required this.playing,
@@ -55,14 +57,29 @@ class RoomControlBar extends StatelessWidget {
   final RoomControlBarActions actions;
   final bool compact;
 
-  double get _progress =>
-      duration.inMilliseconds == 0 ? 0 : position.inMilliseconds / duration.inMilliseconds;
+  @override
+  State<RoomControlBar> createState() => _RoomControlBarState();
+}
 
-  void _seekTo(double v) =>
-      actions.onSeek(Duration(milliseconds: (v * duration.inMilliseconds).round()));
+class _RoomControlBarState extends State<RoomControlBar> {
+  /// While scrubbing, the bar previews this value locally; the actual seek
+  /// (and its room-wide broadcast) fires once, on release.
+  double? _dragValue;
+
+  double get _progress => widget.duration.inMilliseconds == 0
+      ? 0
+      : widget.position.inMilliseconds / widget.duration.inMilliseconds;
+
+  void _endScrub(double v) {
+    setState(() => _dragValue = null);
+    widget.actions.onSeek(Duration(milliseconds: (v * widget.duration.inMilliseconds).round()));
+  }
 
   @override
   Widget build(BuildContext context) {
+    final compact = widget.compact;
+    final drag = _dragValue;
+    final shownPosition = drag == null ? widget.position : widget.duration * drag;
     return GlassPanel(
       radius: compact ? 20 : 24,
       opacity: 0.6,
@@ -76,17 +93,18 @@ class RoomControlBar extends StatelessWidget {
           Row(
             spacing: compact ? 10 : 16,
             children: [
-              Text(_fmt(position), style: PTText.mono.copyWith(fontSize: compact ? 11 : 13)),
+              Text(_fmt(shownPosition), style: PTText.mono.copyWith(fontSize: compact ? 11 : 13)),
               Expanded(
                 child: PTSlider(
-                  value: _progress,
+                  value: drag ?? _progress,
                   trackHeight: compact ? 4 : 5,
                   thumbRadius: compact ? 6 : 7,
-                  onChanged: _seekTo,
+                  onChanged: (v) => setState(() => _dragValue = v),
+                  onChangeEnd: _endScrub,
                 ),
               ),
               Text(
-                _fmt(duration),
+                _fmt(widget.duration),
                 style: PTText.mono.copyWith(fontSize: compact ? 11 : 13, color: PTColors.white(0.5)),
               ),
             ],
@@ -98,29 +116,30 @@ class RoomControlBar extends StatelessWidget {
   }
 
   Widget _fullRow() {
+    final actions = widget.actions;
     return Row(
       children: [
         Row(
           spacing: 8,
           children: [
-            if (avAvailable) ...[
+            if (widget.avAvailable) ...[
               PTIconButton(
                 icon: Symbols.mic_rounded,
-                active: micOn,
+                active: widget.micOn,
                 glass: false,
                 borderRadius: BorderRadius.circular(12),
                 size: 42,
-                tooltip: micOn ? 'Mute mic' : 'Mic on',
-                onPressed: () => actions.onMicToggle(!micOn),
+                tooltip: widget.micOn ? 'Mute mic' : 'Mic on',
+                onPressed: () => actions.onMicToggle(!widget.micOn),
               ),
               PTIconButton(
                 icon: Symbols.videocam_rounded,
-                active: camOn,
+                active: widget.camOn,
                 glass: false,
                 borderRadius: BorderRadius.circular(12),
                 size: 42,
-                tooltip: camOn ? 'Camera off' : 'Camera on',
-                onPressed: () => actions.onCamToggle(!camOn),
+                tooltip: widget.camOn ? 'Camera off' : 'Camera on',
+                onPressed: () => actions.onCamToggle(!widget.camOn),
               ),
               Container(
                 width: 1,
@@ -129,24 +148,26 @@ class RoomControlBar extends StatelessWidget {
                 color: PTColors.white(0.12),
               ),
             ],
-            PTIconButton(
-              icon: Symbols.audiotrack_rounded,
-              glass: false,
-              borderRadius: BorderRadius.circular(12),
-              size: 42,
-              iconSize: 22,
-              tooltip: 'Audio track',
-              onPressed: actions.onAudioTracks,
-            ),
-            PTIconButton(
-              icon: Symbols.subtitles_rounded,
-              glass: false,
-              borderRadius: BorderRadius.circular(12),
-              size: 42,
-              iconSize: 22,
-              tooltip: 'Subtitles',
-              onPressed: actions.onSubtitles,
-            ),
+            if (actions.onAudioTracks != null)
+              PTIconButton(
+                icon: Symbols.audiotrack_rounded,
+                glass: false,
+                borderRadius: BorderRadius.circular(12),
+                size: 42,
+                iconSize: 22,
+                tooltip: 'Audio track',
+                onPressed: actions.onAudioTracks,
+              ),
+            if (actions.onSubtitles != null)
+              PTIconButton(
+                icon: Symbols.subtitles_rounded,
+                glass: false,
+                borderRadius: BorderRadius.circular(12),
+                size: 42,
+                iconSize: 22,
+                tooltip: 'Subtitles',
+                onPressed: actions.onSubtitles,
+              ),
           ],
         ),
         Expanded(
@@ -160,7 +181,7 @@ class RoomControlBar extends StatelessWidget {
                 iconSize: 26,
                 onPressed: () => actions.onSkip(const Duration(seconds: -10)),
               ),
-              PTPlayButton(playing: playing, onPressed: actions.onPlayPause),
+              PTPlayButton(playing: widget.playing, onPressed: actions.onPlayPause),
               PTIconButton(
                 icon: Symbols.forward_10_rounded,
                 glass: false,
@@ -195,13 +216,22 @@ class RoomControlBar extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(left: 6),
               child: Row(
-                spacing: 10,
+                spacing: 4,
                 children: [
-                  Icon(Symbols.volume_up_rounded, size: 20, fill: 1, color: PTColors.white(0.75)),
+                  PTIconButton(
+                    icon: widget.volume == 0
+                        ? Symbols.volume_off_rounded
+                        : Symbols.volume_up_rounded,
+                    glass: false,
+                    size: 36,
+                    iconSize: 20,
+                    tooltip: widget.volume == 0 ? 'Unmute' : 'Mute',
+                    onPressed: actions.onToggleMute,
+                  ),
                   SizedBox(
                     width: 110,
                     child: PTSlider(
-                      value: volume,
+                      value: widget.volume,
                       trackHeight: 4,
                       thumbRadius: 5.5,
                       onChanged: actions.onVolume,
@@ -217,27 +247,28 @@ class RoomControlBar extends StatelessWidget {
   }
 
   Widget _compactRow() {
+    final actions = widget.actions;
     return Row(
       children: [
-        if (avAvailable)
+        if (widget.avAvailable)
           Row(
             spacing: 8,
             children: [
               PTIconButton(
                 icon: Symbols.mic_rounded,
-                active: micOn,
+                active: widget.micOn,
                 glass: false,
                 borderRadius: BorderRadius.circular(12),
                 iconSize: 20,
-                onPressed: () => actions.onMicToggle(!micOn),
+                onPressed: () => actions.onMicToggle(!widget.micOn),
               ),
               PTIconButton(
                 icon: Symbols.videocam_rounded,
-                active: camOn,
+                active: widget.camOn,
                 glass: false,
                 borderRadius: BorderRadius.circular(12),
                 iconSize: 20,
-                onPressed: () => actions.onCamToggle(!camOn),
+                onPressed: () => actions.onCamToggle(!widget.camOn),
               ),
             ],
           ),
@@ -252,7 +283,7 @@ class RoomControlBar extends StatelessWidget {
                 iconSize: 24,
                 onPressed: () => actions.onSkip(const Duration(seconds: -10)),
               ),
-              PTPlayButton(playing: playing, size: 52, onPressed: actions.onPlayPause),
+              PTPlayButton(playing: widget.playing, size: 52, onPressed: actions.onPlayPause),
               PTIconButton(
                 icon: Symbols.forward_10_rounded,
                 glass: false,
@@ -262,13 +293,24 @@ class RoomControlBar extends StatelessWidget {
             ],
           ),
         ),
-        PTIconButton(
-          icon: Symbols.subtitles_rounded,
-          glass: false,
-          borderRadius: BorderRadius.circular(12),
-          iconSize: 21,
-          onPressed: actions.onSubtitles,
-        ),
+        if (actions.onAudioTracks != null)
+          PTIconButton(
+            icon: Symbols.audiotrack_rounded,
+            glass: false,
+            borderRadius: BorderRadius.circular(12),
+            iconSize: 21,
+            tooltip: 'Audio track',
+            onPressed: actions.onAudioTracks,
+          ),
+        if (actions.onSubtitles != null)
+          PTIconButton(
+            icon: Symbols.subtitles_rounded,
+            glass: false,
+            borderRadius: BorderRadius.circular(12),
+            iconSize: 21,
+            tooltip: 'Subtitles',
+            onPressed: actions.onSubtitles,
+          ),
       ],
     );
   }

@@ -83,6 +83,15 @@ class _RoomScreenState extends State<RoomScreen> {
   int _unread = 0;
   bool _camsVisible = true;
 
+  // Floating chrome (topbar + control bar) auto-hides while playing; tap the
+  // video to toggle it manually. Only applies to the overlay layouts
+  // (desktop/landscape) — portrait keeps controls in the column flow.
+  bool _controlsVisible = true;
+  bool _pointerOverControls = false;
+  Timer? _controlsHideTimer;
+  double _volumeBeforeMute = 1.0;
+  final _shortcutFocus = FocusNode();
+
   Timer? _countdownTimer;
   Duration _timeLeft = Duration.zero;
   bool _warningDismissed = false;
@@ -183,7 +192,10 @@ class _RoomScreenState extends State<RoomScreen> {
         if (up && !wasConnected) _reloadChatHistory();
       }),
       widget.player.stream.playing.listen((playing) {
-        if (_mode == .local) setState(() => _playing = playing);
+        if (_mode == .local) {
+          setState(() => _playing = playing);
+          _onPlayingChangedForControls(playing);
+        }
       }),
       widget.player.stream.position.listen((position) {
         if (_mode == .local) setState(() => _position = position);
@@ -230,6 +242,8 @@ class _RoomScreenState extends State<RoomScreen> {
     }
     _countdownTimer?.cancel();
     _idleSourceTimer?.cancel();
+    _controlsHideTimer?.cancel();
+    _shortcutFocus.dispose();
     _youtubeController?.dispose();
     _sync?.dispose();
     _av?.dispose();
@@ -454,12 +468,14 @@ class _RoomScreenState extends State<RoomScreen> {
     final state = controller.value.playerState;
     final isPlaying = state == .playing;
 
+    final wasPlaying = _playing;
     setState(() {
       _playing = isPlaying;
       _position = controller.value.position;
       final meta = controller.metadata.duration;
       if (meta != Duration.zero) _duration = meta;
     });
+    if (isPlaying != wasPlaying) _onPlayingChangedForControls(isPlaying);
 
     // Broadcast only transitions that diverge from the agreed play state —
     // those are direct iframe interactions. Everything triggered by _playPause
@@ -580,6 +596,7 @@ class _RoomScreenState extends State<RoomScreen> {
   // ---------------------------------------------------------------------------
 
   void _playPause() {
+    _showControls();
     if (_mode == .youtube) {
       final controller = _youtubeController;
       if (controller == null || !_ytReady) return;
@@ -604,6 +621,7 @@ class _RoomScreenState extends State<RoomScreen> {
   }
 
   void _seek(Duration position) {
+    _showControls();
     final clamped = position < Duration.zero
         ? Duration.zero
         : (_duration != Duration.zero && position > _duration ? _duration : position);
@@ -625,36 +643,126 @@ class _RoomScreenState extends State<RoomScreen> {
     } else {
       widget.player.setVolume(v * 100);
     }
+    _showControls();
+  }
+
+  void _toggleMute() {
+    if (_volume > 0) {
+      _volumeBeforeMute = _volume;
+      _setVolume(0);
+    } else {
+      _setVolume(_volumeBeforeMute > 0 ? _volumeBeforeMute : 1.0);
+    }
   }
 
   KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
+
+    // A focused text field (chat input) owns the keyboard — space must type a
+    // space, not toggle playback. Esc hands focus back to player shortcuts.
+    final focusedContext = FocusManager.instance.primaryFocus?.context;
+    if (focusedContext?.findAncestorStateOfType<EditableTextState>() != null) {
+      if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.escape) {
+        _shortcutFocus.requestFocus();
+        return KeyEventResult.handled;
+      }
+      return KeyEventResult.ignored;
+    }
+
+    var handled = true;
     switch (event.logicalKey) {
       case LogicalKeyboardKey.space:
       case LogicalKeyboardKey.keyK:
         _playPause();
-        return KeyEventResult.handled;
       case LogicalKeyboardKey.arrowLeft:
         _skip(const Duration(seconds: -5));
-        return KeyEventResult.handled;
       case LogicalKeyboardKey.arrowRight:
         _skip(const Duration(seconds: 5));
-        return KeyEventResult.handled;
       case LogicalKeyboardKey.keyJ:
         _skip(const Duration(seconds: -10));
-        return KeyEventResult.handled;
       case LogicalKeyboardKey.keyL:
         _skip(const Duration(seconds: 10));
-        return KeyEventResult.handled;
       case LogicalKeyboardKey.arrowUp:
         _setVolume((_volume + 0.1).clamp(0, 1));
-        return KeyEventResult.handled;
       case LogicalKeyboardKey.arrowDown:
         _setVolume((_volume - 0.1).clamp(0, 1));
-        return KeyEventResult.handled;
+      case LogicalKeyboardKey.keyM:
+        _toggleMute();
+      case LogicalKeyboardKey.escape:
+        if (_chatOpen) {
+          _toggleChat();
+        } else {
+          handled = false;
+        }
       default:
-        return KeyEventResult.ignored;
+        handled = false;
     }
+    if (!handled) return KeyEventResult.ignored;
+    _showControls();
+    return KeyEventResult.handled;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Controls auto-hide (overlay layouts)
+  // ---------------------------------------------------------------------------
+
+  void _showControls() {
+    if (!_controlsVisible) setState(() => _controlsVisible = true);
+    _scheduleControlsHide();
+  }
+
+  void _scheduleControlsHide() {
+    _controlsHideTimer?.cancel();
+    _controlsHideTimer = Timer(const Duration(seconds: 3), () {
+      if (!mounted || !_playing || _pointerOverControls || !_controlsVisible) return;
+      setState(() => _controlsVisible = false);
+    });
+  }
+
+  void _toggleControlsVisible() {
+    // Tapping the video also steals focus from the chat input, so keyboard
+    // shortcuts work again immediately.
+    _shortcutFocus.requestFocus();
+    if (_controlsVisible) {
+      _controlsHideTimer?.cancel();
+      setState(() => _controlsVisible = false);
+    } else {
+      _showControls();
+    }
+  }
+
+  void _onPlayingChangedForControls(bool playing) {
+    if (playing) {
+      _scheduleControlsHide();
+    } else {
+      // Paused: controls stay up — hiding them on a paused frame helps no one.
+      _controlsHideTimer?.cancel();
+      if (!_controlsVisible) setState(() => _controlsVisible = true);
+    }
+  }
+
+  /// Fades the floating chrome; a pointer resting on it suspends auto-hide,
+  /// and any press on it restarts the countdown (touch scrubs).
+  Widget _overlayControls(Widget child) {
+    return IgnorePointer(
+      ignoring: !_controlsVisible,
+      child: AnimatedOpacity(
+        opacity: _controlsVisible ? 1 : 0,
+        duration: Durations.medium2,
+        child: MouseRegion(
+          opaque: false,
+          onEnter: (_) => _pointerOverControls = true,
+          onExit: (_) {
+            _pointerOverControls = false;
+            _scheduleControlsHide();
+          },
+          child: Listener(
+            onPointerDown: (_) => _showControls(),
+            child: child,
+          ),
+        ),
+      ),
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -785,6 +893,9 @@ class _RoomScreenState extends State<RoomScreen> {
       _chatOpen = !_chatOpen;
       if (_chatOpen) _unread = 0;
     });
+    // Closing chat may leave a disposed TextField as primary focus; reclaim it
+    // so playback shortcuts work again.
+    if (!_chatOpen) _shortcutFocus.requestFocus();
   }
 
   Future<void> _sendChat(String text) async {
@@ -890,6 +1001,7 @@ class _RoomScreenState extends State<RoomScreen> {
     onSwitchSource: _handleSwitchSource,
     onOpenFile: _mode == .local ? _pickVideo : null,
     onVolume: _setVolume,
+    onToggleMute: _toggleMute,
   );
 
   @override
@@ -902,6 +1014,7 @@ class _RoomScreenState extends State<RoomScreen> {
     return Scaffold(
       backgroundColor: PTColors.screenBg,
       body: Focus(
+        focusNode: _shortcutFocus,
         autofocus: true,
         onKeyEvent: _handleKeyEvent,
         child: PTResponsive(
@@ -1034,30 +1147,40 @@ class _RoomScreenState extends State<RoomScreen> {
   }
 
   Widget _desktop() {
-    return Stack(
+    return MouseRegion(
+      // Any mouse motion revives the chrome, like every desktop video player.
+      onHover: (_) => _showControls(),
+      cursor: _controlsVisible ? MouseCursor.defer : SystemMouseCursors.none,
+      child: Stack(
       children: [
-        Positioned.fill(child: _video()),
+        Positioned.fill(
+          child: GestureDetector(
+            behavior: .opaque,
+            onTap: _toggleControlsVisible,
+            child: _video(),
+          ),
+        ),
         Positioned(
           top: 24,
           left: 24,
           right: 24,
-          child: Row(
-            crossAxisAlignment: .start,
-            children: [
-              Flexible(child: _roomPill()),
-              const Spacer(),
-              Row(
-                spacing: 12,
-                children: [
-                  _chatToggleButton(),
-                  PTIconButton(
-                    icon: Symbols.more_vert_rounded,
-                    iconSize: 22,
-                    onPressed: _openOverflowMenu,
-                  ),
-                ],
-              ),
-            ],
+          // Expanded (not Flexible+Spacer: they'd split the free space 50/50,
+          // stranding the action icons mid-screen) pins the icons to the edge.
+          child: _overlayControls(
+            Row(
+              crossAxisAlignment: .start,
+              children: [
+                Expanded(child: Align(alignment: .topLeft, child: _roomPill())),
+                const SizedBox(width: 16),
+                _chatToggleButton(),
+                const SizedBox(width: 12),
+                PTIconButton(
+                  icon: Symbols.more_vert_rounded,
+                  iconSize: 22,
+                  onPressed: _openOverflowMenu,
+                ),
+              ],
+            ),
           ),
         ),
         Positioned(
@@ -1110,23 +1233,26 @@ class _RoomScreenState extends State<RoomScreen> {
           bottom: 24,
           left: 0,
           right: 0,
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 920),
-              child: RoomControlBar(
-                playing: _playing,
-                position: _position,
-                duration: _duration,
-                volume: _volume,
-                micOn: _av?.micEnabled ?? false,
-                camOn: _av?.camEnabled ?? false,
-                avAvailable: _av != null,
-                actions: _controlActions,
+          child: _overlayControls(
+            Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 920),
+                child: RoomControlBar(
+                  playing: _playing,
+                  position: _position,
+                  duration: _duration,
+                  volume: _volume,
+                  micOn: _av?.micEnabled ?? false,
+                  camOn: _av?.camEnabled ?? false,
+                  avAvailable: _av != null,
+                  actions: _controlActions,
+                ),
               ),
             ),
           ),
         ),
       ],
+      ),
     );
   }
 
@@ -1235,7 +1361,13 @@ class _RoomScreenState extends State<RoomScreen> {
   Widget _landscape() {
     return Stack(
       children: [
-        Positioned.fill(child: _video()),
+        Positioned.fill(
+          child: GestureDetector(
+            behavior: .opaque,
+            onTap: _toggleControlsVisible,
+            child: _video(),
+          ),
+        ),
         SafeArea(
           minimum: const EdgeInsets.symmetric(horizontal: 56),
           child: Stack(
@@ -1244,23 +1376,21 @@ class _RoomScreenState extends State<RoomScreen> {
                 top: 16,
                 left: 0,
                 right: 0,
-                child: Row(
-                  crossAxisAlignment: .start,
-                  children: [
-                    Flexible(child: _roomPill(compact: true)),
-                    const Spacer(),
-                    Row(
-                      spacing: 10,
-                      children: [
-                        _chatToggleButton(),
-                        PTIconButton(
-                          icon: Symbols.more_vert_rounded,
-                          iconSize: 21,
-                          onPressed: _openOverflowMenu,
-                        ),
-                      ],
-                    ),
-                  ],
+                child: _overlayControls(
+                  Row(
+                    crossAxisAlignment: .start,
+                    children: [
+                      Expanded(child: Align(alignment: .topLeft, child: _roomPill(compact: true))),
+                      const SizedBox(width: 12),
+                      _chatToggleButton(),
+                      const SizedBox(width: 10),
+                      PTIconButton(
+                        icon: Symbols.more_vert_rounded,
+                        iconSize: 21,
+                        onPressed: _openOverflowMenu,
+                      ),
+                    ],
+                  ),
                 ),
               ),
               if (_av != null && !_chatOpen)
@@ -1303,16 +1433,18 @@ class _RoomScreenState extends State<RoomScreen> {
                 bottom: 22,
                 left: 0,
                 right: 0,
-                child: RoomControlBar(
-                  playing: _playing,
-                  position: _position,
-                  duration: _duration,
-                  volume: _volume,
-                  micOn: _av?.micEnabled ?? false,
-                  camOn: _av?.camEnabled ?? false,
-                  avAvailable: _av != null,
-                  actions: _controlActions,
-                  compact: true,
+                child: _overlayControls(
+                  RoomControlBar(
+                    playing: _playing,
+                    position: _position,
+                    duration: _duration,
+                    volume: _volume,
+                    micOn: _av?.micEnabled ?? false,
+                    camOn: _av?.camEnabled ?? false,
+                    avAvailable: _av != null,
+                    actions: _controlActions,
+                    compact: true,
+                  ),
                 ),
               ),
             ],
