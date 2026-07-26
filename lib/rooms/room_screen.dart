@@ -17,9 +17,12 @@ import 'package:playtogether/profile/profile_service.dart';
 import 'package:playtogether/rooms/room_models.dart';
 import 'package:playtogether/rooms/room_service.dart';
 import 'package:playtogether/rooms/widgets/facecam_rail.dart';
+import 'package:playtogether/rooms/widgets/kick_member_dialog.dart';
+import 'package:playtogether/rooms/widgets/readiness_overlay.dart';
 import 'package:playtogether/rooms/widgets/room_chat_panel.dart';
 import 'package:playtogether/rooms/widgets/room_control_bar.dart';
 import 'package:playtogether/rooms/widgets/room_overflow_menu.dart';
+import 'package:playtogether/sync/sync_events.dart';
 import 'package:playtogether/sync/sync_service.dart';
 import 'package:playtogether/ui/banners.dart';
 import 'package:playtogether/ui/buttons.dart';
@@ -145,9 +148,33 @@ class _RoomScreenState extends State<RoomScreen>
   // showing an empty black frame for the whole state-sync window. One-shot.
   bool _awaitingFirstSource = true;
 
-  ({String name, Duration duration})? _roomFile;
+  RoomMedia _canonicalMedia = RoomMedia.none;
   String? _localFileName;
   bool _mismatchDismissed = false;
+
+  // Own readiness inputs. `_updateReadiness` derives a ReadyStatus from these
+  // and pushes it onto presence, which is what the gate reads.
+  bool _isFilePickerOpen = false;
+  bool _ytBufferReady = false;
+  Timer? _ytBufferFallbackTimer;
+  int _ytDurationProbeGen = 0;
+
+  GateState _gateState = GateState.indeterminate;
+
+  // The overflow menu is a Navigator route — a sibling subtree — so setState
+  // here can never rebuild it. Everything it shows is pushed through this
+  // notifier instead; null means "close now" (the room is over for us).
+  final _menuData = ValueNotifier<RoomMenuData?>(null);
+
+  /// The room's canonical local file. Derived from [_canonicalMedia] rather
+  /// than from whoever last broadcast `file_info`, so it survives host
+  /// succession and is already correct for a late joiner.
+  ({String name, Duration duration})? get _roomFile {
+    if (_canonicalMedia.kind != .local) return null;
+    final name = _canonicalMedia.name;
+    if (name == null) return null;
+    return (name: name, duration: _canonicalMedia.duration ?? Duration.zero);
+  }
 
   final _subscriptions = <StreamSubscription>[];
 
@@ -171,6 +198,13 @@ class _RoomScreenState extends State<RoomScreen>
   void onWindowLeaveFullScreen() => setState(() => _fullscreen = false);
 
   Future<void> _init() async {
+    // The Player is app-wide and outlives this screen, so it still holds
+    // whatever the previous room opened. Unload before anything subscribes to
+    // its streams. Done on entry, not in dispose(): swapping /room/A for
+    // /room/B runs the new State's initState *before* the old one's dispose,
+    // so clearing on the way out would wipe the room being entered.
+    await widget.player.stop();
+
     final profile =
         ProfileService.instance.profile ?? await ProfileService.instance.load();
     if (profile == null) {
@@ -210,7 +244,9 @@ class _RoomScreenState extends State<RoomScreen>
       }
       return;
     }
-    final selfMembership = _members.where((m) => m.userId == profile.id).firstOrNull;
+    final selfMembership = _members
+        .where((m) => m.userId == profile.id)
+        .firstOrNull;
     if (selfMembership == null) {
       // RLS would have hidden the room if we weren't a member; defensive.
       if (mounted) context.go('/lobby');
@@ -244,8 +280,17 @@ class _RoomScreenState extends State<RoomScreen>
       sync.presenceStream.listen(_onPresenceChanged),
       sync.remoteActions.listen(_onRemoteAction),
       sync.modeSwitchStream.listen(_onRemoteModeSwitch),
-      sync.fileInfoStream.listen(_onRemoteFileInfo),
+      sync.canonicalMediaStream.listen(_onCanonicalMedia),
+      sync.gateStream.listen((state) => setState(() => _gateState = state)),
       sync.roomEndedStream.listen((_) => _onRoomEnded()),
+      sync.kickedStream.listen((_) => _onKicked()),
+      sync.transportLockStream.listen((_) {
+        setState(() {});
+        _publishMenuData();
+      }),
+      sync.gateResumedStream.listen(
+        (_) => _showActionToast("Everyone's ready — resuming"),
+      ),
       sync.connectionStream.listen((up) {
         final wasConnected = _connected;
         setState(() => _connected = up);
@@ -262,24 +307,35 @@ class _RoomScreenState extends State<RoomScreen>
         if (_mode == .local) setState(() => _position = position);
       }),
       widget.player.stream.duration.listen((duration) {
-        if (_mode == .local) setState(() => _duration = duration);
+        if (_mode != .local) return;
+        setState(() => _duration = duration);
+        // A non-zero duration is what "the file is actually open" means, so
+        // this is the local-mode loading -> ready edge.
+        _updateReadiness();
       }),
       widget.player.stream.buffering.listen((buffering) {
         if (_mode == .local) setState(() => _buffering = buffering);
       }),
-      widget.player.stream.volume.listen((volume) => setState(() => _volume = volume / 100)),
+      widget.player.stream.volume.listen(
+        (volume) => setState(() => _volume = volume / 100),
+      ),
     ]);
 
     setState(() {
       _room = room;
       _sync = sync;
+      _canonicalMedia = sync.canonicalMedia;
       _loading = false;
     });
 
     await sync.connect();
+    _updateReadiness();
     unawaited(_reloadChatHistory());
 
-    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (_) => _tickCountdown());
+    _countdownTimer = Timer.periodic(
+      const Duration(seconds: 1),
+      (_) => _tickCountdown(),
+    );
     _tickCountdown();
 
     // If the state-sync window closes with no media, we're first in — ask
@@ -288,8 +344,14 @@ class _RoomScreenState extends State<RoomScreen>
       if (!mounted) return;
       setState(() => _awaitingFirstSource = false);
       if (_ended) return;
-      final hasMedia = widget.player.state.duration != Duration.zero || _youtubeUrl != null;
-      if (!hasMedia && !_isModeSelectionDialogOpen && !_isYouTubeUrlDialogOpen) {
+      // Members are never auto-prompted for a source — the readiness overlay
+      // tells them the host is still choosing.
+      if (!(_sync?.isHost ?? false)) return;
+      final hasMedia =
+          widget.player.state.duration != Duration.zero || _youtubeUrl != null;
+      if (!hasMedia &&
+          !_isModeSelectionDialogOpen &&
+          !_isYouTubeUrlDialogOpen) {
         _showModeSelectionDialog();
       }
     });
@@ -312,10 +374,12 @@ class _RoomScreenState extends State<RoomScreen>
     _controlsHideTimer?.cancel();
     _actionToastTimer?.cancel();
     _skipFlashTimer?.cancel();
+    _ytBufferFallbackTimer?.cancel();
     for (final t in _overlayChatTimers) {
       t.cancel();
     }
     _shortcutFocus.dispose();
+    _menuData.dispose();
     _chatCurve.dispose();
     _chatAnim.dispose();
     _youtubeController?.dispose();
@@ -330,28 +394,75 @@ class _RoomScreenState extends State<RoomScreen>
 
   Future<void> _onPresenceChanged(List<PresentMember> present) async {
     setState(() => _present = present);
+    // Don't wait on the member fetch: readiness/online changes should land in
+    // an open menu immediately, even if the round-trip is slow or fails.
+    _publishMenuData();
     // Membership can change under us (join/leave/host succession).
     try {
       final members = await RoomService.instance.fetchMembers(widget.roomId);
       if (!mounted) return;
       setState(() => _members = members);
-      final selfRole =
-          members.where((m) => m.userId == _sync?.userId).firstOrNull?.role;
-      if (selfRole != null) _sync?.updateRole(selfRole);
+      final selfRole = members
+          .where((m) => m.userId == _sync?.userId)
+          .firstOrNull
+          ?.role;
+      if (selfRole != null) {
+        final wasHost = _sync?.isHost ?? false;
+        _sync?.updateRole(selfRole);
+        // Inheriting an empty room means inheriting the job of choosing (D2).
+        // The original 4.5 s idle prompt is one-shot and long gone by now.
+        if (!wasHost &&
+            (_sync?.isHost ?? false) &&
+            !_canonicalMedia.isSet &&
+            !_ended &&
+            !_isModeSelectionDialogOpen &&
+            !_isYouTubeUrlDialogOpen) {
+          _showModeSelectionDialog();
+        }
+      }
+      _publishMenuData();
     } catch (_) {}
   }
 
-  Set<String> get _onlineIds => _present.map((m) => m.userId).toSet();
+  /// Republish the overflow menu's snapshot. Cheap and idempotent (nothing
+  /// listens while the menu is closed), so call it from anywhere any of its
+  /// inputs move: presence, membership, own role, canonical media, transport
+  /// lock, eviction.
+  void _publishMenuData() {
+    final sync = _sync;
+    _menuData.value = _ended
+        ? null
+        : RoomMenuData(
+            members: _members,
+            present: _present,
+            media: _canonicalMedia,
+            transportLock: sync?.transportLock ?? false,
+            selfId: sync?.userId ?? '',
+            selfIsHost: sync?.isHost ?? false,
+          );
+  }
 
   void _onRemoteAction(RemoteAction action) {
-    final name = _present.where((m) => m.userId == action.senderId).firstOrNull?.displayName ??
-        _members.where((m) => m.userId == action.senderId).firstOrNull?.displayName ??
+    final name =
+        _present
+            .where((m) => m.userId == action.senderId)
+            .firstOrNull
+            ?.displayName ??
+        _members
+            .where((m) => m.userId == action.senderId)
+            .firstOrNull
+            ?.displayName ??
         'Someone';
-    final text = switch (action.kind) {
-      RemoteActionKind.seek => '$name jumped to ${_clock(action.position ?? Duration.zero)}',
-      RemoteActionKind.play => '$name hit play',
-      RemoteActionKind.pause => '$name paused',
-    };
+    _showActionToast(switch (action.kind) {
+      RemoteActionKind.seek =>
+        '$name jumped to ${_clock(action.position ?? Duration.zero)}',
+      RemoteActionKind.play => '$name resumed the video',
+      RemoteActionKind.pause => '$name paused the video',
+    });
+  }
+
+  void _showActionToast(String text) {
+    if (!mounted) return;
     setState(() {
       _actionToastText = text;
       _actionToastVisible = true;
@@ -446,7 +557,9 @@ class _RoomScreenState extends State<RoomScreen>
     if (controller == null) return;
     controller.seekTo(position);
     if (!_ytIntendedPlaying) {
-      _ytEventSuppressUntil = DateTime.now().add(const Duration(milliseconds: 800));
+      _ytEventSuppressUntil = DateTime.now().add(
+        const Duration(milliseconds: 800),
+      );
       controller.pause();
     }
   }
@@ -488,6 +601,7 @@ class _RoomScreenState extends State<RoomScreen>
 
   Future<void> _showModeSelectionDialog() async {
     _isModeSelectionDialogOpen = true;
+    _updateReadiness();
     if (_awaitingFirstSource) setState(() => _awaitingFirstSource = false);
     final mode = await showGlassDialog<InitialMode>(
       context: context,
@@ -495,6 +609,7 @@ class _RoomScreenState extends State<RoomScreen>
       builder: (_) => const ModeSelectionDialog(),
     );
     _isModeSelectionDialogOpen = false;
+    _updateReadiness();
     if (!mounted) return;
 
     if (mode == InitialMode.local) {
@@ -502,12 +617,14 @@ class _RoomScreenState extends State<RoomScreen>
     } else if (mode == InitialMode.youtube) {
       _isYouTubeUrlDialogOpen = true;
       _urlDialogDismissedRemotely = false;
+      _updateReadiness();
       final url = await showGlassDialog<String>(
         context: context,
         width: 440,
         builder: (_) => const YouTubeUrlDialog(),
       );
       _isYouTubeUrlDialogOpen = false;
+      _updateReadiness();
       if (!mounted) return;
       if (url != null) {
         await _handleModeSwitch(.youtube, url);
@@ -539,10 +656,30 @@ class _RoomScreenState extends State<RoomScreen>
       _snack("Hmm, that doesn't look like a YouTube link.");
       return;
     }
+    // Re-applying the video we already have embedded must NOT rebuild the
+    // player. `YoutubePlayer` binds its controller in initState and never
+    // rebinds (didUpdateWidget only moves the listener), so a fresh controller
+    // behind a reused element drives a disposed one: onReady never arrives,
+    // `_ytReady` stays false, and transport silently dies with no duration.
+    // Duplicate switches are routine — a `state_response` after a reconnect
+    // replays the room's mode.
+    if (_mode == .youtube &&
+        _youtubeController != null &&
+        _extractVideoId(_youtubeUrl ?? '') == videoId) {
+      _youtubeUrl = url;
+      _sync?.updatePlaybackState('youtube', url);
+      _probeYtDuration(_youtubeController!);
+      _updateReadiness();
+      return;
+    }
+
+    // A new embed re-runs the D6 buffer race from scratch.
+    _ytBufferFallbackTimer?.cancel();
+    _ytBufferFallbackTimer = null;
+    _ytBufferReady = false;
     setState(() {
       _mode = .youtube;
       _youtubeUrl = url;
-      _roomFile = null;
       _localFileName = null;
       _playing = false;
       _buffering = false;
@@ -568,9 +705,61 @@ class _RoomScreenState extends State<RoomScreen>
       _youtubeController!.addListener(_onYouTubePlayerEvent);
     });
     _sync?.updatePlaybackState('youtube', url);
+    _armYouTubeReadyFallback();
+    _probeYtDuration(_youtubeController!);
+    _updateReadiness();
+  }
+
+  /// The embed only pushes VideoData (duration, title) on the *playing*
+  /// transition, so a cued-but-idle player sits at 00:00 until someone presses
+  /// play. Pull it instead: the iframe's `getDuration()` is valid from cue
+  /// time, so poll it through the underlying webview until it lands. The
+  /// VideoData path still runs on first play and agrees with what we fetched.
+  Future<void> _probeYtDuration(yt.YoutubePlayerController controller) async {
+    final gen = ++_ytDurationProbeGen;
+    for (var attempt = 0; attempt < 15; attempt++) {
+      if (!mounted ||
+          gen != _ytDurationProbeGen ||
+          _youtubeController != controller) {
+        return;
+      }
+      if (_mode != .youtube || _duration != Duration.zero) return;
+      final web = controller.value.webViewController;
+      if (web != null) {
+        Object? result;
+        try {
+          // `player` doesn't exist until the iframe API has booted; guard in JS
+          // so early probes return 0 instead of throwing.
+          result = await web.evaluateJavascript(
+            source:
+                "typeof player !== 'undefined' && player.getDuration ? player.getDuration() : 0",
+          );
+        } catch (_) {}
+        if (!mounted ||
+            gen != _ytDurationProbeGen ||
+            _youtubeController != controller) {
+          return;
+        }
+        final seconds = switch (result) {
+          final num n => n.toDouble(),
+          final String s => double.tryParse(s) ?? 0,
+          _ => 0.0,
+        };
+        if (seconds > 0) {
+          setState(
+            () => _duration = Duration(milliseconds: (seconds * 1000).round()),
+          );
+          return;
+        }
+      }
+      await Future<void>.delayed(const Duration(seconds: 1));
+    }
   }
 
   Future<void> _switchToLocalMode() async {
+    _ytBufferFallbackTimer?.cancel();
+    _ytBufferFallbackTimer = null;
+    _ytBufferReady = false;
     setState(() {
       _mode = .local;
       _youtubeUrl = null;
@@ -586,6 +775,7 @@ class _RoomScreenState extends State<RoomScreen>
       _duration = widget.player.state.duration;
     });
     _sync?.updatePlaybackState('local', null);
+    _updateReadiness();
     await _pickVideo();
   }
 
@@ -594,6 +784,7 @@ class _RoomScreenState extends State<RoomScreen>
     if (controller == null) return;
 
     _flushPendingYtCommands(controller);
+    _updateYouTubeReadiness(controller);
 
     final state = controller.value.playerState;
     final isPlaying = state == .playing;
@@ -618,7 +809,10 @@ class _RoomScreenState extends State<RoomScreen>
       if (!_ytIntendedPlaying && !suppressed) {
         _ytIntendedPlaying = true;
         _sync?.broadcastPlay();
-        _sync?.broadcastSeek(controller.value.position);
+        _sync?.broadcastSeek(
+          controller.value.position,
+          reason: SyncActionReason.transport,
+        );
       }
     } else if (!isPlaying && _youtubeWasPlaying && state == .paused) {
       _youtubeWasPlaying = false;
@@ -657,8 +851,14 @@ class _RoomScreenState extends State<RoomScreen>
       if (url != null) {
         _switchToYouTubeMode(url);
         _sync?.broadcastModeSwitch('youtube', url);
+        unawaited(_publishCanonicalMedia(.youtube, url: url));
       }
     } else {
+      // Clear canonical first: between leaving YouTube and actually picking a
+      // file there is nothing to load, and leaving the old media set would have
+      // the gate judging everyone against a video the room has moved off.
+      // `_announceLocalFile` sets the real one if a file gets picked.
+      await _publishCanonicalMedia(.none);
       await _switchToLocalMode();
       _sync?.broadcastModeSwitch('local', null);
     }
@@ -667,12 +867,14 @@ class _RoomScreenState extends State<RoomScreen>
   Future<void> _handleSwitchSource() async {
     if (_mode == .local) {
       _isYouTubeUrlDialogOpen = true;
+      _updateReadiness();
       final url = await showGlassDialog<String>(
         context: context,
         width: 440,
         builder: (_) => const YouTubeUrlDialog(),
       );
       _isYouTubeUrlDialogOpen = false;
+      _updateReadiness();
       if (url != null && mounted) await _handleModeSwitch(.youtube, url);
     } else {
       await _handleModeSwitch(.local, null);
@@ -680,53 +882,324 @@ class _RoomScreenState extends State<RoomScreen>
   }
 
   Future<void> _pickVideo() async {
-    const videoTypeGroup = XTypeGroup(label: 'Videos', extensions: ['mp4', 'mkv']);
-    final response = await FastFilePicker.pickFile(acceptedTypeGroups: [videoTypeGroup]);
+    const videoTypeGroup = XTypeGroup(
+      label: 'Videos',
+      extensions: ['mp4', 'mkv'],
+    );
+    _isFilePickerOpen = true;
+    _updateReadiness();
+    final FastFilePickerPath? response;
+    try {
+      response = await FastFilePicker.pickFile(
+        acceptedTypeGroups: [videoTypeGroup],
+      );
+    } finally {
+      _isFilePickerOpen = false;
+    }
     final uri = response?.uri ?? response?.path;
-    if (uri == null) return;
+    if (uri == null) {
+      _updateReadiness(); // cancelled: back to whatever we had before
+      return;
+    }
     await widget.player.open(Media(uri), play: false);
-    final name = uri.split(RegExp(r'[/\\]')).last;
+    final name = _basename(response!);
     _localFileName = name;
     _mismatchDismissed = false;
-    // Duration arrives async after open.
-    unawaited(
-      widget.player.stream.duration
-          .firstWhere((d) => d != Duration.zero)
-          .timeout(const Duration(seconds: 10))
-          .then((duration) => _sync?.broadcastFileInfo(name, duration))
-          .catchError((_) => null),
-    );
+    unawaited(_announceLocalFile(name));
     setState(() {});
+    _updateReadiness();
   }
 
-  void _onRemoteFileInfo(dynamic event) {
-    setState(() {
-      _roomFile = (
-        name: event.fileName as String,
-        duration: Duration(milliseconds: event.durationMs as int),
+  /// The display name AND the gate's identity for a picked file, so it has to
+  /// be stable across platforms. `path` is already human-readable; `uri` is
+  /// percent-encoded (`Movie%20(2005).mkv`), which is both ugly on screen and
+  /// a false mismatch against a peer whose picker returned a plain path.
+  String _basename(FastFilePickerPath response) {
+    final path = response.path;
+    if (path != null) return path.split(RegExp(r'[/\\]')).last;
+    final last = (response.uri ?? '').split(RegExp(r'[/\\]')).last;
+    try {
+      return Uri.decodeComponent(last);
+    } catch (_) {
+      return last; // a stray '%' that isn't an escape sequence
+    }
+  }
+
+  /// Duration only arrives async after `open`. If it never does, announce
+  /// without it rather than never announcing at all — silence would leave the
+  /// room with no canonical media and the gate shut forever.
+  Future<void> _announceLocalFile(String name) async {
+    var duration = Duration.zero;
+    try {
+      duration = await widget.player.stream.duration
+          .firstWhere((d) => d != Duration.zero)
+          .timeout(const Duration(seconds: 10));
+    } catch (_) {}
+    if (!mounted) return;
+    await _sync?.broadcastFileInfo(name, duration);
+    await _publishCanonicalMedia(
+      .local,
+      name: name,
+      duration: duration == Duration.zero ? null : duration,
+    );
+  }
+
+  /// Host only — the RPC rejects everyone else, so this no-ops for members
+  /// (whose picker exists to locate their own copy, not to set the room's).
+  /// Persist first: the row is what reaches late joiners and outlives the host.
+  Future<void> _publishCanonicalMedia(
+    RoomMediaKind kind, {
+    String? name,
+    Duration? duration,
+    String? url,
+  }) async {
+    final sync = _sync;
+    if (sync == null || !sync.isHost) return;
+    try {
+      final room = await RoomService.instance.setRoomMedia(
+        roomId: widget.roomId,
+        kind: kind,
+        name: name,
+        duration: duration,
+        url: url,
       );
+      if (!mounted) return;
+      await sync.broadcastMediaSet(RoomMedia.fromRoom(room));
+    } catch (e) {
+      if (mounted) _snack(RoomErrorCode.fromError(e).message);
+    }
+  }
+
+  void _onCanonicalMedia(RoomMedia media) {
+    // `media_set` and its `mode_switch` are separate broadcasts and can land in
+    // either order. Drop our YouTube buffer flag the moment the room's video
+    // changes, or the gate reads "ready" for the *previous* video for a beat —
+    // long enough to auto-resume into the wrong thing.
+    if (!_isSameYouTubeVideo(media)) {
+      _ytBufferFallbackTimer?.cancel();
+      _ytBufferFallbackTimer = null;
+      _ytBufferReady = false;
+      // Re-arm, or a reset that lands after the embed went idle would strand
+      // us on "Loading" with nothing left to flip it.
+      if (media.kind == .youtube && _youtubeController != null) {
+        _armYouTubeReadyFallback();
+      }
+    }
+    setState(() {
+      _canonicalMedia = media;
       _mismatchDismissed = false;
+    });
+    _publishMenuData();
+    _updateReadiness();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Readiness: derive our own status from local state and push it onto
+  // presence. Cheap to call from anywhere — retrackReadiness no-ops when
+  // nothing actually changed.
+  // ---------------------------------------------------------------------------
+
+  void _updateReadiness() {
+    _sync?.retrackReadiness(
+      _computeReadiness(),
+      loadedFileName: _mode == .local ? _localFileName : null,
+    );
+  }
+
+  ReadyStatus _computeReadiness() {
+    if (_isModeSelectionDialogOpen ||
+        _isYouTubeUrlDialogOpen ||
+        _isFilePickerOpen) {
+      return .selecting;
+    }
+    switch (_canonicalMedia.kind) {
+      case .none:
+        return .none; // nothing has been picked for the room yet
+      case .local:
+        if (_localFileName == null) return .none;
+        // `ready` means "a file is fully open", NOT "the right file" — the gate
+        // compares loadedFileName against canonical itself, so the UI can tell
+        // "still loading" apart from "loaded the wrong thing".
+        return _duration == Duration.zero ? .loading : .ready;
+      case .youtube:
+        return _ytBufferReady ? .ready : .loading;
+    }
+  }
+
+  /// D6, amended: `cued` counts as ready. `buffered` can never rise for a
+  /// member who hasn't pressed play — the package's VideoTime poll (the only
+  /// thing that updates it) starts on the *playing* transition — so gating on
+  /// "first buffer" sent every idle member to the 10 s fallback. Cued is the
+  /// iframe's own "video fetched, can start on command", lands a beat after
+  /// onReady, and is the YouTube equivalent of a local file being open.
+  /// `buffered > 0` stays as an extra path for embeds that skip the cued state.
+  void _updateYouTubeReadiness(yt.YoutubePlayerController controller) {
+    if (_ytBufferReady) return;
+    final value = controller.value;
+    final state = value.playerState;
+    final loaded =
+        state == .cued ||
+        state == .buffering ||
+        state == .playing ||
+        state == .paused ||
+        value.buffered > 0;
+    if (!value.isReady || !loaded) return;
+    _ytBufferFallbackTimer?.cancel();
+    _ytBufferFallbackTimer = null;
+    _ytBufferReady = true;
+    _updateReadiness();
+  }
+
+  /// Whether canonical media is the video this client already has embedded.
+  /// Compared by **video id**, not raw URL: canonical is whatever
+  /// `set_room_media` stored (trimmed, capped), while `_youtubeUrl` is the raw
+  /// string `mode_switch` carried, so the two are routinely not
+  /// string-identical for the same video. Treating that as a video change
+  /// wiped readiness on members who had already loaded it.
+  bool _isSameYouTubeVideo(RoomMedia media) {
+    if (media.kind != .youtube) return false;
+    final current = _youtubeUrl;
+    if (current == null) return false;
+    final canonicalId = _extractVideoId(media.url ?? '');
+    return canonicalId != null && canonicalId == _extractVideoId(current);
+  }
+
+  /// The D6 fallback, armed when the embed is created rather than from the
+  /// player listener. The controller only notifies on value *changes*, so a
+  /// member who never presses play gets a short burst of events during init
+  /// and then silence — arming from the listener meant that if the flag was
+  /// ever cleared afterwards, nothing existed to re-arm it and they sat on
+  /// "Loading" forever while the host (whose player keeps emitting) went ready.
+  void _armYouTubeReadyFallback() {
+    _ytBufferFallbackTimer?.cancel();
+    _ytBufferFallbackTimer = Timer(const Duration(seconds: 10), () {
+      if (!mounted || _ytBufferReady) return;
+      _ytBufferReady = true;
+      _updateReadiness();
     });
   }
 
-  bool get _fileMismatch {
+  /// The old "different file loaded" banner is gone — the readiness overlay
+  /// now says who is missing what, in better words, and the gate stops
+  /// playback outright. What survives is the case the gate deliberately does
+  /// NOT block on: right name, suspiciously different length (D3's soft
+  /// warning). Non-gating by design, so it stays dismissible.
+  bool get _durationDrifts {
     final roomFile = _roomFile;
     if (_mode != .local || roomFile == null || _mismatchDismissed) return false;
-    if (_localFileName == null) return true; // room is watching, we have nothing
-    if (_localFileName != roomFile.name) return true;
-    if (_duration != Duration.zero &&
+    if (_localFileName != roomFile.name) return false;
+    return _duration != Duration.zero &&
         roomFile.duration != Duration.zero &&
-        (_duration - roomFile.duration).abs() > const Duration(seconds: 2)) {
-      return true;
-    }
-    return false;
+        (_duration - roomFile.duration).abs() > const Duration(seconds: 2);
   }
 
   // ---------------------------------------------------------------------------
   // User playback actions (act locally + broadcast; play/pause also seek)
   // ---------------------------------------------------------------------------
 
+  /// Non-host while the host holds the remote (D10).
+  bool get _transportLocked =>
+      (_sync?.transportLock ?? false) && !(_sync?.isHost ?? false);
+
+  /// Why the transport can't be used right now, or null when it can.
+  /// `indeterminate` deliberately reads as usable: before presence syncs we
+  /// don't know who's here, and blocking on a guess makes entry feel broken.
+  String? get _transportBlockedReason {
+    if (_transportLocked) return 'The host has the remote.';
+    if (_gateState != GateState.closed) return null;
+    if (!_canonicalMedia.isSet) {
+      return (_sync?.isHost ?? false)
+          ? 'Pick something to watch first.'
+          : 'Waiting for the host to pick something to watch.';
+    }
+    final blocker = _sync?.gateBlocker;
+    final what = _canonicalMedia.name ?? 'the video';
+    if (blocker == null) return 'Waiting for everyone to be ready.';
+    if (blocker.userId == _sync?.userId) return 'Load $what to join in.';
+    return 'Waiting for ${blocker.displayName} to load $what.';
+  }
+
+  /// Host only. D9: whether the member may come back is chosen per kick, not
+  /// once as a room setting.
+  Future<void> _confirmKick(PresentMember member) async {
+    final allowRejoin = await showGlassDialog<bool>(
+      context: context,
+      width: 420,
+      builder: (_) => KickMemberDialog(displayName: member.displayName),
+    );
+    if (allowRejoin == null || !mounted) return;
+    try {
+      await RoomService.instance.kickMember(
+        roomId: widget.roomId,
+        userId: member.userId,
+        allowRejoin: allowRejoin,
+      );
+      // Deleting the row doesn't eject them: Realtime authorizes at subscribe
+      // time, so an already-connected client keeps receiving until it
+      // resubscribes. The broadcast is what actually removes them.
+      await _sync?.broadcastMemberKicked(member.userId);
+      if (mounted) _snack('Removed ${member.displayName} from the room.');
+    } catch (e) {
+      if (mounted) _snack(RoomErrorCode.fromError(e).message);
+    }
+  }
+
+  bool get _selfBlocksGate {
+    final sync = _sync;
+    if (sync == null) return false;
+    final self = _present.where((m) => m.userId == sync.userId).firstOrNull;
+    return self != null && !sync.memberSatisfiesGate(self);
+  }
+
+  /// Plain-language "who are we waiting on, and for what".
+  String get _gateHeadline {
+    final sync = _sync;
+    if (!_canonicalMedia.isSet) {
+      return (sync?.isHost ?? false)
+          ? 'Pick something for everyone to watch.'
+          : 'Waiting for the host to pick something to watch.';
+    }
+    final what = _canonicalMedia.name ?? 'the video';
+    final blockers = sync?.gateBlockers ?? const <PresentMember>[];
+    if (blockers.isEmpty) return 'Getting everyone back in sync…';
+
+    final others = blockers.where((m) => m.userId != sync?.userId).toList();
+    if (others.isEmpty) {
+      return _canonicalMedia.kind == .local
+          ? 'Load $what to join in.'
+          : 'Getting $what ready…';
+    }
+    // The wrong-file case only reads well for a single person; past that,
+    // "waiting for X and Y to load <name>" covers both situations.
+    if (others.length == 1 &&
+        _canonicalMedia.kind == .local &&
+        others.first.isReady) {
+      final wrong = others.first.loadedFileName ?? 'nothing';
+      return 'Waiting for ${others.first.displayName} to pick the right file — '
+          'they currently have $wrong.';
+    }
+    return 'Waiting for ${_joinNames(others.map((m) => m.displayName).toList())} to load $what.';
+  }
+
+  String _joinNames(List<String> names) => switch (names.length) {
+    0 => 'everyone',
+    1 => names.first,
+    2 => '${names[0]} and ${names[1]}',
+    _ => '${names.sublist(0, names.length - 1).join(', ')} and ${names.last}',
+  };
+
+  /// True when the action was blocked. Every user-initiated transport action
+  /// funnels through here — the dimmed widgets are affordance only, and
+  /// keyboard shortcuts and double-tap skip zones never touch them.
+  bool _blockTransport() {
+    final reason = _transportBlockedReason;
+    if (reason == null) return false;
+    _snack(reason);
+    return true;
+  }
+
   void _playPause() {
+    if (_blockTransport()) return;
     _showControls();
     if (_mode == .youtube) {
       final controller = _youtubeController;
@@ -742,30 +1215,36 @@ class _RoomScreenState extends State<RoomScreen>
         controller.play();
         _sync?.broadcastPlay();
       }
-      _sync?.broadcastSeek(currentPosition);
+      _sync?.broadcastSeek(currentPosition, reason: SyncActionReason.transport);
     } else {
       final currentPosition = widget.player.state.position;
       widget.player.playOrPause();
       _playing ? _sync?.broadcastPause() : _sync?.broadcastPlay();
-      _sync?.broadcastSeek(currentPosition);
+      _sync?.broadcastSeek(currentPosition, reason: SyncActionReason.transport);
     }
   }
 
-  void _seek(Duration position) {
+  /// Returns false when the gate or transport lock refused the seek, so
+  /// callers can skip their own feedback (the ±10 s badge) too.
+  bool _seek(Duration position) {
+    if (_blockTransport()) return false;
     _showControls();
     final clamped = position < Duration.zero
         ? Duration.zero
-        : (_duration != Duration.zero && position > _duration ? _duration : position);
+        : (_duration != Duration.zero && position > _duration
+              ? _duration
+              : position);
     if (_mode == .youtube) {
-      if (!_ytReady) return;
+      if (!_ytReady) return false;
       _ytSeekKeepingPlayState(clamped);
     } else {
       widget.player.seek(clamped);
     }
     _sync?.broadcastSeek(clamped);
+    return true;
   }
 
-  void _skip(Duration delta) => _seek(_position + delta);
+  bool _skip(Duration delta) => _seek(_position + delta);
 
   void _flashSkip(int direction) {
     setState(() => _skipFlash = direction);
@@ -805,13 +1284,16 @@ class _RoomScreenState extends State<RoomScreen>
   }
 
   KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
-    if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+      return KeyEventResult.ignored;
+    }
 
     // A focused text field (chat input) owns the keyboard — space must type a
     // space, not toggle playback. Esc hands focus back to player shortcuts.
     final focusedContext = FocusManager.instance.primaryFocus?.context;
     if (focusedContext?.findAncestorStateOfType<EditableTextState>() != null) {
-      if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.escape) {
+      if (event is KeyDownEvent &&
+          event.logicalKey == LogicalKeyboardKey.escape) {
         _shortcutFocus.requestFocus();
         return KeyEventResult.handled;
       }
@@ -869,7 +1351,9 @@ class _RoomScreenState extends State<RoomScreen>
   void _scheduleControlsHide() {
     _controlsHideTimer?.cancel();
     _controlsHideTimer = Timer(const Duration(seconds: 3), () {
-      if (!mounted || !_playing || _pointerOverControls || !_controlsVisible) return;
+      if (!mounted || !_playing || _pointerOverControls || !_controlsVisible) {
+        return;
+      }
       setState(() => _controlsVisible = false);
     });
   }
@@ -911,10 +1395,7 @@ class _RoomScreenState extends State<RoomScreen>
             _pointerOverControls = false;
             _scheduleControlsHide();
           },
-          child: Listener(
-            onPointerDown: (_) => _showControls(),
-            child: child,
-          ),
+          child: Listener(onPointerDown: (_) => _showControls(), child: child),
         ),
       ),
     );
@@ -937,9 +1418,22 @@ class _RoomScreenState extends State<RoomScreen>
     }
   }
 
-  Future<void> _onRoomEnded() async {
+  Future<void> _onRoomEnded() => _evictSelf();
+
+  /// The host removed us. Same teardown as a room ending — only the copy
+  /// differs — because from this client's side the room is equally over.
+  Future<void> _onKicked() => _evictSelf(
+    title: 'Removed from the room',
+    body: 'The host removed you from this room. No hard feelings!',
+    icon: Symbols.person_remove_rounded,
+  );
+
+  Future<void> _evictSelf({String? title, String? body, IconData? icon}) async {
     if (_ended) return;
     _ended = true;
+    // Null closes the overflow menu if it happens to be open — otherwise it
+    // sits over the "That's a wrap!" dialog listing a room that no longer runs.
+    _publishMenuData();
     _countdownTimer?.cancel();
     _remotePause();
     // Unpublish mic/cam right away — not when the user finally taps
@@ -952,10 +1446,11 @@ class _RoomScreenState extends State<RoomScreen>
     }
     av?.dispose();
     await _sync?.disconnect();
-    if (mounted) _showEndedDialog();
+    await widget.player.stop();
+    if (mounted) _showEndedDialog(title: title, body: body, icon: icon);
   }
 
-  void _showEndedDialog() {
+  void _showEndedDialog({String? title, String? body, IconData? icon}) {
     _ended = true;
     if (!mounted) return;
     final isMobile = layoutOf(context) == .portrait;
@@ -968,36 +1463,51 @@ class _RoomScreenState extends State<RoomScreen>
       builder: (dialogContext) => PopScope(
         canPop: false,
         child: Column(
-        mainAxisSize: .min,
-        children: [
-          Container(
-            width: 64,
-            height: 64,
-            decoration: BoxDecoration(
-              color: PTColors.primary.withValues(alpha: 0.18),
-              shape: .circle,
-              border: Border.all(color: const Color(0xFFA78BFA).withValues(alpha: 0.4)),
+          mainAxisSize: .min,
+          children: [
+            Container(
+              width: 64,
+              height: 64,
+              decoration: BoxDecoration(
+                color: PTColors.primary.withValues(alpha: 0.18),
+                shape: .circle,
+                border: Border.all(
+                  color: const Color(0xFFA78BFA).withValues(alpha: 0.4),
+                ),
+              ),
+              child: Icon(
+                icon ?? Symbols.bedtime_rounded,
+                size: 32,
+                fill: 1,
+                color: PTColors.textAccent,
+              ),
             ),
-            child: const Icon(Symbols.bedtime_rounded, size: 32, fill: 1, color: PTColors.textAccent),
-          ),
-          const SizedBox(height: 18),
-          Text("That's a wrap!", style: PTText.screenTitle.copyWith(fontSize: 21)),
-          const SizedBox(height: 10),
-          Text(
-            'This room has ended. Head back to the lobby to start another one.',
-            textAlign: .center,
-            style: PTText.body.copyWith(fontSize: 14, color: PTColors.white(0.6), height: 1.5),
-          ),
-          const SizedBox(height: 24),
-          PTButton(
-            label: 'Back to lobby',
-            icon: Symbols.home_rounded,
-            onPressed: () {
-              Navigator.of(dialogContext).pop();
-              context.go('/lobby');
-            },
-          ),
-        ],
+            const SizedBox(height: 18),
+            Text(
+              title ?? "That's a wrap!",
+              style: PTText.screenTitle.copyWith(fontSize: 21),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              body ??
+                  'This room has ended. Head back to the lobby to start another one.',
+              textAlign: .center,
+              style: PTText.body.copyWith(
+                fontSize: 14,
+                color: PTColors.white(0.6),
+                height: 1.5,
+              ),
+            ),
+            const SizedBox(height: 24),
+            PTButton(
+              label: 'Back to lobby',
+              icon: Symbols.home_rounded,
+              onPressed: () {
+                Navigator.of(dialogContext).pop();
+                context.go('/lobby');
+              },
+            ),
+          ],
         ),
       ),
     );
@@ -1007,6 +1517,9 @@ class _RoomScreenState extends State<RoomScreen>
     try {
       await RoomService.instance.leaveRoom(widget.roomId);
     } catch (_) {}
+    // Safe here (unlike dispose): this path always lands on the lobby, never
+    // straight into another room.
+    await widget.player.stop();
     if (mounted) context.go('/lobby');
   }
 
@@ -1026,7 +1539,9 @@ class _RoomScreenState extends State<RoomScreen>
 
   void _snack(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   void _copyCode() {
@@ -1088,23 +1603,64 @@ class _RoomScreenState extends State<RoomScreen>
   }
 
   void _openOverflowMenu() {
+    // A null snapshot means "close" — opening on it would strand an empty panel.
+    if (_ended) return;
+    _publishMenuData();
     showRoomOverflowMenu(
       context: context,
-      members: _members,
-      onlineIds: _onlineIds,
-      selfId: _sync?.userId ?? '',
-      selfIsHost: _sync?.isHost ?? false,
+      data: _menuData,
       onCopyInvite: _copyInvite,
       onLeave: _leaveRoom,
       onEndRoom: _endRoomForEveryone,
+      onTransportLockChanged: _setTransportLock,
+      onKick: (member) {
+        final present = _present
+            .where((p) => p.userId == member.userId)
+            .firstOrNull;
+        _confirmKick(
+          present ??
+              PresentMember(
+                userId: member.userId,
+                displayName: member.displayName,
+                role: member.role,
+                joinedAt: member.joinedAt,
+                avatarUrl: member.profile?.avatarUrl,
+              ),
+        );
+      },
     );
+  }
+
+  Future<void> _setTransportLock(bool locked) async {
+    try {
+      final room = await RoomService.instance.setTransportLock(
+        roomId: widget.roomId,
+        locked: locked,
+      );
+      if (!mounted) return;
+      setState(() => _room = room);
+      await _sync?.broadcastTransportLock(room.transportLock);
+      if (mounted) {
+        _snack(
+          locked
+              ? 'You have the remote now.'
+              : 'Everyone can use the controls again.',
+        );
+      }
+    } catch (e) {
+      if (mounted) _snack(RoomErrorCode.fromError(e).message);
+    }
   }
 
   Future<void> _showTrackChooser({required bool subtitles}) async {
     final tracks = widget.player.state.tracks;
     final values = subtitles ? tracks.subtitle : tracks.audio;
     if (values.isEmpty) {
-      _snack(subtitles ? 'No subtitle tracks in this video.' : 'No audio tracks in this video.');
+      _snack(
+        subtitles
+            ? 'No subtitle tracks in this video.'
+            : 'No audio tracks in this video.',
+      );
       return;
     }
     await showGlassDialog(
@@ -1159,10 +1715,19 @@ class _RoomScreenState extends State<RoomScreen>
     onSkip: _skip,
     onMicToggle: (v) => _av?.setMicEnabled(v),
     onCamToggle: (v) => _av?.setCamEnabled(v),
-    onAudioTracks: _mode == .local ? () => _showTrackChooser(subtitles: false) : null,
-    onSubtitles: _mode == .local ? () => _showTrackChooser(subtitles: true) : null,
-    onSwitchSource: _handleSwitchSource,
+    onAudioTracks: _mode == .local
+        ? () => _showTrackChooser(subtitles: false)
+        : null,
+    onSubtitles: _mode == .local
+        ? () => _showTrackChooser(subtitles: true)
+        : null,
+    // D1: only the host chooses what the room watches. Members keep a picker
+    // purely to locate their own copy of the canonical file.
+    onSwitchSource: (_sync?.isHost ?? false) ? _handleSwitchSource : null,
     onOpenFile: _mode == .local ? _pickVideo : null,
+    openFileTooltip: (_sync?.isHost ?? false)
+        ? 'Open file'
+        : 'Locate your copy of ${_canonicalMedia.name ?? 'the file'}',
     onVolume: _setVolume,
     onToggleMute: _toggleMute,
   );
@@ -1205,11 +1770,9 @@ class _RoomScreenState extends State<RoomScreen>
           onDoubleTap: () {
             final dx = down?.localPosition.dx ?? width / 2;
             if (dx < width / 3) {
-              _skip(const Duration(seconds: -10));
-              _flashSkip(-1);
+              if (_skip(const Duration(seconds: -10))) _flashSkip(-1);
             } else if (dx > width * 2 / 3) {
-              _skip(const Duration(seconds: 10));
-              _flashSkip(1);
+              if (_skip(const Duration(seconds: 10))) _flashSkip(1);
             }
           },
           child: child,
@@ -1231,13 +1794,24 @@ class _RoomScreenState extends State<RoomScreen>
             ),
           ),
         if (_mode == .youtube && _youtubeController != null)
-          Center(
-            child: yt.YoutubePlayer(
-              key: ValueKey(_youtubeUrl),
-              controller: _youtubeController!,
-              showVideoProgressIndicator: false,
-              bottomActions: const [],
-              topActions: const [],
+          // The embed is a display surface, not a control surface. Its own
+          // chrome is stripped, so the only things left to click are the big
+          // play button — which would bypass the readiness gate and the
+          // transport lock, since those are enforced in _playPause/_seek — and
+          // "Watch on YouTube", which navigates the embed away entirely. It
+          // also stops the platform view from competing for the mouse cursor.
+          IgnorePointer(
+            child: Center(
+              child: yt.YoutubePlayer(
+                // Keyed on the controller, not the URL: the player never rebinds
+                // its controller, so a replaced one must force a fresh element
+                // rather than leave the webview driving the disposed instance.
+                key: ObjectKey(_youtubeController!),
+                controller: _youtubeController!,
+                showVideoProgressIndicator: false,
+                bottomActions: const [],
+                topActions: const [],
+              ),
             ),
           ),
         // Bottom scrim so glass controls always sit on something dark.
@@ -1260,7 +1834,10 @@ class _RoomScreenState extends State<RoomScreen>
                 children: [
                   const SizedBox.square(
                     dimension: 44,
-                    child: CircularProgressIndicator(color: PTColors.primary, strokeWidth: 3),
+                    child: CircularProgressIndicator(
+                      color: PTColors.primary,
+                      strokeWidth: 3,
+                    ),
                   ),
                   if (_awaitingFirstSource) ...[
                     const SizedBox(height: 18),
@@ -1270,11 +1847,30 @@ class _RoomScreenState extends State<RoomScreen>
               ),
             ),
           ),
+        // Covers the video only — chat, facecams and the member list stay
+        // interactive while the room waits (D2).
+        if (_gateState == GateState.closed && !_awaitingFirstSource)
+          Positioned.fill(
+            child: ReadinessOverlay(
+              headline: _gateHeadline,
+              members: _present,
+              media: _canonicalMedia,
+              selfId: _sync?.userId ?? '',
+              selfIsHost: _sync?.isHost ?? false,
+              compact: MediaQuery.sizeOf(context).width < 700,
+              onLocateFile: _selfBlocksGate && _canonicalMedia.kind == .local
+                  ? _pickVideo
+                  : null,
+              onKick: _confirmKick,
+            ),
+          ),
         if (_skipFlash != 0)
           Positioned.fill(
             child: IgnorePointer(
               child: Align(
-                alignment: _skipFlash < 0 ? const Alignment(-0.55, 0) : const Alignment(0.55, 0),
+                alignment: _skipFlash < 0
+                    ? const Alignment(-0.55, 0)
+                    : const Alignment(0.55, 0),
                 child: _skipFlashBadge(_skipFlash < 0),
               ),
             ),
@@ -1289,15 +1885,25 @@ class _RoomScreenState extends State<RoomScreen>
                 opacity: _actionToastVisible ? 1 : 0,
                 duration: Durations.short4,
                 child: GlassPill(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 9,
+                  ),
                   child: Row(
                     mainAxisSize: .min,
                     spacing: 8,
                     children: [
-                      const Icon(Symbols.sync_alt_rounded, size: 16, color: PTColors.textAccent),
+                      const Icon(
+                        Symbols.sync_alt_rounded,
+                        size: 16,
+                        color: PTColors.textAccent,
+                      ),
                       Text(
                         _actionToastText,
-                        style: PTText.body.copyWith(fontSize: 13, color: PTColors.white(0.85)),
+                        style: PTText.body.copyWith(
+                          fontSize: 13,
+                          color: PTColors.white(0.85),
+                        ),
                       ),
                     ],
                   ),
@@ -1333,7 +1939,10 @@ class _RoomScreenState extends State<RoomScreen>
               size: 32,
               color: Colors.white,
             ),
-            Text('10s', style: PTText.mono.copyWith(fontSize: 12, color: Colors.white)),
+            Text(
+              '10s',
+              style: PTText.mono.copyWith(fontSize: 12, color: Colors.white),
+            ),
           ],
         ),
       ),
@@ -1343,7 +1952,10 @@ class _RoomScreenState extends State<RoomScreen>
   Widget _roomPill({bool compact = false}) {
     final room = _room!;
     return GlassPill(
-      padding: EdgeInsets.symmetric(horizontal: compact ? 14 : 18, vertical: compact ? 8 : 10),
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 14 : 18,
+        vertical: compact ? 8 : 10,
+      ),
       child: Row(
         mainAxisSize: .min,
         spacing: compact ? 12 : 16,
@@ -1355,15 +1967,26 @@ class _RoomScreenState extends State<RoomScreen>
               style: PTText.panelHeading.copyWith(fontSize: compact ? 13 : 15),
             ),
           ),
-          RoomCodeChip(code: room.code, onCopy: _copyCode, fontSize: compact ? 11 : 13),
+          RoomCodeChip(
+            code: room.code,
+            onCopy: _copyCode,
+            fontSize: compact ? 11 : 13,
+          ),
           Row(
             mainAxisSize: .min,
             spacing: 6,
             children: [
-              Icon(Symbols.schedule_rounded, size: compact ? 13 : 16, color: PTColors.white(0.7)),
+              Icon(
+                Symbols.schedule_rounded,
+                size: compact ? 13 : 16,
+                color: PTColors.white(0.7),
+              ),
               Text(
                 _countdownLabel,
-                style: PTText.mono.copyWith(fontSize: compact ? 11 : 13, color: PTColors.white(0.7)),
+                style: PTText.mono.copyWith(
+                  fontSize: compact ? 11 : 13,
+                  color: PTColors.white(0.7),
+                ),
               ),
             ],
           ),
@@ -1374,8 +1997,15 @@ class _RoomScreenState extends State<RoomScreen>
 
   List<Widget> _banners() {
     return [
-      if (!_warningDismissed && _timeLeft > Duration.zero && _timeLeft <= const Duration(minutes: 5))
+      if (!_warningDismissed &&
+          _timeLeft > Duration.zero &&
+          _timeLeft <= const Duration(minutes: 5))
         PTBanner(
+          // Stable key: _tickCountdown rebuilds this list every second, and
+          // without it the auto-dismiss timer would restart each tick and the
+          // banner would never go away.
+          key: const ValueKey('t5-warning'),
+          autoDismissAfter: const Duration(seconds: 10),
           kind: .warning,
           icon: Symbols.timer_rounded,
           title: () {
@@ -1387,20 +2017,22 @@ class _RoomScreenState extends State<RoomScreen>
         ),
       if (!_connected)
         const PTBanner(
+          key: ValueKey('reconnecting'),
           kind: .info,
           icon: Symbols.sync_rounded,
           title: 'Reconnecting…',
           subtitle: 'Hang tight, getting you back in sync.',
         ),
-      if (_fileMismatch)
+      if (_durationDrifts)
         PTBanner(
-          kind: .error,
+          key: const ValueKey('duration-drift'),
+          kind: .warning,
           icon: Symbols.difference_rounded,
-          title: 'Different file loaded',
+          title: 'Same name, different length',
           subtitle:
-              'The room is watching ${_roomFile!.name} — your file doesn\'t match.',
+              'Your copy of ${_roomFile!.name} runs a little different — you might drift apart.',
           trailing: PTButton(
-            label: 'Pick file',
+            label: 'Pick another',
             variant: .secondary,
             height: 38,
             expand: false,
@@ -1430,7 +2062,10 @@ class _RoomScreenState extends State<RoomScreen>
                 curve: Curves.easeOut,
                 builder: (_, t, child) => Opacity(
                   opacity: t,
-                  child: Transform.translate(offset: Offset(0, (1 - t) * 8), child: child),
+                  child: Transform.translate(
+                    offset: Offset(0, (1 - t) * 8),
+                    child: child,
+                  ),
                 ),
                 child: _overlayBubble(message),
               ),
@@ -1446,7 +2081,11 @@ class _RoomScreenState extends State<RoomScreen>
       crossAxisAlignment: .end,
       spacing: 8,
       children: [
-        PTAvatar(userId: message.senderId, displayName: message.displayName, size: 26),
+        PTAvatar(
+          userId: message.senderId,
+          displayName: message.displayName,
+          size: 26,
+        ),
         Flexible(
           child: Container(
             constraints: const BoxConstraints(maxWidth: 260),
@@ -1475,7 +2114,10 @@ class _RoomScreenState extends State<RoomScreen>
                     color: PTColors.textAccent,
                   ),
                 ),
-                Text(message.content, style: PTText.body.copyWith(fontSize: 13)),
+                Text(
+                  message.content,
+                  style: PTText.body.copyWith(fontSize: 13),
+                ),
               ],
             ),
           ),
@@ -1544,120 +2186,121 @@ class _RoomScreenState extends State<RoomScreen>
       onHover: (_) => _showControls(),
       cursor: _controlsVisible ? MouseCursor.defer : SystemMouseCursors.none,
       child: Stack(
-      children: [
-        Positioned.fill(
-          child: GestureDetector(
-            behavior: .opaque,
-            onTap: _toggleControlsVisible,
-            child: _video(),
-          ),
-        ),
-        Positioned(
-          top: 24,
-          left: 24,
-          right: 24,
-          // Expanded (not Flexible+Spacer: they'd split the free space 50/50,
-          // stranding the action icons mid-screen) pins the icons to the edge.
-          child: _overlayControls(
-            Row(
-              crossAxisAlignment: .start,
-              children: [
-                Expanded(child: Align(alignment: .topLeft, child: _roomPill())),
-                const SizedBox(width: 16),
-                _chatToggleButton(),
-                const SizedBox(width: 12),
-                PTIconButton(
-                  icon: Symbols.more_vert_rounded,
-                  iconSize: 22,
-                  onPressed: _openOverflowMenu,
-                ),
-              ],
+        children: [
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: .opaque,
+              onTap: _toggleControlsVisible,
+              child: _video(),
             ),
           ),
-        ),
-        AnimatedPositioned(
-          duration: _chatMotion,
-          curve: _chatOpen ? Curves.easeOutCubic : Curves.easeInCubic,
-          top: 90,
-          left: 240,
-          right: _chatOpen ? 378 : 240,
-          child: Column(
-            spacing: 12,
-            children: _banners(),
-          ),
-        ),
-        if (_av != null && _camsVisible)
           Positioned(
-            top: 84,
+            top: 24,
             left: 24,
-            child: FacecamRail(
-              av: _av!,
-              present: _present,
-              selfId: _sync?.userId ?? '',
-              layout: .railLeft,
-              onHide: () => setState(() => _camsVisible = false),
-            ),
-          ),
-        if (_av != null && !_camsVisible)
-          Positioned(
-            top: 84,
-            left: 24,
-            child: PTActionPill(
-              label: 'Show cams',
-              icon: Symbols.keyboard_arrow_right_rounded,
-              onTap: () => setState(() => _camsVisible = true),
-            ),
-          ),
-        if (_sync != null)
-          Positioned(
-            top: 84,
             right: 24,
-            bottom: 178,
-            width: 330,
-            child: _chatRevealed(
-              // Panel width + its right margin: starts fully off the edge.
-              offscreen: 354,
-              panel: RoomChatPanel(
-                sync: _sync!,
-                messages: _messages,
-                typingNames: _typingNames,
-                watchingCount: _present.length,
-                onClose: _toggleChat,
-                onSend: _sendChat,
-                autofocus: true,
+            // Expanded (not Flexible+Spacer: they'd split the free space 50/50,
+            // stranding the action icons mid-screen) pins the icons to the edge.
+            child: _overlayControls(
+              Row(
+                crossAxisAlignment: .start,
+                children: [
+                  Expanded(
+                    child: Align(alignment: .topLeft, child: _roomPill()),
+                  ),
+                  const SizedBox(width: 16),
+                  _chatToggleButton(),
+                  const SizedBox(width: 12),
+                  PTIconButton(
+                    icon: Symbols.more_vert_rounded,
+                    iconSize: 22,
+                    onPressed: _openOverflowMenu,
+                  ),
+                ],
               ),
             ),
           ),
-        if (_overlayChat.isNotEmpty)
-          Positioned(
-            left: 24,
-            bottom: 170,
-            width: 340,
-            child: _chatDisplaced(_chatOverlay()),
+          AnimatedPositioned(
+            duration: _chatMotion,
+            curve: _chatOpen ? Curves.easeOutCubic : Curves.easeInCubic,
+            top: 90,
+            left: 240,
+            right: _chatOpen ? 378 : 240,
+            child: Column(spacing: 12, children: _banners()),
           ),
-        Positioned(
-          bottom: 24,
-          left: 0,
-          right: 0,
-          child: _overlayControls(
-            Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 920),
-                child: RoomControlBar(
-                  playing: _playing,
-                  position: _position,
-                  duration: _duration,
-                  volume: _volume,
-                  micOn: _av?.micEnabled ?? false,
-                  camOn: _av?.camEnabled ?? false,
-                  avAvailable: _av != null,
-                  actions: _controlActions,
+          if (_av != null && _camsVisible)
+            Positioned(
+              top: 84,
+              left: 24,
+              child: FacecamRail(
+                av: _av!,
+                present: _present,
+                selfId: _sync?.userId ?? '',
+                layout: .railLeft,
+                onHide: () => setState(() => _camsVisible = false),
+              ),
+            ),
+          if (_av != null && !_camsVisible)
+            Positioned(
+              top: 84,
+              left: 24,
+              child: PTActionPill(
+                label: 'Show cams',
+                icon: Symbols.keyboard_arrow_right_rounded,
+                onTap: () => setState(() => _camsVisible = true),
+              ),
+            ),
+          if (_sync != null)
+            Positioned(
+              top: 84,
+              right: 24,
+              bottom: 178,
+              width: 330,
+              child: _chatRevealed(
+                // Panel width + its right margin: starts fully off the edge.
+                offscreen: 354,
+                panel: RoomChatPanel(
+                  sync: _sync!,
+                  messages: _messages,
+                  typingNames: _typingNames,
+                  watchingCount: _present.length,
+                  onClose: _toggleChat,
+                  onSend: _sendChat,
+                  autofocus: true,
+                ),
+              ),
+            ),
+          if (_overlayChat.isNotEmpty)
+            Positioned(
+              left: 24,
+              bottom: 170,
+              width: 340,
+              child: _chatDisplaced(_chatOverlay()),
+            ),
+          Positioned(
+            bottom: 24,
+            left: 0,
+            right: 0,
+            child: _overlayControls(
+              Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 920),
+                  child: RoomControlBar(
+                    playing: _playing,
+                    position: _position,
+                    duration: _duration,
+                    volume: _volume,
+                    micOn: _av?.micEnabled ?? false,
+                    camOn: _av?.camEnabled ?? false,
+                    avAvailable: _av != null,
+                    actions: _controlActions,
+                    transportEnabled: _transportBlockedReason == null,
+                    transportHint: _transportBlockedReason,
+                  ),
                 ),
               ),
             ),
           ),
-        ),
-      ],
+        ],
       ),
     );
   }
@@ -1684,11 +2327,22 @@ class _RoomScreenState extends State<RoomScreen>
                       Row(
                         spacing: 8,
                         children: [
-                          RoomCodeChip(code: room.code, onCopy: _copyCode, fontSize: 11),
-                          Icon(Symbols.schedule_rounded, size: 13, color: PTColors.white(0.6)),
+                          RoomCodeChip(
+                            code: room.code,
+                            onCopy: _copyCode,
+                            fontSize: 11,
+                          ),
+                          Icon(
+                            Symbols.schedule_rounded,
+                            size: 13,
+                            color: PTColors.white(0.6),
+                          ),
                           Text(
                             _countdownLabel,
-                            style: PTText.mono.copyWith(fontSize: 11, color: PTColors.white(0.6)),
+                            style: PTText.mono.copyWith(
+                              fontSize: 11,
+                              color: PTColors.white(0.6),
+                            ),
                           ),
                         ],
                       ),
@@ -1703,7 +2357,10 @@ class _RoomScreenState extends State<RoomScreen>
               ],
             ),
           ),
-          AspectRatio(aspectRatio: 16 / 9, child: _skipZones(child: _video())),
+          AspectRatio(
+            aspectRatio: 16 / 9,
+            child: _skipZones(child: _video()),
+          ),
           if (_av != null)
             Padding(
               padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
@@ -1725,16 +2382,23 @@ class _RoomScreenState extends State<RoomScreen>
               camOn: _av?.camEnabled ?? false,
               avAvailable: _av != null,
               actions: _controlActions,
+              transportEnabled: _transportBlockedReason == null,
+              transportHint: _transportBlockedReason,
               compact: true,
             ),
           ),
           for (final banner in _banners())
-            Padding(padding: const EdgeInsets.fromLTRB(14, 10, 14, 0), child: banner),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
+              child: banner,
+            ),
           Expanded(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
               child: ClipRRect(
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(20),
+                ),
                 child: DecoratedBox(
                   decoration: BoxDecoration(
                     color: const Color(0xFF141022).withValues(alpha: 0.5),
@@ -1782,7 +2446,12 @@ class _RoomScreenState extends State<RoomScreen>
                   Row(
                     crossAxisAlignment: .start,
                     children: [
-                      Expanded(child: Align(alignment: .topLeft, child: _roomPill(compact: true))),
+                      Expanded(
+                        child: Align(
+                          alignment: .topLeft,
+                          child: _roomPill(compact: true),
+                        ),
+                      ),
                       const SizedBox(width: 12),
                       _chatToggleButton(),
                       const SizedBox(width: 10),
@@ -1857,6 +2526,8 @@ class _RoomScreenState extends State<RoomScreen>
                     camOn: _av?.camEnabled ?? false,
                     avAvailable: _av != null,
                     actions: _controlActions,
+                    transportEnabled: _transportBlockedReason == null,
+                    transportHint: _transportBlockedReason,
                     compact: true,
                   ),
                 ),

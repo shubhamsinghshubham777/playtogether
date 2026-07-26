@@ -57,6 +57,11 @@ class _PTButtonState extends State<PTButton> {
 
     final label = Text(
       widget.label,
+      // The button is a fixed height, so a label that wraps gets clipped
+      // rather than growing the button. Degrade to an ellipsis instead.
+      maxLines: 1,
+      overflow: .ellipsis,
+      textAlign: .center,
       style: PTText.buttonLabel.copyWith(
         color: foreground,
         fontWeight: widget.variant == .primary ? .w600 : .w500,
@@ -217,33 +222,40 @@ class PTPlayButton extends StatelessWidget {
   });
 
   final bool playing;
-  final VoidCallback onPressed;
+
+  /// Null disables the button (dimmed, no cursor), matching [PTButton].
+  final VoidCallback? onPressed;
   final double size;
 
   @override
   Widget build(BuildContext context) {
+    final enabled = onPressed != null;
     return MouseRegion(
-      cursor: SystemMouseCursors.click,
+      cursor: enabled ? SystemMouseCursors.click : MouseCursor.defer,
       child: GestureDetector(
         onTap: onPressed,
-        child: Container(
-          width: size,
-          height: size,
-          decoration: BoxDecoration(
-            gradient: PTColors.buttonGradient,
-            shape: .circle,
-            boxShadow: [
-              BoxShadow(
-                color: PTColors.primary.withValues(alpha: 0.5),
-                blurRadius: 26,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          child: Icon(
-            playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
-            size: size * 0.55,
-            color: Colors.white,
+        child: AnimatedOpacity(
+          duration: Durations.short2,
+          opacity: enabled ? 1 : 0.45,
+          child: Container(
+            width: size,
+            height: size,
+            decoration: BoxDecoration(
+              gradient: PTColors.buttonGradient,
+              shape: .circle,
+              boxShadow: [
+                BoxShadow(
+                  color: PTColors.primary.withValues(alpha: 0.5),
+                  blurRadius: 26,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
+            child: Icon(
+              playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
+              size: size * 0.55,
+              color: Colors.white,
+            ),
           ),
         ),
       ),

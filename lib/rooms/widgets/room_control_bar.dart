@@ -16,6 +16,7 @@ class RoomControlBarActions {
     required this.onSubtitles,
     required this.onSwitchSource,
     required this.onOpenFile,
+    this.openFileTooltip,
     required this.onVolume,
     required this.onToggleMute,
   });
@@ -27,8 +28,14 @@ class RoomControlBarActions {
   final ValueChanged<bool> onCamToggle;
   final VoidCallback? onAudioTracks;
   final VoidCallback? onSubtitles;
-  final VoidCallback onSwitchSource;
+  /// Null for members — choosing what the room watches is host-only (D1), and
+  /// omitting the callback is how this kit hides an action.
+  final VoidCallback? onSwitchSource;
   final VoidCallback? onOpenFile;
+
+  /// Members get "Locate your copy of `<name>`" — their picker exists to find
+  /// their own copy of the room's file, never to change what the room watches.
+  final String? openFileTooltip;
   final ValueChanged<double> onVolume;
   final VoidCallback onToggleMute;
 }
@@ -45,6 +52,8 @@ class RoomControlBar extends StatefulWidget {
     required this.avAvailable,
     required this.actions,
     this.compact = false,
+    this.transportEnabled = true,
+    this.transportHint,
   });
 
   final bool playing;
@@ -56,6 +65,14 @@ class RoomControlBar extends StatefulWidget {
   final bool avAvailable;
   final RoomControlBarActions actions;
   final bool compact;
+
+  /// Affordance only — the real enforcement lives at RoomScreen's
+  /// `_playPause`/`_seek`/`_skip` choke points, which keyboard shortcuts and
+  /// double-tap skip zones also go through.
+  final bool transportEnabled;
+
+  /// Why the transport is disabled, shown next to the controls.
+  final String? transportHint;
 
   @override
   State<RoomControlBar> createState() => _RoomControlBarState();
@@ -107,6 +124,7 @@ class _RoomControlBarState extends State<RoomControlBar> {
                     value: drag ?? _progress,
                     trackHeight: compact ? 4 : 5,
                     thumbRadius: compact ? 6 : 7,
+                    enabled: widget.transportEnabled,
                     onChanged: (v) => setState(() => _dragValue = v),
                     onChangeEnd: _endScrub,
                     onHover: (v) => setState(() => _hoverValue = v),
@@ -120,6 +138,16 @@ class _RoomControlBarState extends State<RoomControlBar> {
             ],
           ),
           compact ? _compactRow() : _fullRow(),
+          if (!widget.transportEnabled && widget.transportHint != null)
+            Text(
+              widget.transportHint!,
+              textAlign: .center,
+              // Media names get long; the overlay is where the full name is
+              // readable, this is only a nudge.
+              maxLines: 2,
+              overflow: .ellipsis,
+              style: PTText.finePrint.copyWith(color: PTColors.white(0.55)),
+            ),
         ],
       ),
     );
@@ -231,14 +259,21 @@ class _RoomControlBarState extends State<RoomControlBar> {
                 icon: Symbols.replay_10_rounded,
                 glass: false,
                 iconSize: 26,
-                onPressed: () => actions.onSkip(const Duration(seconds: -10)),
+                onPressed: widget.transportEnabled
+                    ? () => actions.onSkip(const Duration(seconds: -10))
+                    : null,
               ),
-              PTPlayButton(playing: widget.playing, onPressed: actions.onPlayPause),
+              PTPlayButton(
+                playing: widget.playing,
+                onPressed: widget.transportEnabled ? actions.onPlayPause : null,
+              ),
               PTIconButton(
                 icon: Symbols.forward_10_rounded,
                 glass: false,
                 iconSize: 26,
-                onPressed: () => actions.onSkip(const Duration(seconds: 10)),
+                onPressed: widget.transportEnabled
+                    ? () => actions.onSkip(const Duration(seconds: 10))
+                    : null,
               ),
             ],
           ),
@@ -246,15 +281,16 @@ class _RoomControlBarState extends State<RoomControlBar> {
         Row(
           spacing: 8,
           children: [
-            PTIconButton(
-              icon: Symbols.smart_display_rounded,
-              glass: false,
-              borderRadius: BorderRadius.circular(12),
-              size: 42,
-              iconSize: 22,
-              tooltip: 'Switch source',
-              onPressed: actions.onSwitchSource,
-            ),
+            if (actions.onSwitchSource != null)
+              PTIconButton(
+                icon: Symbols.smart_display_rounded,
+                glass: false,
+                borderRadius: BorderRadius.circular(12),
+                size: 42,
+                iconSize: 22,
+                tooltip: 'Switch source',
+                onPressed: actions.onSwitchSource,
+              ),
             if (actions.onOpenFile != null)
               PTIconButton(
                 icon: Symbols.folder_open_rounded,
@@ -262,7 +298,7 @@ class _RoomControlBarState extends State<RoomControlBar> {
                 borderRadius: BorderRadius.circular(12),
                 size: 42,
                 iconSize: 22,
-                tooltip: 'Open file',
+                tooltip: actions.openFileTooltip ?? 'Open file',
                 onPressed: actions.onOpenFile,
               ),
             Padding(
@@ -333,18 +369,47 @@ class _RoomControlBarState extends State<RoomControlBar> {
                 icon: Symbols.replay_10_rounded,
                 glass: false,
                 iconSize: 24,
-                onPressed: () => actions.onSkip(const Duration(seconds: -10)),
+                onPressed: widget.transportEnabled
+                    ? () => actions.onSkip(const Duration(seconds: -10))
+                    : null,
               ),
-              PTPlayButton(playing: widget.playing, size: 52, onPressed: actions.onPlayPause),
+              PTPlayButton(
+                playing: widget.playing,
+                size: 52,
+                onPressed: widget.transportEnabled ? actions.onPlayPause : null,
+              ),
               PTIconButton(
                 icon: Symbols.forward_10_rounded,
                 glass: false,
                 iconSize: 24,
-                onPressed: () => actions.onSkip(const Duration(seconds: 10)),
+                onPressed: widget.transportEnabled
+                    ? () => actions.onSkip(const Duration(seconds: 10))
+                    : null,
               ),
             ],
           ),
         ),
+        // Source controls belong here too — this row is what portrait,
+        // landscape and any narrow desktop window actually render, so leaving
+        // them out of it left those layouts with no way to pick anything.
+        if (actions.onSwitchSource != null)
+          PTIconButton(
+            icon: Symbols.smart_display_rounded,
+            glass: false,
+            borderRadius: BorderRadius.circular(12),
+            iconSize: 21,
+            tooltip: 'Switch source',
+            onPressed: actions.onSwitchSource,
+          ),
+        if (actions.onOpenFile != null)
+          PTIconButton(
+            icon: Symbols.folder_open_rounded,
+            glass: false,
+            borderRadius: BorderRadius.circular(12),
+            iconSize: 21,
+            tooltip: actions.openFileTooltip ?? 'Open file',
+            onPressed: actions.onOpenFile,
+          ),
         if (actions.onAudioTracks != null)
           PTIconButton(
             icon: Symbols.audiotrack_rounded,

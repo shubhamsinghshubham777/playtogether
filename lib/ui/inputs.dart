@@ -276,6 +276,7 @@ class PTSlider extends StatelessWidget {
     this.onHover,
     this.trackHeight = 5,
     this.thumbRadius = 8,
+    this.enabled = true,
   });
 
   /// Normalized 0–1.
@@ -288,6 +289,10 @@ class PTSlider extends StatelessWidget {
   final ValueChanged<double?>? onHover;
   final double trackHeight;
   final double thumbRadius;
+
+  /// False dims the track and drops every gesture, matching [PTButton]'s
+  /// disabled treatment.
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
@@ -309,23 +314,27 @@ class PTSlider extends StatelessWidget {
     }
 
     return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      onHover: onHover == null ? null : (e) => hover(e.localPosition),
-      onExit: onHover == null ? null : (_) => onHover!(null),
+      cursor: enabled ? SystemMouseCursors.click : MouseCursor.defer,
+      onHover: onHover == null || !enabled ? null : (e) => hover(e.localPosition),
+      onExit: onHover == null || !enabled ? null : (_) => onHover!(null),
       child: GestureDetector(
         behavior: .opaque,
-        onTapDown: (d) => update(d.localPosition),
-        onTapUp: (d) => update(d.localPosition, end: true),
-        onHorizontalDragUpdate: (d) => update(d.localPosition),
-        onHorizontalDragEnd: (_) => onChangeEnd?.call(clamped),
-        child: SizedBox(
-          height: 20,
-          width: double.infinity,
-          child: CustomPaint(
-            painter: _PTSliderPainter(
-              value: clamped,
-              trackHeight: trackHeight,
-              thumbRadius: thumbRadius,
+        onTapDown: enabled ? (d) => update(d.localPosition) : null,
+        onTapUp: enabled ? (d) => update(d.localPosition, end: true) : null,
+        onHorizontalDragUpdate: enabled ? (d) => update(d.localPosition) : null,
+        onHorizontalDragEnd: enabled ? (_) => onChangeEnd?.call(clamped) : null,
+        child: AnimatedOpacity(
+          duration: Durations.short2,
+          opacity: enabled ? 1 : 0.45,
+          child: SizedBox(
+            height: 20,
+            width: double.infinity,
+            child: CustomPaint(
+              painter: _PTSliderPainter(
+                value: clamped,
+                trackHeight: trackHeight,
+                thumbRadius: thumbRadius,
+              ),
             ),
           ),
         ),

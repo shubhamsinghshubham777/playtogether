@@ -132,24 +132,24 @@ class _LobbyScreenState extends State<LobbyScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final profile = ProfileService.instance.profile;
-    final firstName = profile?.displayName.split(' ').first ?? 'there';
-
+    // Anything reading the profile must do so *inside* this builder — the
+    // enclosing build() doesn't re-run when the profile lands, so a value
+    // captured out here stays stale until an unrelated setState.
     return Scaffold(
       body: AmbientBackground(
         child: ListenableBuilder(
           listenable: ProfileService.instance,
           builder: (context, _) => PTResponsive(
-            desktop: (_) => _desktop(firstName),
-            portrait: (_) => _portrait(firstName),
-            landscape: (_) => _landscape(firstName),
+            desktop: (_) => _desktop(),
+            portrait: (_) => _portrait(),
+            landscape: (_) => _landscape(),
           ),
         ),
       ),
     );
   }
 
-  Widget _desktop(String firstName) {
+  Widget _desktop() {
     return Column(
       children: [
         Padding(
@@ -175,7 +175,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
             padding: const EdgeInsets.only(top: 36, bottom: 48),
             child: Column(
               children: [
-                Text('Hey $firstName, ready to watch?', style: PTText.display),
+                const _Greeting(style: PTText.display),
                 const SizedBox(height: 12),
                 Text(
                   'Start a room or hop into one your friends made.',
@@ -203,7 +203,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
     );
   }
 
-  Widget _portrait(String firstName) {
+  Widget _portrait() {
     return SafeArea(
       child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(20, 10, 20, 40),
@@ -220,9 +220,10 @@ class _LobbyScreenState extends State<LobbyScreen> {
             ),
             Padding(
               padding: const EdgeInsets.only(top: 8),
-              child: Text(
-                'Hey $firstName,\nready to watch?',
+              child: _Greeting(
                 style: PTText.display.copyWith(fontSize: 26),
+                twoLine: true,
+                align: .centerLeft,
               ),
             ),
             _createCard(compact: true),
@@ -233,7 +234,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
     );
   }
 
-  Widget _landscape(String firstName) {
+  Widget _landscape() {
     return SafeArea(
       minimum: const EdgeInsets.symmetric(horizontal: 44),
       child: Padding(
@@ -246,7 +247,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
               children: [
                 const _Wordmark(compact: true),
                 const SizedBox(width: 10),
-                Text('Hey $firstName, ready to watch?', style: PTText.panelHeading),
+                const _Greeting(style: PTText.panelHeading, align: .centerLeft),
                 const Spacer(),
                 _avatarButton(size: 36),
               ],
@@ -449,6 +450,40 @@ class _LobbyScreenState extends State<LobbyScreen> {
           ],
         ),
       ],
+    );
+  }
+}
+
+/// Subscribes to [ProfileService] itself so the name can't be captured in a
+/// scope that never rebuilds — the profile lands asynchronously after login.
+class _Greeting extends StatelessWidget {
+  const _Greeting({required this.style, this.twoLine = false, this.align = Alignment.center});
+
+  final TextStyle style;
+  final bool twoLine;
+  final Alignment align;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: ProfileService.instance,
+      builder: (context, _) {
+        final name = ProfileService.instance.profile?.displayName.split(' ').first ?? 'there';
+        return AnimatedSwitcher(
+          duration: const Duration(milliseconds: 180),
+          // Same as the default layout builder, but the stack alignment has to
+          // follow the host layout or the outgoing line jumps as it fades.
+          layoutBuilder: (current, previous) => Stack(
+            alignment: align,
+            children: [...previous, if (current != null) current],
+          ),
+          child: Text(
+            twoLine ? 'Hey $name,\nready to watch?' : 'Hey $name, ready to watch?',
+            key: ValueKey(name),
+            style: style,
+          ),
+        );
+      },
     );
   }
 }

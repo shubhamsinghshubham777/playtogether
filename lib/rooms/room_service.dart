@@ -88,6 +88,50 @@ class RoomService extends ChangeNotifier {
     await _client.rpc('end_room', params: {'p_room_id': roomId});
   }
 
+  /// Host only. Passing [kind] `.none` clears the room's media entirely.
+  Future<Room> setRoomMedia({
+    required String roomId,
+    required RoomMediaKind kind,
+    String? name,
+    Duration? duration,
+    String? url,
+  }) async {
+    final row = await _client.rpc(
+      'set_room_media',
+      params: {
+        'p_room_id': roomId,
+        'p_kind': kind.wire,
+        'p_name': name,
+        'p_duration_ms': duration?.inMilliseconds,
+        'p_url': url,
+      },
+    );
+    return _adopt(Room.fromJson(_singleRow(row)));
+  }
+
+  /// Host only.
+  Future<Room> setTransportLock({required String roomId, required bool locked}) async {
+    final row = await _client.rpc(
+      'set_transport_lock',
+      params: {'p_room_id': roomId, 'p_locked': locked},
+    );
+    return _adopt(Room.fromJson(_singleRow(row)));
+  }
+
+  /// Host only. Removing the member's row does not eject them from the realtime
+  /// channel — Realtime authorizes at subscribe time — so the caller must also
+  /// broadcast `member_kicked`.
+  Future<void> kickMember({
+    required String roomId,
+    required String userId,
+    required bool allowRejoin,
+  }) async {
+    await _client.rpc(
+      'kick_member',
+      params: {'p_room_id': roomId, 'p_target_user_id': userId, 'p_ban': !allowRejoin},
+    );
+  }
+
   Future<List<RoomMember>> fetchMembers(String roomId) async {
     final rows = await _client
         .from('room_members')
@@ -101,6 +145,14 @@ class RoomService extends ChangeNotifier {
     _currentRoom = null;
     pendingJoinCode = null;
     notifyListeners();
+  }
+
+  Room _adopt(Room room) {
+    if (_currentRoom?.id == room.id) {
+      _currentRoom = room;
+      notifyListeners();
+    }
+    return room;
   }
 
   // rpc() returning `setof`/record can come back as a single map or a

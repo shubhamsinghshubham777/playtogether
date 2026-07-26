@@ -10,7 +10,21 @@ abstract class SyncEventType {
   static const String typing = 'typing';
   static const String positionSync = 'position_sync';
   static const String fileInfo = 'file_info';
+  static const String mediaSet = 'media_set';
+  static const String memberKicked = 'member_kicked';
+  static const String transportLock = 'transport_lock';
   static const String roomEnded = 'room_ended';
+}
+
+/// Why a play/pause happened. Absent means a human pressed something — the
+/// distinction attribution toasts and gate auto-resume both hang off.
+abstract class SyncActionReason {
+  static const String gate = 'gate';
+
+  /// The positional realignment that rides along with a play/pause. It keeps
+  /// everyone at the same spot but is not a seek anyone performed, so it must
+  /// not be attributed as one.
+  static const String transport = 'transport';
 }
 
 /// Base class for all sync events. `senderId` is the authenticated user id.
@@ -24,43 +38,87 @@ sealed class SyncEvent {
 }
 
 class PlayEvent extends SyncEvent {
-  const PlayEvent({required super.senderId, required super.timestamp});
+  /// [SyncActionReason] when the gate derived this rather than a human; null
+  /// for a real button press.
+  final String? reason;
+
+  /// Whose readiness the gate was waiting on, for the banner copy.
+  final String? subjectUserId;
+
+  const PlayEvent({
+    required super.senderId,
+    required super.timestamp,
+    this.reason,
+    this.subjectUserId,
+  });
 
   factory PlayEvent.fromPayload(Map<String, dynamic> payload) {
     return PlayEvent(
       senderId: payload['senderId'] as String,
       timestamp: payload['timestamp'] as int,
+      reason: payload['reason'] as String?,
+      subjectUserId: payload['subjectUserId'] as String?,
     );
   }
 
   @override
-  Map<String, dynamic> toPayload() => {'senderId': senderId, 'timestamp': timestamp};
+  Map<String, dynamic> toPayload() => {
+    'senderId': senderId,
+    'timestamp': timestamp,
+    'reason': reason,
+    'subjectUserId': subjectUserId,
+  };
 }
 
 class PauseEvent extends SyncEvent {
-  const PauseEvent({required super.senderId, required super.timestamp});
+  final String? reason;
+  final String? subjectUserId;
+
+  const PauseEvent({
+    required super.senderId,
+    required super.timestamp,
+    this.reason,
+    this.subjectUserId,
+  });
 
   factory PauseEvent.fromPayload(Map<String, dynamic> payload) {
     return PauseEvent(
       senderId: payload['senderId'] as String,
       timestamp: payload['timestamp'] as int,
+      reason: payload['reason'] as String?,
+      subjectUserId: payload['subjectUserId'] as String?,
     );
   }
 
   @override
-  Map<String, dynamic> toPayload() => {'senderId': senderId, 'timestamp': timestamp};
+  Map<String, dynamic> toPayload() => {
+    'senderId': senderId,
+    'timestamp': timestamp,
+    'reason': reason,
+    'subjectUserId': subjectUserId,
+  };
 }
 
 class SeekEvent extends SyncEvent {
   final int positionMs;
 
-  const SeekEvent({required super.senderId, required super.timestamp, required this.positionMs});
+  /// [SyncActionReason] when this seek is mechanical rather than a jump a
+  /// human made; null for a real scrub.
+  final String? reason;
+
+  const SeekEvent({
+    required super.senderId,
+    required super.timestamp,
+    required this.positionMs,
+    this.reason,
+  });
 
   factory SeekEvent.fromPayload(Map<String, dynamic> payload) {
     return SeekEvent(
       senderId: payload['senderId'] as String,
       timestamp: payload['timestamp'] as int,
       positionMs: payload['positionMs'] as int,
+      reason: payload['reason'] as String?,
     );
   }
 
@@ -69,6 +127,7 @@ class SeekEvent extends SyncEvent {
     'senderId': senderId,
     'timestamp': timestamp,
     'positionMs': positionMs,
+    'reason': reason,
   };
 }
 
@@ -245,6 +304,57 @@ class PositionSyncEvent extends SyncEvent {
     'timestamp': timestamp,
     'positionMs': positionMs,
     'playing': playing,
+  };
+}
+
+/// The room's canonical media, fanned out by the host straight after
+/// `set_room_media` persisted it. The `rooms` row stays the source of truth —
+/// this is latency, not durability, since clients also refetch on join and on
+/// every reconnect.
+class MediaSetEvent extends SyncEvent {
+  final String kind;
+  final String? name;
+  final int? durationMs;
+  final String? url;
+
+  /// `rooms.media_updated_at` — the **server** clock, not the sender's. It is
+  /// the ordering key that lets a room-row refetch resolving late be discarded
+  /// instead of clobbering this event.
+  final int? updatedAtMs;
+
+  const MediaSetEvent({
+    required super.senderId,
+    required super.timestamp,
+    required this.kind,
+    this.name,
+    this.durationMs,
+    this.url,
+    this.updatedAtMs,
+  });
+
+  factory MediaSetEvent.fromPayload(Map<String, dynamic> payload) {
+    return MediaSetEvent(
+      // Tolerant: neither field is read when this is applied, so a payload
+      // missing them must still deliver the media rather than throw.
+      senderId: payload['senderId'] as String? ?? '',
+      timestamp: payload['timestamp'] as int? ?? 0,
+      kind: payload['kind'] as String? ?? 'none',
+      name: payload['name'] as String?,
+      durationMs: payload['durationMs'] as int?,
+      url: payload['url'] as String?,
+      updatedAtMs: payload['updatedAtMs'] as int?,
+    );
+  }
+
+  @override
+  Map<String, dynamic> toPayload() => {
+    'senderId': senderId,
+    'timestamp': timestamp,
+    'kind': kind,
+    'name': name,
+    'durationMs': durationMs,
+    'url': url,
+    'updatedAtMs': updatedAtMs,
   };
 }
 
