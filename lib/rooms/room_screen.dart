@@ -1739,16 +1739,25 @@ class _RoomScreenState extends State<RoomScreen>
         body: Center(child: CircularProgressIndicator(color: PTColors.primary)),
       );
     }
-    return Scaffold(
-      backgroundColor: PTColors.screenBg,
-      body: Focus(
-        focusNode: _shortcutFocus,
-        autofocus: true,
-        onKeyEvent: _handleKeyEvent,
-        child: PTResponsive(
-          desktop: (_) => _desktop(),
-          portrait: (_) => _portrait(),
-          landscape: (_) => _landscape(),
+    // The room sits on top of the lobby, so a system back gesture would pop
+    // straight out of it — and a bare pop skips leave_room, stranding the
+    // membership (member cap, authority election). Route it through _leaveRoom.
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _leaveRoom();
+      },
+      child: Scaffold(
+        backgroundColor: PTColors.screenBg,
+        body: Focus(
+          focusNode: _shortcutFocus,
+          autofocus: true,
+          onKeyEvent: _handleKeyEvent,
+          child: PTResponsive(
+            desktop: (_) => _desktop(),
+            portrait: (_) => _portrait(),
+            landscape: (_) => _landscape(),
+          ),
         ),
       ),
     );

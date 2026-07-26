@@ -13,6 +13,19 @@ import 'rooms/lobby_screen.dart';
 import 'rooms/room_screen.dart';
 import 'rooms/room_service.dart';
 
+/// Profile and rooms are *sub-routes* of the lobby, so the lobby is always the
+/// page beneath them in the navigator stack. That is what makes `go('/lobby')`
+/// — every back button, leave, eviction and end-room exit — shrink the stack
+/// and play the reverse (pop) transition. As sibling top-level routes, `go`
+/// swaps the whole stack and Flutter animates it as a forward push instead.
+const kRoomPathPrefix = '/lobby/room/';
+
+String roomPath(String roomId) => '$kRoomPathPrefix$roomId';
+
+/// Room id of the currently shown location, or null when not in a room.
+String? roomIdOfPath(String path) =>
+    path.startsWith(kRoomPathPrefix) ? path.substring(kRoomPathPrefix.length) : null;
+
 GoRouter buildRouter(Player player) {
   return GoRouter(
     initialLocation: '/lobby',
@@ -26,18 +39,23 @@ GoRouter buildRouter(Player player) {
     },
     routes: [
       GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
-      GoRoute(path: '/lobby', builder: (context, state) => const LobbyScreen()),
-      GoRoute(path: '/profile', builder: (context, state) => const ProfileScreen()),
       GoRoute(
-        path: '/room/:id',
-        // Keyed by room id: go_router reuses the page for /room/A → /room/B
-        // (same route pattern), and without the key the old room's State —
-        // sync channel, countdown, chat — would survive the navigation.
-        builder: (context, state) => RoomScreen(
-          key: ValueKey(state.pathParameters['id']!),
-          roomId: state.pathParameters['id']!,
-          player: player,
-        ),
+        path: '/lobby',
+        builder: (context, state) => const LobbyScreen(),
+        routes: [
+          GoRoute(path: 'profile', builder: (context, state) => const ProfileScreen()),
+          GoRoute(
+            path: 'room/:id',
+            // Keyed by room id: go_router reuses the page for room A → room B
+            // (same route pattern), and without the key the old room's State —
+            // sync channel, countdown, chat — would survive the navigation.
+            builder: (context, state) => RoomScreen(
+              key: ValueKey(state.pathParameters['id']!),
+              roomId: state.pathParameters['id']!,
+              player: player,
+            ),
+          ),
+        ],
       ),
     ],
   );

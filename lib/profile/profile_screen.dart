@@ -176,18 +176,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       children: [
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 28),
-          child: Row(
-            spacing: 16,
-            children: [
-              PTIconButton(
-                icon: Symbols.arrow_back_rounded,
-                iconSize: 20,
-                size: 42,
-                onPressed: () => context.go('/lobby'),
-              ),
-              Text('Profile', style: PTText.cardHeading),
-            ],
-          ),
+          child: _backHeader(size: 42),
         ),
         Expanded(
           child: SingleChildScrollView(
@@ -216,17 +205,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
-            child: Row(
-              spacing: 14,
-              children: [
-                PTIconButton(
-                  icon: Symbols.arrow_back_rounded,
-                  iconSize: 20,
-                  onPressed: () => context.go('/lobby'),
-                ),
-                Text('Profile', style: PTText.cardHeading.copyWith(fontSize: 18)),
-              ],
-            ),
+            child: _backHeader(titleSize: 18),
           ),
           Expanded(
             child: SingleChildScrollView(
@@ -242,64 +221,90 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _landscape(Profile profile) {
-    if (profile.isGuest) {
-      return SafeArea(
-        minimum: const EdgeInsets.symmetric(horizontal: 44),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-          child: _guestBody(profile),
-        ),
-      );
-    }
     return SafeArea(
       minimum: const EdgeInsets.symmetric(horizontal: 44),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 24, 16, 22),
-        child: Row(
-          spacing: 36,
-          children: [
-            SizedBox(width: 240, child: _identityHeader(profile, vertical: true)),
-            Expanded(
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisAlignment: .center,
-                  spacing: 12,
-                  children: [
-                    _nameField(profile),
-                    _emailField(profile),
-                    Padding(
-                      padding: const EdgeInsets.only(top: 6),
-                      child: Row(
-                        spacing: 11,
-                        children: [
-                          Expanded(
-                            child: PTButton(
-                              label: 'Log out',
-                              icon: Symbols.logout_rounded,
-                              variant: .secondary,
-                              height: 46,
-                              onPressed: AuthService.instance.signOut,
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: _backHeader(iconSize: 19, size: 38, titleSize: 17),
+          ),
+          Expanded(
+            child: profile.isGuest
+                ? SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
+                    child: _guestBody(profile),
+                  )
+                : Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 22),
+                    child: Row(
+                      spacing: 36,
+                      children: [
+                        SizedBox(width: 240, child: _identityHeader(profile, vertical: true)),
+                        Expanded(
+                          child: SingleChildScrollView(
+                            child: Column(
+                              mainAxisAlignment: .center,
+                              spacing: 12,
+                              children: [
+                                _nameField(profile),
+                                _emailField(profile),
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 6),
+                                  child: Row(
+                                    spacing: 11,
+                                    children: [
+                                      Expanded(
+                                        child: PTButton(
+                                          label: 'Log out',
+                                          icon: Symbols.logout_rounded,
+                                          variant: .secondary,
+                                          height: 46,
+                                          onPressed: AuthService.instance.signOut,
+                                        ),
+                                      ),
+                                      Expanded(
+                                        child: PTButton(
+                                          label: 'Delete account',
+                                          icon: Symbols.delete_rounded,
+                                          variant: .destructive,
+                                          height: 46,
+                                          onPressed: _confirmDeleteAccount,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                          Expanded(
-                            child: PTButton(
-                              label: 'Delete account',
-                              icon: Symbols.delete_rounded,
-                              variant: .destructive,
-                              height: 46,
-                              onPressed: _confirmDeleteAccount,
-                            ),
-                          ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
+                  ),
+          ),
+        ],
       ),
+    );
+  }
+
+  Widget _backHeader({double iconSize = 20, double size = 44, double? titleSize}) {
+    return Row(
+      spacing: 14,
+      children: [
+        PTIconButton(
+          icon: Symbols.arrow_back_rounded,
+          iconSize: iconSize,
+          size: size,
+          onPressed: () => context.go('/lobby'),
+        ),
+        Text(
+          'Profile',
+          style: titleSize == null
+              ? PTText.cardHeading
+              : PTText.cardHeading.copyWith(fontSize: titleSize),
+        ),
+      ],
     );
   }
 

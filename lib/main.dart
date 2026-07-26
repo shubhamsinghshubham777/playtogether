@@ -83,16 +83,13 @@ class _MainAppState extends State<MainApp> {
       final room = await RoomService.instance.joinRoom(code);
       // Invited into a different room while already in one: leave the old
       // room's membership, or it counts against caps and authority election.
-      final currentPath = router.routerDelegate.currentConfiguration.uri.path;
-      if (currentPath.startsWith('/room/')) {
-        final currentId = currentPath.substring('/room/'.length);
-        if (currentId.isNotEmpty && currentId != room.id) {
-          try {
-            await RoomService.instance.leaveRoom(currentId);
-          } catch (_) {}
-        }
+      final currentId = roomIdOfPath(router.routerDelegate.currentConfiguration.uri.path);
+      if (currentId != null && currentId.isNotEmpty && currentId != room.id) {
+        try {
+          await RoomService.instance.leaveRoom(currentId);
+        } catch (_) {}
       }
-      router.go('/room/${room.id}');
+      router.go(roomPath(room.id));
     } catch (e) {
       final message = RoomErrorCode.fromError(e).message;
       _scaffoldMessengerKey.currentState?.showSnackBar(SnackBar(content: Text(message)));

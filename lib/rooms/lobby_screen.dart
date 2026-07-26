@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import 'package:playtogether/app_router.dart';
 import 'package:playtogether/auth/auth_service.dart';
 import 'package:playtogether/profile/profile_service.dart';
 import 'package:playtogether/rooms/room_models.dart';
@@ -71,7 +72,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
         name: _nameController.text,
         durationMinutes: _durationMinutes,
       );
-      if (mounted) context.go('/room/${room.id}');
+      if (mounted) context.go(roomPath(room.id));
     } catch (e) {
       if (!mounted) return;
       final code = RoomErrorCode.fromError(e);
@@ -93,7 +94,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
     setState(() => _joining = true);
     try {
       final room = await RoomService.instance.joinRoom(code);
-      if (mounted) context.go('/room/${room.id}');
+      if (mounted) context.go(roomPath(room.id));
     } catch (e) {
       if (mounted) {
         _snack(RoomErrorCode.fromError(e).message);
@@ -124,7 +125,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
         },
         onRejoin: () {
           Navigator.of(dialogContext).pop();
-          if (live != null) context.go('/room/${live.id}');
+          if (live != null) context.go(roomPath(live.id));
         },
       ),
     );
@@ -271,7 +272,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
   Widget _profilePill() {
     final profile = ProfileService.instance.profile;
     return GlassPill(
-      onTap: () => context.go('/profile'),
+      onTap: () => context.go('/lobby/profile'),
       padding: const EdgeInsets.fromLTRB(8, 7, 16, 7),
       child: Row(
         mainAxisSize: .min,
@@ -295,7 +296,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
   Widget _avatarButton({double size = 40}) {
     final profile = ProfileService.instance.profile;
     return GestureDetector(
-      onTap: () => context.go('/profile'),
+      onTap: () => context.go('/lobby/profile'),
       child: PTAvatar(
         userId: profile?.id ?? '',
         displayName: profile?.displayName ?? '?',
