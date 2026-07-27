@@ -116,11 +116,11 @@ os.makedirs(OUT, exist_ok=True)
 master = write("app_icon", art(SIZE))
 write_ico(master, os.path.join(ROOT, "windows", "runner", "resources", "app_icon.ico"))
 
-# iOS masks the corners itself and rejects alpha, so it gets square full-bleed art.
-write("app_icon_ios", art(SIZE, rounded=False))
-
-# macOS icons sit on the Big Sur grid: art inset to ~80% of the canvas.
-write("app_icon_macos", art(SIZE * 0.80))
+# iOS and macOS 26+ both round the corners themselves, so they share square
+# full-bleed art. Anything less than full bleed is actively wrong on macOS 26:
+# the system treats transparency as "legacy icon" and drops the artwork onto a
+# default light-grey container, which reads as a grey border in the Dock.
+write("app_icon_square", art(SIZE, rounded=False))
 
 # Android adaptive layers are full-bleed: flutter_launcher_icons wraps the
 # foreground and monochrome drawables in its own 16% safe-zone inset, so

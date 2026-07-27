@@ -88,12 +88,14 @@ flutter_launcher_icons:
   adaptive_icon_foreground: assets/icon/app_icon_foreground.png
   adaptive_icon_monochrome: assets/icon/app_icon_monochrome.png
   ios: true
-  # iOS masks the corners itself and rejects alpha, so it gets the square art.
-  image_path_ios: assets/icon/app_icon_ios.png
+  # iOS and macOS 26+ round the corners themselves, so both take square
+  # full-bleed art — padding or alpha makes macOS 26 fall back to its default
+  # grey icon container.
+  image_path_ios: assets/icon/app_icon_square.png
   remove_alpha_ios: true
   macos:
     generate: true
-    image_path: assets/icon/app_icon_macos.png
+    image_path: assets/icon/app_icon_square.png
   # Windows is deliberately off: flutter_launcher_icons writes a single 256px
   # frame, so tool/generate_app_icon.py owns app_icon.ico and gives it the
   # 16/24/32/48 frames the taskbar and Inno Setup installer actually use.
