@@ -41,23 +41,74 @@ class RoomChatPanel extends StatefulWidget {
 class _RoomChatPanelState extends State<RoomChatPanel> {
   final _controller = TextEditingController();
   final _scrollController = ScrollController();
+  final _inputFocus = FocusNode();
   Timer? _typingDebounce;
   bool _sentTyping = false;
+
+  // What the list was last laid out with. Snapshotted here rather than diffed
+  // against `oldWidget`, because the room owns one mutable list and appends to
+  // it in place — `widget.messages` and `oldWidget.messages` are the same object.
+  int _seenCount = 0;
+  DateTime? _seenLast;
+  bool _seenTyping = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _snapshot();
+    // The panel mounts with history already loaded (and remounts every time it
+    // is reopened), so land on the newest message instead of the top.
+    _scrollToBottom(animate: false);
+  }
 
   @override
   void didUpdateWidget(covariant RoomChatPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.messages.length != oldWidget.messages.length) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (_scrollController.hasClients) {
-          _scrollController.animateTo(
-            _scrollController.position.maxScrollExtent,
-            duration: Durations.short4,
-            curve: Curves.easeOut,
-          );
-        }
-      });
+    // Count alone misses a history reload that swaps rows in place, and the
+    // typing row counts towards the list's extent too.
+    final last = widget.messages.lastOrNull;
+    if (widget.messages.length == _seenCount &&
+        last?.sentAt == _seenLast &&
+        widget.typingNames.isNotEmpty == _seenTyping) {
+      return;
     }
+    // Read the offset *before* the new row lays out — someone who scrolled up to
+    // read history keeps their place; our own outgoing message always wins.
+    final follow = _nearBottom || last?.senderId == widget.sync.userId;
+    _snapshot();
+    if (follow) _scrollToBottom();
+  }
+
+  void _snapshot() {
+    _seenCount = widget.messages.length;
+    _seenLast = widget.messages.lastOrNull?.sentAt;
+    _seenTyping = widget.typingNames.isNotEmpty;
+  }
+
+  /// Within a bubble or so of the end. True before the list has been laid out
+  /// (nothing to scroll yet) so the first messages of a room still stick.
+  bool get _nearBottom {
+    if (!_scrollController.hasClients) return true;
+    final position = _scrollController.position;
+    return position.maxScrollExtent - position.pixels <= 80;
+  }
+
+  /// Runs after the frame that lays the new row out — `maxScrollExtent` is only
+  /// correct once the list has measured it.
+  void _scrollToBottom({bool animate = true}) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scrollController.hasClients) return;
+      final target = _scrollController.position.maxScrollExtent;
+      if (animate) {
+        _scrollController.animateTo(
+          target,
+          duration: Durations.short4,
+          curve: Curves.easeOut,
+        );
+      } else {
+        _scrollController.jumpTo(target);
+      }
+    });
   }
 
   @override
@@ -65,6 +116,7 @@ class _RoomChatPanelState extends State<RoomChatPanel> {
     _typingDebounce?.cancel();
     _controller.dispose();
     _scrollController.dispose();
+    _inputFocus.dispose();
     super.dispose();
   }
 
@@ -90,6 +142,10 @@ class _RoomChatPanelState extends State<RoomChatPanel> {
       widget.sync.broadcastTyping(false);
     }
     widget.onSend(text);
+    // Keep the caret in the field for the next line — Enter would otherwise hand
+    // focus back to the player shortcuts (so the next Space toggles playback),
+    // and tapping the send button never had it to begin with.
+    _inputFocus.requestFocus();
   }
 
   @override
@@ -162,8 +218,13 @@ class _RoomChatPanelState extends State<RoomChatPanel> {
                   ),
                   child: TextField(
                     controller: _controller,
+                    focusNode: _inputFocus,
                     autofocus: widget.autofocus,
+                    textInputAction: .send,
                     onChanged: _onTextChanged,
+                    // The default `onEditingComplete` unfocuses on submit; `_send`
+                    // owns focus instead. `onSubmitted` still fires after it.
+                    onEditingComplete: () {},
                     onSubmitted: (_) => _send(),
                     maxLength: 500,
                     style: PTText.body.copyWith(fontSize: 13.5),

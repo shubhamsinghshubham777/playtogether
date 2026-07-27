@@ -1558,6 +1558,10 @@ class _RoomScreenState extends State<RoomScreen>
     _snack('Invite link copied — send it to your people.');
   }
 
+  void _openChat() {
+    if (!_chatOpen) _toggleChat();
+  }
+
   void _toggleChat() {
     setState(() {
       _chatOpen = !_chatOpen;
@@ -2054,37 +2058,51 @@ class _RoomScreenState extends State<RoomScreen>
 
   /// Floating stack of the last few incoming messages, shown while the chat
   /// panel is closed (desktop/landscape). Bottom-aligned so new bubbles push up.
+  /// Deliberately *not* wrapped in an `IgnorePointer`: the bubbles themselves are
+  /// tap targets that open the panel, and the bare Column/Padding around them
+  /// hit-tests children only, so the empty gaps still pass clicks to the video.
   Widget _chatOverlay() {
-    return IgnorePointer(
-      child: Column(
-        mainAxisSize: .min,
-        mainAxisAlignment: .end,
-        crossAxisAlignment: .start,
-        children: [
-          for (final message in _overlayChat)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: TweenAnimationBuilder<double>(
-                key: ValueKey(message),
-                tween: Tween(begin: 0, end: 1),
-                duration: Durations.medium2,
-                curve: Curves.easeOut,
-                builder: (_, t, child) => Opacity(
-                  opacity: t,
-                  child: Transform.translate(
-                    offset: Offset(0, (1 - t) * 8),
-                    child: child,
-                  ),
+    return Column(
+      mainAxisSize: .min,
+      mainAxisAlignment: .end,
+      crossAxisAlignment: .start,
+      children: [
+        for (final message in _overlayChat)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: TweenAnimationBuilder<double>(
+              key: ValueKey(message),
+              tween: Tween(begin: 0, end: 1),
+              duration: Durations.medium2,
+              curve: Curves.easeOut,
+              builder: (_, t, child) => Opacity(
+                opacity: t,
+                child: Transform.translate(
+                  offset: Offset(0, (1 - t) * 8),
+                  child: child,
                 ),
-                child: _overlayBubble(message),
               ),
+              child: _overlayBubble(message),
             ),
-        ],
-      ),
+          ),
+      ],
     );
   }
 
   Widget _overlayBubble(ChatMessage message) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        // Opaque so the bubble's padding is tappable too, not just its text —
+        // the Row hugs its content, so this claims no space beyond the bubble.
+        behavior: .opaque,
+        onTap: _openChat,
+        child: _overlayBubbleBody(message),
+      ),
+    );
+  }
+
+  Widget _overlayBubbleBody(ChatMessage message) {
     return Row(
       mainAxisSize: .min,
       crossAxisAlignment: .end,
