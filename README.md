@@ -1,4 +1,4 @@
-<img src="assets/icon/app_icon_macos.png" width="96" align="left" alt="PlayTogether app icon">
+<img src="assets/icon/app_icon.svg" width="96" alt="App Icon">
 
 # PlayTogether
 
