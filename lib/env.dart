@@ -12,4 +12,9 @@ class Env {
   /// Optional; when set, guest sign-in requires a Turnstile captcha token
   /// (the server enforces it — [auth.captcha] in supabase/config.toml).
   static final turnstileSiteKey = dotenv.maybeGet("TURNSTILE_SITE_KEY");
+
+  /// Optional; error reporting is disabled entirely when absent, which is the
+  /// normal state for local development. A Sentry DSN is a public write-only
+  /// key, so shipping it in the bundle is fine — unlike a server secret.
+  static final sentryDsn = dotenv.maybeGet("SENTRY_DSN");
 }

@@ -27,15 +27,48 @@ class _TurnstileBody extends StatefulWidget {
   State<_TurnstileBody> createState() => _TurnstileBodyState();
 }
 
+/// How long the challenge gets before we call it stuck. Turnstile normally
+/// resolves in well under a second; this only has to be longer than a slow
+/// cold WebView2 start.
+const _kChallengeTimeout = Duration(seconds: 20);
+
 class _TurnstileBodyState extends State<_TurnstileBody> {
   bool _failed = false;
+  String? _errorCode;
   HttpServer? _server;
   Uri? _pageUrl;
+  Timer? _timeout;
+  bool _pageRequested = false;
 
   @override
   void initState() {
     super.initState();
     _serve();
+  }
+
+  /// The silent-failure case, and the reason this timer exists: if the webview
+  /// never renders at all, nothing throws and no error-callback fires, so the
+  /// dialog just sits there looking patient. Without an explicit deadline that
+  /// state produces no telemetry whatsoever — which is exactly the hole we
+  /// fell into on Windows.
+  void _armTimeout() {
+    _timeout?.cancel();
+    _timeout = Timer(_kChallengeTimeout, () {
+      if (!mounted || _errorCode != null) return;
+      reportNonFatal(
+        StateError(
+          'Turnstile produced neither a token nor an error in '
+          '${_kChallengeTimeout.inSeconds}s '
+          '(page requested: $_pageRequested)',
+        ),
+        StackTrace.current,
+        during: 'running the Turnstile challenge',
+      );
+      setState(() {
+        _failed = true;
+        _errorCode = _pageRequested ? 'no-response' : 'page-never-requested';
+      });
+    });
   }
 
   /// Hands the challenge page a real `http://localhost:<port>` origin.
@@ -56,6 +89,15 @@ class _TurnstileBodyState extends State<_TurnstileBody> {
       }
       _server = server;
       server.listen((request) {
+        // Distinguishes "the webview never reached us" from "it loaded the page
+        // and Turnstile then failed" — the two have completely different causes
+        // and look identical from the outside.
+        _pageRequested = true;
+        trace(
+          'challenge page requested',
+          category: 'turnstile',
+          data: {'path': request.uri.path},
+        );
         request.response
           ..headers.contentType = ContentType.html
           ..write(_html);
@@ -64,7 +106,10 @@ class _TurnstileBodyState extends State<_TurnstileBody> {
       // `localhost` rather than 127.0.0.1: Turnstile matches on hostname, and
       // the literal IP is not what the widget is registered for. Webviews
       // resolve it dual-stack and fall back to the IPv4 loopback we bound.
-      setState(() => _pageUrl = Uri.parse('http://localhost:${server.port}/'));
+      final url = Uri.parse('http://localhost:${server.port}/');
+      trace('serving challenge', category: 'turnstile', data: {'url': '$url'});
+      _armTimeout();
+      setState(() => _pageUrl = url);
     } catch (e, s) {
       reportNonFatal(e, s, during: 'starting the Turnstile loopback server');
       if (mounted) setState(() => _failed = true);
@@ -73,6 +118,7 @@ class _TurnstileBodyState extends State<_TurnstileBody> {
 
   @override
   void dispose() {
+    _timeout?.cancel();
     _server?.close(force: true);
     super.dispose();
   }
@@ -123,6 +169,13 @@ function onloadTurnstile() {
               : "Just making sure you're human — takes a second.",
           style: PTText.body.copyWith(fontSize: 13.5, color: PTColors.white(0.6)),
         ),
+        // Shown only on failure, and deliberately not dressed up as friendly
+        // copy: it exists so a bug report can quote it.
+        if (_errorCode != null)
+          Text(
+            'Error $_errorCode',
+            style: PTText.mono.copyWith(fontSize: 11.5, color: PTColors.white(0.4)),
+          ),
         ClipRRect(
           borderRadius: BorderRadius.circular(12),
           child: SizedBox(
@@ -132,18 +185,62 @@ function onloadTurnstile() {
                 : InAppWebView(
                     initialUrlRequest: URLRequest(url: WebUri.uri(_pageUrl!)),
                     initialSettings: InAppWebViewSettings(transparentBackground: true),
+                    // Turnstile reports its own diagnostics to the JS console
+                    // (an unlisted hostname says so there in as many words),
+                    // and that output is otherwise invisible in a release build.
+                    onConsoleMessage: (_, msg) => trace(
+                      msg.message,
+                      category: 'turnstile.console',
+                      data: {'level': msg.messageLevel.toString()},
+                    ),
+                    onReceivedError: (_, request, error) => trace(
+                      'load error: ${error.description}',
+                      category: 'turnstile.webview',
+                      data: {'url': '${request.url}', 'type': '${error.type}'},
+                    ),
+                    onReceivedHttpError: (_, request, response) => trace(
+                      'http error: ${response.statusCode}',
+                      category: 'turnstile.webview',
+                      data: {'url': '${request.url}'},
+                    ),
+                    onLoadStop: (_, url) => trace(
+                      'load finished',
+                      category: 'turnstile.webview',
+                      data: {'url': '$url'},
+                    ),
                     onWebViewCreated: (controller) {
                       controller.addJavaScriptHandler(
                         handlerName: 'turnstileToken',
                         callback: (args) {
                           final token = args.isNotEmpty ? args.first as String : null;
-                          if (mounted && token != null) Navigator.of(context).pop(token);
+                          if (mounted && token != null) {
+                            _timeout?.cancel();
+                            Navigator.of(context).pop(token);
+                          }
                         },
                       );
                       controller.addJavaScriptHandler(
                         handlerName: 'turnstileError',
-                        callback: (_) {
-                          if (mounted) setState(() => _failed = true);
+                        callback: (args) {
+                          // Cloudflare's code is the single most diagnostic
+                          // thing available here — 110200 is an unlisted
+                          // hostname, 300xxx/600xxx are render-side failures —
+                          // so it goes to Sentry *and* on screen, because the
+                          // person hitting this is usually not the person
+                          // reading the dashboard.
+                          final code = args.isNotEmpty ? '${args.first}' : 'unknown';
+                          _timeout?.cancel();
+                          reportNonFatal(
+                            StateError('Turnstile error-callback: $code'),
+                            StackTrace.current,
+                            during: 'running the Turnstile challenge',
+                          );
+                          if (mounted) {
+                            setState(() {
+                              _failed = true;
+                              _errorCode = code;
+                            });
+                          }
                         },
                       );
                     },

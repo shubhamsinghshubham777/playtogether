@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:app_links/app_links.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:media_kit/media_kit.dart';
@@ -15,12 +16,30 @@ import 'package:playtogether/ui/banners.dart';
 import 'package:playtogether/ui/pt_theme.dart';
 import 'package:playtogether/ui/responsive.dart';
 import 'package:playtogether/ui/splash_screen.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:window_manager/window_manager.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: ".env");
+
+  // Reporting is opt-in via SENTRY_DSN, so a checkout without one still runs.
+  // Sentry installs its own FlutterError.onError, which is what makes every
+  // existing reportNonFatal call site arrive here for free — see diagnostics.dart.
+  final dsn = Env.sentryDsn;
+  if (dsn == null || dsn.isEmpty) return _bootstrap();
+  return SentryFlutter.init((options) {
+    options.dsn = dsn;
+    options.environment = kReleaseMode ? 'release' : 'debug';
+    // Crash reports only. Tracing would multiply event volume for no benefit
+    // here, and the free tier is the budget.
+    options.tracesSampleRate = 0;
+    options.debug = kDebugMode;
+  }, appRunner: _bootstrap);
+}
+
+Future<void> _bootstrap() async {
   MediaKit.ensureInitialized();
   // OS-window fullscreen (F key in a room) needs the manager ready up front.
   if (isDesktop) {

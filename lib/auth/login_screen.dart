@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:playtogether/auth/auth_service.dart';
 import 'package:playtogether/auth/turnstile_dialog.dart';
+import 'package:playtogether/diagnostics.dart';
 import 'package:playtogether/env.dart';
 import 'package:playtogether/ui/banners.dart';
 import 'package:playtogether/ui/buttons.dart';
@@ -22,12 +23,20 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _googleLoading = false;
   bool _guestLoading = false;
 
-  Future<void> _run(Future<void> Function() action, void Function(bool) setLoading) async {
+  Future<void> _run(
+    Future<void> Function() action,
+    void Function(bool) setLoading, {
+    required String during,
+  }) async {
     setLoading(true);
     try {
       await action();
       // Navigation happens via the router's auth redirect.
-    } catch (e) {
+    } catch (e, s) {
+      // The user gets one friendly line no matter what went wrong, so without
+      // this the actual cause — a rejected captcha token, a 4xx from GoTrue —
+      // never leaves the device.
+      reportNonFatal(e, s, during: during);
       if (mounted) {
         showPTSnack(
           context,
@@ -40,18 +49,31 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  void _signInWithGoogle() =>
-      _run(AuthService.instance.signInWithGoogle, (v) => setState(() => _googleLoading = v));
+  void _signInWithGoogle() => _run(
+    AuthService.instance.signInWithGoogle,
+    (v) => setState(() => _googleLoading = v),
+    during: 'signing in with Google',
+  );
 
   Future<void> _continueAsGuest() async {
     String? captchaToken;
-    if ((Env.turnstileSiteKey ?? '').isNotEmpty) {
+    final captchaRequired = (Env.turnstileSiteKey ?? '').isNotEmpty;
+    trace('guest sign-in started', category: 'auth', data: {'captcha': captchaRequired});
+    if (captchaRequired) {
       captchaToken = await showTurnstileDialog(context);
-      if (captchaToken == null) return; // cancelled or challenge failed
+      // Cancelled or failed. The dialog has already reported *why*; this only
+      // records that we never got as far as the sign-in call, which is what
+      // distinguishes a captcha problem from a Supabase one.
+      if (captchaToken == null) {
+        trace('guest sign-in abandoned: no captcha token', category: 'auth');
+        return;
+      }
+      trace('captcha token acquired', category: 'auth');
     }
     await _run(
       () => AuthService.instance.signInAsGuest(captchaToken: captchaToken),
       (v) => setState(() => _guestLoading = v),
+      during: 'signing in as a guest',
     );
   }
 

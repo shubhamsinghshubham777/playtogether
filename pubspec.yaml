@@ -23,6 +23,7 @@ dependencies:
   media_kit_video: 2.0.1
   media_kit_libs_video: 1.0.7
   responsive_framework: 1.5.1
+  sentry_flutter: 9.25.0
   supabase_flutter: 2.16.0
   uuid: 4.6.0
   window_manager: 0.5.2
