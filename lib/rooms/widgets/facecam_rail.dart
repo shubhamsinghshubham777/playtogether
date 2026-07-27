@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:livekit_client/livekit_client.dart' as lk;
 import 'package:material_symbols_icons/symbols.dart';
@@ -5,13 +7,18 @@ import 'package:playtogether/av/livekit_service.dart';
 import 'package:playtogether/sync/sync_service.dart';
 import 'package:playtogether/ui/buttons.dart';
 import 'package:playtogether/ui/identity.dart';
+import 'package:playtogether/ui/pt_motion.dart';
 import 'package:playtogether/ui/pt_theme.dart';
 
 enum FacecamLayout { railLeft, stripTop, miniStackRight }
 
 /// Facecam tiles per present member: live video when the member publishes a
 /// cam track, avatar tile otherwise; self first with the violet ring.
-class FacecamRail extends StatelessWidget {
+///
+/// People arriving and leaving is a social event, so tiles animate both ways:
+/// departures are held in the tree for one [PTMotion.state] while they fade,
+/// which is why this is stateful.
+class FacecamRail extends StatefulWidget {
   const FacecamRail({
     super.key,
     required this.av,
@@ -30,55 +37,121 @@ class FacecamRail extends StatelessWidget {
   final int maxTiles;
 
   @override
+  State<FacecamRail> createState() => _FacecamRailState();
+}
+
+class _FacecamRailState extends State<FacecamRail> {
+  /// Members that have gone but are still fading out, in their last known
+  /// slot order so the rail doesn't reshuffle while they leave.
+  final _leaving = <String, PresentMember>{};
+  final _leavingTimers = <String, Timer>{};
+
+  List<PresentMember> get _ordered => [
+    ...widget.present.where((m) => m.userId == widget.selfId),
+    ...widget.present.where((m) => m.userId != widget.selfId),
+  ];
+
+  @override
+  void didUpdateWidget(FacecamRail oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final now = widget.present.map((m) => m.userId).toSet();
+    for (final member in oldWidget.present) {
+      if (now.contains(member.userId) || _leaving.containsKey(member.userId)) {
+        continue;
+      }
+      _leaving[member.userId] = member;
+      _leavingTimers[member.userId] = Timer(PTMotion.state, () {
+        _leavingTimers.remove(member.userId);
+        if (mounted) setState(() => _leaving.remove(member.userId));
+      });
+    }
+    // A member who reappears mid-fade takes their real slot straight back.
+    for (final id in now) {
+      _leavingTimers.remove(id)?.cancel();
+      _leaving.remove(id);
+    }
+  }
+
+  @override
+  void dispose() {
+    for (final timer in _leavingTimers.values) {
+      timer.cancel();
+    }
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: av,
+      listenable: widget.av,
       builder: (context, _) {
-        final ordered = [
-          ...present.where((m) => m.userId == selfId),
-          ...present.where((m) => m.userId != selfId),
-        ];
-        final visible = ordered.take(maxTiles).toList();
+        final ordered = _ordered;
+        final visible = ordered.take(widget.maxTiles).toList();
         final overflow = ordered.length - visible.length;
+        // Leavers only fill slots the live roster isn't using.
+        final departing = _leaving.values
+            .take((widget.maxTiles - visible.length).clamp(0, widget.maxTiles))
+            .toList();
 
         final tiles = <Widget>[
-          for (final member in visible)
-            _FacecamTile(
-              member: member,
-              isSelf: member.userId == selfId,
-              av: av,
-              compact: layout != .railLeft,
+          for (final member in [...visible, ...departing])
+            _AnimatedTile(
+              key: ValueKey(member.userId),
+              leaving: _leaving.containsKey(member.userId),
+              child: _FacecamTile(
+                member: member,
+                isSelf: member.userId == widget.selfId,
+                av: widget.av,
+                compact: widget.layout != .railLeft,
+              ),
             ),
-          if (overflow > 0 && layout == .miniStackRight)
+          if (overflow > 0 && widget.layout == .miniStackRight)
             PTActionPill(label: '+$overflow', icon: Symbols.sync_rounded),
-          if (onHide != null && layout == .railLeft)
+          if (widget.onHide != null && widget.layout == .railLeft)
             PTActionPill(
               label: 'Hide cams',
               icon: Symbols.keyboard_arrow_left_rounded,
-              onTap: onHide,
+              onTap: widget.onHide,
             ),
         ];
 
-        return switch (layout) {
+        final rail = switch (widget.layout) {
           .railLeft => SizedBox(
             width: 200,
-            child: Column(
-              crossAxisAlignment: .start,
-              spacing: 10,
-              children: tiles,
-            ),
+            child: Column(crossAxisAlignment: .start, spacing: 10, children: tiles),
           ),
-          .stripTop => Row(
-            spacing: 8,
-            children: [for (final t in tiles) Expanded(child: t)],
-          ),
-          .miniStackRight => Column(
-            crossAxisAlignment: .end,
-            spacing: 6,
-            children: tiles,
-          ),
+          .stripTop => Row(spacing: 8, children: [for (final t in tiles) Expanded(child: t)]),
+          .miniStackRight => Column(crossAxisAlignment: .end, spacing: 6, children: tiles),
         };
+
+        return AnimatedSize(
+          duration: PTMotion.functional(context, PTMotion.state),
+          curve: PTMotion.enter,
+          alignment: widget.layout == .miniStackRight ? .topRight : .topLeft,
+          child: rail,
+        );
       },
+    );
+  }
+}
+
+class _AnimatedTile extends StatelessWidget {
+  const _AnimatedTile({super.key, required this.child, required this.leaving});
+
+  final Widget child;
+  final bool leaving;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedScale(
+      scale: leaving ? 0.95 : 1,
+      duration: PTMotion.functional(context, PTMotion.state),
+      curve: PTMotion.exit,
+      child: AnimatedOpacity(
+        opacity: leaving ? 0 : 1,
+        duration: PTMotion.functional(context, PTMotion.state),
+        child: PTEntrance(duration: PTMotion.state, offset: 0, scaleFrom: 0.95, child: child),
+      ),
     );
   }
 }
@@ -114,15 +187,32 @@ class _FacecamTile extends StatelessWidget {
     final height = compact ? 58.0 : 112.0;
     final radius = compact ? 13.0 : 16.0;
 
-    return Container(
+    // The highest-value AV micro: this is how you know who just laughed.
+    // Snaps on and lingers on the way out, the way a voice does — an equal
+    // fade both ways reads as a flicker on short utterances.
+    return AnimatedContainer(
+      duration: speaking ? const Duration(milliseconds: 200) : const Duration(milliseconds: 600),
+      curve: PTMotion.enter,
       height: height,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(radius),
-        border: isSelf
-            ? Border.all(color: const Color(0xFFC4A8FF).withValues(alpha: 0.85), width: 2)
-            : Border.all(color: PTColors.white(0.13)),
+        border: Border.all(
+          color: speaking
+              ? const Color(0xFFC4A8FF)
+              : isSelf
+              ? const Color(0xFFC4A8FF).withValues(alpha: 0.85)
+              : PTColors.white(0.13),
+          width: speaking || isSelf ? 2 : 1,
+        ),
         boxShadow: [
-          if (isSelf) BoxShadow(color: PTColors.primary.withValues(alpha: 0.25), spreadRadius: 3),
+          if (speaking)
+            BoxShadow(
+              color: PTColors.primary.withValues(alpha: 0.55),
+              blurRadius: 16,
+              spreadRadius: 2,
+            )
+          else if (isSelf)
+            BoxShadow(color: PTColors.primary.withValues(alpha: 0.25), spreadRadius: 3),
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.45),
             blurRadius: 32,
@@ -186,7 +276,10 @@ class _FacecamTile extends StatelessWidget {
                 left: compact ? 5 : 8,
                 bottom: compact ? 5 : 8,
                 child: Container(
-                  padding: EdgeInsets.symmetric(horizontal: compact ? 7 : 9, vertical: compact ? 2 : 3),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: compact ? 7 : 9,
+                    vertical: compact ? 2 : 3,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0x9908070C),
                     borderRadius: BorderRadius.circular(999),
@@ -205,20 +298,30 @@ class _FacecamTile extends StatelessWidget {
                           color: Colors.white,
                         ),
                       ),
-                      if (speaking)
-                        Icon(
-                          Symbols.graphic_eq_rounded,
-                          size: compact ? 10 : 12,
-                          color: PTColors.textAccent,
-                        ),
+                      // The border glow is now the primary speaking cue; this
+                      // stays as a redundant, colour-blind-safe marker.
+                      AnimatedSize(
+                        duration: PTMotion.functional(context, PTMotion.state),
+                        curve: PTMotion.enter,
+                        child: speaking
+                            ? Icon(
+                                Symbols.graphic_eq_rounded,
+                                size: compact ? 10 : 12,
+                                color: PTColors.textAccent,
+                              )
+                            : const SizedBox.shrink(),
+                      ),
                     ],
                   ),
                 ),
               ),
-            if (micOff && participant != null)
-              Positioned(
-                top: compact ? 5 : 7,
-                right: compact ? 5 : 7,
+            Positioned(
+              top: compact ? 5 : 7,
+              right: compact ? 5 : 7,
+              child: AnimatedScale(
+                scale: micOff && participant != null ? 1 : 0,
+                duration: PTMotion.functional(context, PTMotion.state),
+                curve: micOff ? PTMotion.arrive : PTMotion.exit,
                 child: Container(
                   width: compact ? 17 : 22,
                   height: compact ? 17 : 22,
@@ -235,6 +338,7 @@ class _FacecamTile extends StatelessWidget {
                   ),
                 ),
               ),
+            ),
           ],
         ),
       ),

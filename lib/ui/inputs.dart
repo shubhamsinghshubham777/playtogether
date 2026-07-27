@@ -1,7 +1,10 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import 'pt_motion.dart';
 import 'pt_theme.dart';
 
 class PTTextField extends StatefulWidget {
@@ -138,9 +141,16 @@ class PTCodeInput extends StatefulWidget {
   State<PTCodeInput> createState() => PTCodeInputState();
 }
 
-class PTCodeInputState extends State<PTCodeInput> {
+class PTCodeInputState extends State<PTCodeInput> with SingleTickerProviderStateMixin {
   final _controller = TextEditingController();
   final _focusNode = FocusNode();
+
+  /// Runs the left-to-right "ready to go" flourish once the sixth character
+  /// lands. Each box reads its own slice of this, staggered by index.
+  late final AnimationController _complete = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 420),
+  );
 
   String get value => _controller.text;
 
@@ -154,13 +164,20 @@ class PTCodeInputState extends State<PTCodeInput> {
   }
 
   void _onText() {
+    final wasComplete = _complete.value > 0 && _complete.isCompleted;
     setState(() {});
     widget.onChanged(value);
-    if (value.length == PTCodeInput.length) widget.onCompleted?.call(value);
+    if (value.length == PTCodeInput.length) {
+      if (!wasComplete && !reducedMotion(context)) _complete.forward(from: 0);
+      widget.onCompleted?.call(value);
+    } else {
+      _complete.value = 0;
+    }
   }
 
   @override
   void dispose() {
+    _complete.dispose();
     _controller.dispose();
     _focusNode.dispose();
     super.dispose();
@@ -196,7 +213,7 @@ class PTCodeInputState extends State<PTCodeInput> {
               spacing: 9,
               children: [
                 for (var i = 0; i < PTCodeInput.length; i++)
-                  Expanded(child: _box(i < text.length ? text[i] : null, i == text.length)),
+                  Expanded(child: _box(i < text.length ? text[i] : null, i == text.length, i)),
               ],
             ),
           ),
@@ -205,26 +222,44 @@ class PTCodeInputState extends State<PTCodeInput> {
     );
   }
 
-  Widget _box(String? char, bool isCursor) {
+  Widget _box(String? char, bool isCursor, int index) {
     final active = char != null || (isCursor && _focusNode.hasFocus);
-    return AnimatedContainer(
-      duration: Durations.short2,
-      height: widget.boxHeight,
-      alignment: .center,
-      decoration: BoxDecoration(
-        color: PTColors.white(active ? 0.06 : 0.04),
-        border: Border.all(
-          color: active
-              ? const Color(0xFFA78BFA).withValues(alpha: 0.5)
-              : PTColors.white(char != null ? 0.12 : 0.09),
-        ),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: char != null
-          ? Text(char, style: PTText.code.copyWith(letterSpacing: 0, color: const Color(0xFFE9DCFF)))
-          : isCursor && _focusNode.hasFocus
-          ? const _BlinkingCaret()
-          : null,
+    return AnimatedBuilder(
+      animation: _complete,
+      builder: (context, _) {
+        // Each box gets a 25 ms-offset window of the shared controller, so the
+        // pulse sweeps left to right rather than flashing all six at once.
+        final start = index * 0.12;
+        final local = ((_complete.value - start) / 0.4).clamp(0.0, 1.0);
+        final pulse = math.sin(local * math.pi);
+        return AnimatedContainer(
+          duration: PTMotion.functional(context, PTMotion.hover),
+          height: widget.boxHeight,
+          alignment: .center,
+          decoration: BoxDecoration(
+            color: PTColors.white(active ? 0.06 : 0.04),
+            border: Border.all(
+              color: Color.lerp(
+                active
+                    ? const Color(0xFFA78BFA).withValues(alpha: 0.5)
+                    : PTColors.white(char != null ? 0.12 : 0.09),
+                const Color(0xFFC9B8FF),
+                pulse,
+              )!,
+              width: 1 + pulse,
+            ),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: char != null
+              ? Text(
+                  char,
+                  style: PTText.code.copyWith(letterSpacing: 0, color: const Color(0xFFE9DCFF)),
+                )
+              : isCursor && _focusNode.hasFocus
+              ? const _BlinkingCaret()
+              : null,
+        );
+      },
     );
   }
 }
@@ -243,8 +278,7 @@ class _BlinkingCaret extends StatefulWidget {
   State<_BlinkingCaret> createState() => _BlinkingCaretState();
 }
 
-class _BlinkingCaretState extends State<_BlinkingCaret>
-    with SingleTickerProviderStateMixin {
+class _BlinkingCaretState extends State<_BlinkingCaret> with SingleTickerProviderStateMixin {
   late final _controller = AnimationController(vsync: this, duration: const Duration(seconds: 1))
     ..repeat();
 
@@ -267,7 +301,7 @@ class _BlinkingCaretState extends State<_BlinkingCaret>
 }
 
 /// Progress/duration slider with the violet gradient fill.
-class PTSlider extends StatelessWidget {
+class PTSlider extends StatefulWidget {
   const PTSlider({
     super.key,
     required this.value,
@@ -295,16 +329,30 @@ class PTSlider extends StatelessWidget {
   final bool enabled;
 
   @override
+  State<PTSlider> createState() => _PTSliderState();
+}
+
+class _PTSliderState extends State<PTSlider> {
+  bool _active = false;
+
+  void _setActive(bool value) {
+    if (_active == value) return;
+    setState(() => _active = value);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final clamped = value.clamp(0.0, 1.0);
+    final enabled = widget.enabled;
+    final onHover = widget.onHover;
+    final clamped = widget.value.clamp(0.0, 1.0);
     // No LayoutBuilder here: it can't answer intrinsic-size queries, so it
     // would crash inside IntrinsicHeight (e.g. the lobby's equal-height cards).
     void update(Offset local, {bool end = false}) {
       final width = context.size?.width ?? 0;
       if (width <= 0) return;
       final v = (local.dx / width).clamp(0.0, 1.0);
-      onChanged(v);
-      if (end) onChangeEnd?.call(v);
+      widget.onChanged(v);
+      if (end) widget.onChangeEnd?.call(v);
     }
 
     void hover(Offset local) {
@@ -315,25 +363,44 @@ class PTSlider extends StatelessWidget {
 
     return MouseRegion(
       cursor: enabled ? SystemMouseCursors.click : MouseCursor.defer,
+      onEnter: enabled ? (_) => _setActive(true) : null,
       onHover: onHover == null || !enabled ? null : (e) => hover(e.localPosition),
-      onExit: onHover == null || !enabled ? null : (_) => onHover!(null),
+      onExit: !enabled
+          ? null
+          : (_) {
+              _setActive(false);
+              onHover?.call(null);
+            },
       child: GestureDetector(
         behavior: .opaque,
+        // Scrub behaviour is untouched: the thumb grows, but the value still
+        // previews locally and only broadcasts on release.
         onTapDown: enabled ? (d) => update(d.localPosition) : null,
         onTapUp: enabled ? (d) => update(d.localPosition, end: true) : null,
+        onHorizontalDragStart: enabled ? (_) => _setActive(true) : null,
         onHorizontalDragUpdate: enabled ? (d) => update(d.localPosition) : null,
-        onHorizontalDragEnd: enabled ? (_) => onChangeEnd?.call(clamped) : null,
+        onHorizontalDragEnd: enabled
+            ? (_) {
+                widget.onChangeEnd?.call(clamped);
+                _setActive(false);
+              }
+            : null,
         child: AnimatedOpacity(
-          duration: Durations.short2,
+          duration: PTMotion.functional(context, PTMotion.hover),
           opacity: enabled ? 1 : 0.45,
           child: SizedBox(
             height: 20,
             width: double.infinity,
-            child: CustomPaint(
-              painter: _PTSliderPainter(
-                value: clamped,
-                trackHeight: trackHeight,
-                thumbRadius: thumbRadius,
+            child: TweenAnimationBuilder<double>(
+              tween: Tween(end: _active && enabled ? 1.0 : 0.0),
+              duration: PTMotion.functional(context, PTMotion.hover),
+              curve: PTMotion.enter,
+              builder: (context, grow, _) => CustomPaint(
+                painter: _PTSliderPainter(
+                  value: clamped,
+                  trackHeight: widget.trackHeight,
+                  thumbRadius: widget.thumbRadius + 2 * grow,
+                ),
               ),
             ),
           ),

@@ -4,8 +4,10 @@ import 'package:material_symbols_icons/symbols.dart';
 import 'package:playtogether/auth/auth_service.dart';
 import 'package:playtogether/auth/turnstile_dialog.dart';
 import 'package:playtogether/env.dart';
+import 'package:playtogether/ui/banners.dart';
 import 'package:playtogether/ui/buttons.dart';
 import 'package:playtogether/ui/glass.dart';
+import 'package:playtogether/ui/pt_motion.dart';
 import 'package:playtogether/ui/pt_theme.dart';
 import 'package:playtogether/ui/responsive.dart';
 
@@ -27,8 +29,10 @@ class _LoginScreenState extends State<LoginScreen> {
       // Navigation happens via the router's auth redirect.
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Couldn't sign you in — give it another try.")),
+        showPTSnack(
+          context,
+          "Couldn't sign you in — give it another try.",
+          kind: .error,
         );
       }
     } finally {
@@ -71,7 +75,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     const SizedBox(height: 34),
                     _actions(),
                     const SizedBox(height: 26),
-                    const _TermsNote(),
+                    const PTEntrance(delay: Duration(milliseconds: 240), child: _TermsNote()),
                   ],
                 ),
               ),
@@ -90,7 +94,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         children: [
                           _actions(),
                           const SizedBox(height: 14),
-                          const _TermsNote(),
+                          const PTEntrance(delay: Duration(milliseconds: 240), child: _TermsNote()),
                         ],
                       ),
                     ),
@@ -109,7 +113,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   const Spacer(),
                   _actions(buttonHeight: 54),
                   const SizedBox(height: 16),
-                  const _TermsNote(),
+                  const PTEntrance(delay: Duration(milliseconds: 240), child: _TermsNote()),
                   const SizedBox(height: 30),
                 ],
               ),
@@ -121,75 +125,128 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Widget _actions({double buttonHeight = 52}) {
-    return Column(
-      mainAxisSize: .min,
-      children: [
-        GoogleButton(
-          label: 'Continue with Google',
-          loading: _googleLoading,
-          onPressed: _googleLoading || _guestLoading ? null : _signInWithGoogle,
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          child: Row(
-            spacing: 14,
-            children: [
-              Expanded(child: Container(height: 1, color: PTColors.white(0.12))),
-              Text('or', style: PTText.finePrint),
-              Expanded(child: Container(height: 1, color: PTColors.white(0.12))),
-            ],
+    // Staggered after the brand. The glass card around this is deliberately
+    // *not* animated: fading a GlassPanel leaves its BackdropFilter sampling an
+    // empty layer, and the route's own fade-through already covers its arrival.
+    return PTEntrance(
+      delay: const Duration(milliseconds: 180),
+      child: Column(
+        mainAxisSize: .min,
+        children: [
+          GoogleButton(
+            label: 'Continue with Google',
+            loading: _googleLoading,
+            onPressed: _googleLoading || _guestLoading ? null : _signInWithGoogle,
           ),
-        ),
-        PTButton(
-          label: 'Continue as guest',
-          icon: Symbols.person_rounded,
-          variant: .secondary,
-          height: buttonHeight,
-          loading: _guestLoading,
-          onPressed: _googleLoading || _guestLoading ? null : _continueAsGuest,
-        ),
-      ],
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Row(
+              spacing: 14,
+              children: [
+                Expanded(child: Container(height: 1, color: PTColors.white(0.12))),
+                Text('or', style: PTText.finePrint),
+                Expanded(child: Container(height: 1, color: PTColors.white(0.12))),
+              ],
+            ),
+          ),
+          PTButton(
+            label: 'Continue as guest',
+            icon: Symbols.person_rounded,
+            variant: .secondary,
+            height: buttonHeight,
+            loading: _guestLoading,
+            onPressed: _googleLoading || _guestLoading ? null : _continueAsGuest,
+          ),
+        ],
+      ),
     );
   }
 }
 
-class _Brand extends StatelessWidget {
+class _Brand extends StatefulWidget {
   const _Brand({this.large = false});
 
   final bool large;
 
   @override
+  State<_Brand> createState() => _BrandState();
+}
+
+class _BrandState extends State<_Brand> with SingleTickerProviderStateMixin {
+  // The one breathing element on this screen — the lobby's is its greeting.
+  // Isolated behind a RepaintBoundary so a looping shadow can't dirty the rest
+  // of the card every frame.
+  late final AnimationController _breath = AnimationController(
+    vsync: this,
+    duration: const Duration(seconds: 5),
+  );
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (reducedMotion(context)) {
+      _breath.stop();
+      _breath.value = 0;
+    } else if (!_breath.isAnimating) {
+      _breath.repeat(reverse: true);
+    }
+  }
+
+  @override
+  void dispose() {
+    _breath.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final logoSize = large ? 84.0 : 72.0;
+    final logoSize = widget.large ? 84.0 : 72.0;
     return Column(
       mainAxisSize: .min,
       children: [
-        Container(
-          width: logoSize,
-          height: logoSize,
-          decoration: BoxDecoration(
-            gradient: PTColors.brandGradient,
-            borderRadius: BorderRadius.circular(logoSize * 0.3),
-            boxShadow: [
-              BoxShadow(
-                color: PTColors.primary.withValues(alpha: 0.45),
-                blurRadius: 32,
-                offset: const Offset(0, 12),
+        PTEntrance(
+          scaleFrom: 0.9,
+          offset: 0,
+          duration: const Duration(milliseconds: 400),
+          child: RepaintBoundary(
+            child: AnimatedBuilder(
+              animation: _breath,
+              builder: (context, child) => Container(
+                width: logoSize,
+                height: logoSize,
+                decoration: BoxDecoration(
+                  gradient: PTColors.brandGradient,
+                  borderRadius: BorderRadius.circular(logoSize * 0.3),
+                  boxShadow: [
+                    BoxShadow(
+                      color: PTColors.primary.withValues(alpha: 0.45 + 0.1 * _breath.value),
+                      blurRadius: 32 + 8 * _breath.value,
+                      offset: const Offset(0, 12),
+                    ),
+                  ],
+                ),
+                child: child,
               ),
-            ],
+              child: Icon(Icons.play_arrow_rounded, size: logoSize * 0.53, color: Colors.white),
+            ),
           ),
-          child: Icon(Icons.play_arrow_rounded, size: logoSize * 0.53, color: Colors.white),
         ),
-        SizedBox(height: large ? 26 : 22),
-        Text(
-          'PlayTogether',
-          style: PTText.display.copyWith(fontSize: large ? 32 : 30),
+        SizedBox(height: widget.large ? 26 : 22),
+        PTEntrance(
+          delay: const Duration(milliseconds: 60),
+          child: Text(
+            'PlayTogether',
+            style: PTText.display.copyWith(fontSize: widget.large ? 32 : 30),
+          ),
         ),
         const SizedBox(height: 8),
-        Text(
-          'Movie nights with your people,\nperfectly in sync.',
-          textAlign: .center,
-          style: PTText.body.copyWith(color: PTColors.white(0.6)),
+        PTEntrance(
+          delay: const Duration(milliseconds: 120),
+          child: Text(
+            'Movie nights with your people,\nperfectly in sync.',
+            textAlign: .center,
+            style: PTText.body.copyWith(color: PTColors.white(0.6)),
+          ),
         ),
       ],
     );

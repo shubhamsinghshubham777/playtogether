@@ -6,12 +6,15 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:playtogether/auth/auth_service.dart';
+import 'package:playtogether/diagnostics.dart';
 import 'package:playtogether/profile/profile_models.dart';
 import 'package:playtogether/profile/profile_service.dart';
+import 'package:playtogether/ui/banners.dart';
 import 'package:playtogether/ui/buttons.dart';
 import 'package:playtogether/ui/glass.dart';
 import 'package:playtogether/ui/identity.dart';
 import 'package:playtogether/ui/inputs.dart';
+import 'package:playtogether/ui/pt_motion.dart';
 import 'package:playtogether/ui/pt_theme.dart';
 import 'package:playtogether/ui/responsive.dart';
 
@@ -41,7 +44,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     setState(() => _uploadingAvatar = true);
     try {
       await ProfileService.instance.uploadAvatar(await File(path).readAsBytes());
-    } catch (_) {
+    } catch (e, s) {
+      // "Try a different image" is a guess. Storage quota, a bucket policy or a
+      // dead connection all land here, and only the log can tell them apart.
+      reportNonFatal(e, s, during: 'uploading an avatar');
       if (mounted) _snack("Couldn't update your photo — try a different image.");
     } finally {
       if (mounted) setState(() => _uploadingAvatar = false);
@@ -92,7 +98,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (saved == true && name.isNotEmpty && name != profile.displayName) {
       try {
         await ProfileService.instance.updateDisplayName(name);
-      } catch (_) {
+      } catch (e, s) {
+        reportNonFatal(e, s, during: 'saving the display name');
         if (mounted) _snack("Couldn't save that name — give it another try.");
       }
     }
@@ -140,14 +147,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (confirmed == true) {
       try {
         await AuthService.instance.deleteAccount();
-      } catch (_) {
+      } catch (e, s) {
+        // Account deletion has known server-side failure modes (a hosted room
+        // still referencing the user), so the cause is worth keeping.
+        reportNonFatal(e, s, during: 'deleting the account');
         if (mounted) _snack("Couldn't delete the account right now — try again in a bit.");
       }
     }
   }
 
-  void _snack(String message) =>
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  void _snack(String message, {PTSnackKind kind = PTSnackKind.error}) =>
+      showPTSnack(context, message, kind: kind);
 
   @override
   Widget build(BuildContext context) {
@@ -189,7 +199,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   opacity: 0.5,
                   blur: 32,
                   padding: const EdgeInsets.symmetric(horizontal: 46, vertical: 44),
-                  child: profile.isGuest ? _guestBody(profile) : _accountBody(profile, header: .row),
+                  child: profile.isGuest
+                      ? _guestBody(profile)
+                      : _accountBody(profile, header: .row),
                 ),
               ),
             ),
@@ -210,9 +222,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(22, 28, 22, 40),
-              child: profile.isGuest
-                  ? _guestBody(profile)
-                  : _accountBody(profile, header: .column),
+              child: profile.isGuest ? _guestBody(profile) : _accountBody(profile, header: .column),
             ),
           ),
         ],
@@ -396,21 +406,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
               Row(
                 spacing: 12,
                 children: [
-                  const Icon(Symbols.auto_awesome_rounded, size: 24, fill: 1, color: PTColors.textAccent),
+                  const Icon(
+                    Symbols.auto_awesome_rounded,
+                    size: 24,
+                    fill: 1,
+                    color: PTColors.textAccent,
+                  ),
                   Text('Keep your identity', style: PTText.cardHeading.copyWith(fontSize: 16)),
                 ],
               ),
               Text(
                 'Sign in with Google to pick a name and photo, and keep them across '
                 'devices. Your current session carries over.',
-                style: PTText.body.copyWith(fontSize: 13.5, color: PTColors.white(0.65), height: 1.5),
+                style: PTText.body.copyWith(
+                  fontSize: 13.5,
+                  color: PTColors.white(0.65),
+                  height: 1.5,
+                ),
               ),
               GoogleButton(
                 label: 'Sign in with Google',
                 onPressed: () async {
                   try {
                     await AuthService.instance.linkGoogleIdentity();
-                  } catch (_) {
+                  } catch (e, s) {
+                    reportNonFatal(e, s, during: 'linking a Google identity to a guest');
                     if (mounted) _snack("Couldn't start Google sign-in — try again.");
                   }
                 },
@@ -437,19 +457,39 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final avatar = Stack(
       clipBehavior: Clip.none,
       children: [
-        PTAvatar(
-          userId: profile.id,
-          displayName: profile.displayName,
-          avatarUrl: profile.avatarUrl,
-          size: 96,
-          ringColor: PTColors.white(0.15),
+        // A fresh photo scale-pulses itself in — confirmation the user is
+        // already looking at, so no snackbar is needed for the happy path.
+        PTEntrance(
+          key: ValueKey(profile.avatarUrl),
+          offset: 0,
+          scaleFrom: 0.9,
+          fade: false,
+          duration: PTMotion.state,
+          child: PTAvatar(
+            userId: profile.id,
+            displayName: profile.displayName,
+            avatarUrl: profile.avatarUrl,
+            size: 96,
+            ringColor: PTColors.white(0.15),
+          ),
+        ),
+        Positioned.fill(
+          child: IgnorePointer(
+            child: AnimatedOpacity(
+              opacity: _uploadingAvatar ? 1 : 0,
+              duration: PTMotion.functional(context, PTMotion.state),
+              child: const DecoratedBox(
+                decoration: BoxDecoration(color: Color(0x99080710), shape: .circle),
+              ),
+            ),
+          ),
         ),
         Positioned(
           bottom: -2,
           right: -2,
           child: MouseRegion(
             cursor: SystemMouseCursors.click,
-            child: GestureDetector(
+            child: PTPressable(
               onTap: _uploadingAvatar ? null : _pickAvatar,
               child: Container(
                 width: 34,
@@ -459,12 +499,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   shape: .circle,
                   border: Border.all(color: const Color(0xFFA78BFA).withValues(alpha: 0.5)),
                 ),
-                child: _uploadingAvatar
-                    ? const Padding(
-                        padding: EdgeInsets.all(8),
-                        child: CircularProgressIndicator(strokeWidth: 2, color: PTColors.textAccent),
-                      )
-                    : const Icon(Symbols.photo_camera_rounded, size: 17, fill: 1, color: PTColors.textAccent),
+                child: AnimatedSwitcher(
+                  duration: PTMotion.functional(context, PTMotion.state),
+                  switchInCurve: PTMotion.enter,
+                  switchOutCurve: PTMotion.exit,
+                  child: _uploadingAvatar
+                      ? const Padding(
+                          key: ValueKey('uploading'),
+                          padding: EdgeInsets.all(8),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: PTColors.textAccent,
+                          ),
+                        )
+                      : const Icon(
+                          Symbols.photo_camera_rounded,
+                          key: ValueKey('idle'),
+                          size: 17,
+                          fill: 1,
+                          color: PTColors.textAccent,
+                        ),
+                ),
               ),
             ),
           ),
@@ -476,17 +531,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
       crossAxisAlignment: vertical ? .center : .start,
       spacing: 4,
       children: [
-        Text(profile.displayName, style: PTText.screenTitle),
+        AnimatedSwitcher(
+          duration: PTMotion.functional(context, PTMotion.state),
+          switchInCurve: PTMotion.enter,
+          switchOutCurve: PTMotion.exit,
+          child: Text(
+            profile.displayName,
+            key: ValueKey(profile.displayName),
+            style: PTText.screenTitle,
+          ),
+        ),
         Text(sinceLabel, style: PTText.caption.copyWith(fontWeight: .w400)),
       ],
     );
 
     if (vertical) {
-      return Center(
-        child: Column(spacing: 14, children: [avatar, text]),
-      );
+      return Center(child: Column(spacing: 14, children: [avatar, text]));
     }
-    return Row(spacing: 24, children: [avatar, Expanded(child: text)]);
+    return Row(
+      spacing: 24,
+      children: [
+        avatar,
+        Expanded(child: text),
+      ],
+    );
   }
 
   Widget _nameField(Profile profile) {
@@ -542,8 +610,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   String _monthName(int month) => const [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December',
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
   ][month - 1];
 }
 

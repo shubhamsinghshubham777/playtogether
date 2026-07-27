@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
+import 'pt_motion.dart';
 import 'pt_theme.dart';
 
 /// Gradient avatar with the per-user fixed gradient; falls back to the first
@@ -55,7 +58,6 @@ class PTAvatar extends StatelessWidget {
     );
 
     if (presence != null) {
-      final dot = size * 0.29;
       avatar = Stack(
         clipBehavior: Clip.none,
         children: [
@@ -63,20 +65,92 @@ class PTAvatar extends StatelessWidget {
           Positioned(
             bottom: 0,
             right: 0,
-            child: Container(
-              width: dot,
-              height: dot,
-              decoration: BoxDecoration(
-                color: presence! ? PTColors.online : PTColors.away,
-                shape: .circle,
-                border: Border.all(color: PTColors.presenceRing, width: 2),
-              ),
-            ),
+            child: _PresenceDot(online: presence!, size: size * 0.29),
           ),
         ],
       );
     }
     return avatar;
+  }
+}
+
+/// Presence dot with a one-shot ripple when someone comes online. Deliberately
+/// *not* a continuous pulse — eight avatars breathing forever is noise, and it
+/// would keep the vsync awake for the whole session.
+class _PresenceDot extends StatefulWidget {
+  const _PresenceDot({required this.online, required this.size});
+
+  final bool online;
+  final double size;
+
+  @override
+  State<_PresenceDot> createState() => _PresenceDotState();
+}
+
+class _PresenceDotState extends State<_PresenceDot> with SingleTickerProviderStateMixin {
+  late final AnimationController _ripple = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 600),
+  );
+
+  @override
+  void didUpdateWidget(_PresenceDot oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Transition only. Rippling on first mount would fire for every member at
+    // once on room entry, which reads as a glitch rather than an arrival.
+    if (widget.online && !oldWidget.online && !reducedMotion(context)) {
+      _ripple.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _ripple.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final dot = widget.size;
+    return SizedBox.square(
+      dimension: dot,
+      child: Stack(
+        clipBehavior: Clip.none,
+        alignment: .center,
+        children: [
+          AnimatedBuilder(
+            animation: _ripple,
+            builder: (context, _) {
+              if (_ripple.isDismissed || _ripple.isCompleted) {
+                return const SizedBox.shrink();
+              }
+              final t = _ripple.value;
+              return Container(
+                width: dot * (1 + t * 1.6),
+                height: dot * (1 + t * 1.6),
+                decoration: BoxDecoration(
+                  shape: .circle,
+                  border: Border.all(
+                    color: PTColors.online.withValues(alpha: 0.55 * (1 - t)),
+                    width: 1.5,
+                  ),
+                ),
+              );
+            },
+          ),
+          AnimatedContainer(
+            duration: PTMotion.functional(context, PTMotion.state),
+            width: dot,
+            height: dot,
+            decoration: BoxDecoration(
+              color: widget.online ? PTColors.online : PTColors.away,
+              shape: .circle,
+              border: Border.all(color: PTColors.presenceRing, width: 2),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -137,7 +211,10 @@ class PTAvatarStack extends StatelessWidget {
 }
 
 /// Copyable room-code chip: violet tint, JetBrains Mono, copy glyph.
-class RoomCodeChip extends StatelessWidget {
+///
+/// The glyph flips to a tick for a beat after a copy — feedback lands where the
+/// eye already is, which a snackbar at the other end of the screen never does.
+class RoomCodeChip extends StatefulWidget {
   const RoomCodeChip({super.key, required this.code, this.onCopy, this.fontSize = 13});
 
   final String code;
@@ -145,11 +222,35 @@ class RoomCodeChip extends StatelessWidget {
   final double fontSize;
 
   @override
+  State<RoomCodeChip> createState() => _RoomCodeChipState();
+}
+
+class _RoomCodeChipState extends State<RoomCodeChip> {
+  bool _copied = false;
+  Timer? _revert;
+
+  @override
+  void dispose() {
+    _revert?.cancel();
+    super.dispose();
+  }
+
+  void _copy() {
+    widget.onCopy!.call();
+    setState(() => _copied = true);
+    _revert?.cancel();
+    _revert = Timer(const Duration(milliseconds: 1200), () {
+      if (mounted) setState(() => _copied = false);
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final fontSize = widget.fontSize;
     return MouseRegion(
-      cursor: onCopy != null ? SystemMouseCursors.click : MouseCursor.defer,
-      child: GestureDetector(
-        onTap: onCopy,
+      cursor: widget.onCopy != null ? SystemMouseCursors.click : MouseCursor.defer,
+      child: PTPressable(
+        onTap: widget.onCopy == null ? null : _copy,
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
           decoration: BoxDecoration(
@@ -162,7 +263,7 @@ class RoomCodeChip extends StatelessWidget {
             spacing: 8,
             children: [
               Text(
-                code,
+                widget.code,
                 style: TextStyle(
                   fontFamily: PTFonts.mono,
                   fontSize: fontSize,
@@ -171,12 +272,22 @@ class RoomCodeChip extends StatelessWidget {
                   color: PTColors.textAccent,
                 ),
               ),
-              if (onCopy != null)
-                Icon(
-                  Symbols.content_copy_rounded,
-                  size: fontSize + 2,
-                  fill: 1,
-                  color: PTColors.textAccent,
+              if (widget.onCopy != null)
+                AnimatedSwitcher(
+                  duration: PTMotion.functional(context, PTMotion.state),
+                  switchInCurve: PTMotion.enter,
+                  switchOutCurve: PTMotion.exit,
+                  transitionBuilder: (child, animation) => FadeTransition(
+                    opacity: animation,
+                    child: ScaleTransition(scale: animation, child: child),
+                  ),
+                  child: Icon(
+                    _copied ? Symbols.check_rounded : Symbols.content_copy_rounded,
+                    key: ValueKey(_copied),
+                    size: fontSize + 2,
+                    fill: 1,
+                    color: _copied ? PTColors.online : PTColors.textAccent,
+                  ),
                 ),
             ],
           ),
@@ -232,11 +343,7 @@ class GuestBadge extends StatelessWidget {
           Icon(Symbols.lock_rounded, size: 14, fill: 1, color: PTColors.white(0.55)),
           Text(
             label,
-            style: TextStyle(
-              fontFamily: PTFonts.body,
-              fontSize: 12,
-              color: PTColors.white(0.55),
-            ),
+            style: TextStyle(fontFamily: PTFonts.body, fontSize: 12, color: PTColors.white(0.55)),
           ),
         ],
       ),
@@ -244,39 +351,82 @@ class GuestBadge extends StatelessWidget {
   }
 }
 
-/// Unread-count bubble anchored to a corner of its child.
-class UnreadBadge extends StatelessWidget {
+/// Unread-count bubble anchored to a corner of its child. Pops in with the
+/// arrival overshoot and pulses on every increment — the one place in the app
+/// where a message you haven't read needs to interrupt you.
+class UnreadBadge extends StatefulWidget {
   const UnreadBadge({super.key, required this.count, required this.child});
 
   final int count;
   final Widget child;
 
   @override
+  State<UnreadBadge> createState() => _UnreadBadgeState();
+}
+
+class _UnreadBadgeState extends State<UnreadBadge> with SingleTickerProviderStateMixin {
+  late final AnimationController _bump = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 150),
+  );
+
+  @override
+  void didUpdateWidget(UnreadBadge oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Only a rise: clearing the count unmounts the badge, and a bump on the way
+    // out would just be noise behind the opening chat panel.
+    if (widget.count > oldWidget.count && oldWidget.count > 0 && !reducedMotion(context)) {
+      _bump.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _bump.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    if (count <= 0) return child;
+    final count = widget.count;
     return Stack(
       clipBehavior: Clip.none,
       children: [
-        child,
+        widget.child,
         Positioned(
           top: -4,
           right: -4,
-          child: Container(
-            constraints: const BoxConstraints(minWidth: 19),
-            height: 19,
-            padding: const EdgeInsets.symmetric(horizontal: 5),
-            decoration: const BoxDecoration(
-              color: PTColors.primary,
-              borderRadius: BorderRadius.all(Radius.circular(999)),
-            ),
-            alignment: .center,
-            child: Text(
-              count > 99 ? '99+' : '$count',
-              style: const TextStyle(
-                fontFamily: PTFonts.body,
-                fontSize: 11,
-                fontWeight: .w600,
-                color: Colors.white,
+          child: AnimatedScale(
+            scale: count <= 0 ? 0 : 1,
+            duration: PTMotion.functional(context, PTMotion.state),
+            curve: count <= 0 ? PTMotion.exit : PTMotion.arrive,
+            child: ScaleTransition(
+              scale: TweenSequence<double>([
+                TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.15), weight: 1),
+                TweenSequenceItem(tween: Tween(begin: 1.15, end: 1.0), weight: 1),
+              ]).animate(_bump),
+              child: Container(
+                constraints: const BoxConstraints(minWidth: 19),
+                height: 19,
+                padding: const EdgeInsets.symmetric(horizontal: 5),
+                decoration: const BoxDecoration(
+                  color: PTColors.primary,
+                  borderRadius: BorderRadius.all(Radius.circular(999)),
+                ),
+                alignment: .center,
+                child: AnimatedSwitcher(
+                  duration: PTMotion.functional(context, PTMotion.hover),
+                  child: Text(
+                    count > 99 ? '99+' : '$count',
+                    key: ValueKey(count),
+                    style: const TextStyle(
+                      fontFamily: PTFonts.body,
+                      fontSize: 11,
+                      fontWeight: .w600,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
               ),
             ),
           ),
@@ -297,8 +447,10 @@ class TypingDots extends StatefulWidget {
 }
 
 class _TypingDotsState extends State<TypingDots> with SingleTickerProviderStateMixin {
-  late final _controller =
-      AnimationController(vsync: this, duration: const Duration(milliseconds: 900))..repeat();
+  late final _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+  )..repeat();
 
   @override
   void dispose() {

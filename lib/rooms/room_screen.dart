@@ -9,6 +9,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:playtogether/av/livekit_service.dart';
+import 'package:playtogether/diagnostics.dart';
 import 'package:playtogether/platform.dart';
 import 'package:playtogether/player/chooser_dialog.dart';
 import 'package:playtogether/player/mode_selection_dialog.dart';
@@ -28,6 +29,7 @@ import 'package:playtogether/ui/banners.dart';
 import 'package:playtogether/ui/buttons.dart';
 import 'package:playtogether/ui/glass.dart';
 import 'package:playtogether/ui/identity.dart';
+import 'package:playtogether/ui/pt_motion.dart';
 import 'package:playtogether/ui/pt_theme.dart';
 import 'package:playtogether/ui/responsive.dart';
 import 'package:window_manager/window_manager.dart';
@@ -45,8 +47,7 @@ class RoomScreen extends StatefulWidget {
   State<RoomScreen> createState() => _RoomScreenState();
 }
 
-class _RoomScreenState extends State<RoomScreen>
-    with WindowListener, SingleTickerProviderStateMixin {
+class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProviderStateMixin {
   late final controller = VideoController(widget.player);
 
   Room? _room;
@@ -110,6 +111,7 @@ class _RoomScreenState extends State<RoomScreen>
   // it fades so the fade-out actually renders.
   String _actionToastText = '';
   bool _actionToastVisible = false;
+  bool _actionToastArrival = false;
   Timer? _actionToastTimer;
 
   // Floating chat bubbles (last 3) shown over the video while the panel is
@@ -118,6 +120,11 @@ class _RoomScreenState extends State<RoomScreen>
   // on open (where the bubbles instead fade out under the arriving panel).
   final _overlayChat = <ChatMessage>[];
   final _overlayChatTimers = <Timer>{};
+
+  /// Bubbles that have timed out and are playing their exit. They stay in
+  /// [_overlayChat] until the fade finishes — removing them on the timer alone
+  /// is what made them vanish mid-sentence.
+  final _expiringChat = <ChatMessage>{};
 
   // Double-tap skip feedback (touch layouts): -1 flashes the left −10s label,
   // 1 the right +10s, 0 none.
@@ -161,6 +168,37 @@ class _RoomScreenState extends State<RoomScreen>
 
   GateState _gateState = GateState.indeterminate;
 
+  // Readiness-overlay reveal. Driven only by `closed` — `indeterminate` must
+  // render as usable, or the overlay flashes on every room entry. Out is
+  // quicker than in on purpose: the payoff of the gate opening is *seeing the
+  // video*, so don't make people wait for it.
+  late final AnimationController _gateAnim = AnimationController(
+    vsync: this,
+    duration: PTMotion.panel,
+    reverseDuration: PTMotion.state,
+  );
+  late final CurvedAnimation _gateCurve = CurvedAnimation(
+    parent: _gateAnim,
+    curve: PTMotion.enter,
+    reverseCurve: PTMotion.exit,
+  );
+
+  /// The overlay is suppressed until the first source decision lands, so
+  /// clearing that flag is also a gate-visibility edge.
+  void _resolveFirstSource() {
+    setState(() => _awaitingFirstSource = false);
+    _syncGateReveal();
+  }
+
+  void _syncGateReveal() {
+    final shouldShow = _gateState == GateState.closed && !_awaitingFirstSource;
+    if (shouldShow) {
+      _gateAnim.forward();
+    } else {
+      _gateAnim.reverse();
+    }
+  }
+
   // The overflow menu is a Navigator route — a sibling subtree — so setState
   // here can never rebuild it. Everything it shows is pushed through this
   // notifier instead; null means "close now" (the room is over for us).
@@ -185,7 +223,10 @@ class _RoomScreenState extends State<RoomScreen>
     // Bubbles are kept alive (fading) until the panel has fully covered them.
     _chatAnim.addStatusListener((status) {
       if (status == AnimationStatus.completed && _overlayChat.isNotEmpty) {
-        setState(_overlayChat.clear);
+        setState(() {
+          _overlayChat.clear();
+          _expiringChat.clear();
+        });
       }
     });
     _init();
@@ -205,8 +246,7 @@ class _RoomScreenState extends State<RoomScreen>
     // so clearing on the way out would wipe the room being entered.
     await widget.player.stop();
 
-    final profile =
-        ProfileService.instance.profile ?? await ProfileService.instance.load();
+    final profile = ProfileService.instance.profile ?? await ProfileService.instance.load();
     if (profile == null) {
       if (mounted) context.go('/login');
       return;
@@ -219,8 +259,11 @@ class _RoomScreenState extends State<RoomScreen>
     try {
       room = await RoomService.instance.fetchRoom(widget.roomId);
       await RoomService.instance.syncServerTime();
-    } catch (_) {
+    } catch (e, s) {
       loadFailed = true;
+      // The user gets a deliberately vague "check your connection"; the log is
+      // the only place the actual cause (RLS, expiry, network) survives.
+      reportNonFatal(e, s, during: 'loading room ${widget.roomId}');
     }
     if (!mounted) return;
     if (loadFailed) {
@@ -237,16 +280,15 @@ class _RoomScreenState extends State<RoomScreen>
 
     try {
       _members = await RoomService.instance.fetchMembers(widget.roomId);
-    } catch (_) {
+    } catch (e, s) {
+      reportNonFatal(e, s, during: 'loading members of room ${widget.roomId}');
       if (mounted) {
         _snack("Couldn't load the room — check your connection and try again.");
         context.go('/lobby');
       }
       return;
     }
-    final selfMembership = _members
-        .where((m) => m.userId == profile.id)
-        .firstOrNull;
+    final selfMembership = _members.where((m) => m.userId == profile.id).firstOrNull;
     if (selfMembership == null) {
       // RLS would have hidden the room if we weren't a member; defensive.
       if (mounted) context.go('/lobby');
@@ -281,7 +323,10 @@ class _RoomScreenState extends State<RoomScreen>
       sync.remoteActions.listen(_onRemoteAction),
       sync.modeSwitchStream.listen(_onRemoteModeSwitch),
       sync.canonicalMediaStream.listen(_onCanonicalMedia),
-      sync.gateStream.listen((state) => setState(() => _gateState = state)),
+      sync.gateStream.listen((state) {
+        setState(() => _gateState = state);
+        _syncGateReveal();
+      }),
       sync.roomEndedStream.listen((_) => _onRoomEnded()),
       sync.kickedStream.listen((_) => _onKicked()),
       sync.transportLockStream.listen((_) {
@@ -289,7 +334,7 @@ class _RoomScreenState extends State<RoomScreen>
         _publishMenuData();
       }),
       sync.gateResumedStream.listen(
-        (_) => _showActionToast("Everyone's ready — resuming"),
+        (_) => _showActionToast("Everyone's ready — resuming", arrival: true),
       ),
       sync.connectionStream.listen((up) {
         final wasConnected = _connected;
@@ -316,9 +361,7 @@ class _RoomScreenState extends State<RoomScreen>
       widget.player.stream.buffering.listen((buffering) {
         if (_mode == .local) setState(() => _buffering = buffering);
       }),
-      widget.player.stream.volume.listen(
-        (volume) => setState(() => _volume = volume / 100),
-      ),
+      widget.player.stream.volume.listen((volume) => setState(() => _volume = volume / 100)),
     ]);
 
     setState(() {
@@ -332,26 +375,20 @@ class _RoomScreenState extends State<RoomScreen>
     _updateReadiness();
     unawaited(_reloadChatHistory());
 
-    _countdownTimer = Timer.periodic(
-      const Duration(seconds: 1),
-      (_) => _tickCountdown(),
-    );
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (_) => _tickCountdown());
     _tickCountdown();
 
     // If the state-sync window closes with no media, we're first in — ask
     // what to watch.
     _idleSourceTimer = Timer(const Duration(milliseconds: 4500), () {
       if (!mounted) return;
-      setState(() => _awaitingFirstSource = false);
+      _resolveFirstSource();
       if (_ended) return;
       // Members are never auto-prompted for a source — the readiness overlay
       // tells them the host is still choosing.
       if (!(_sync?.isHost ?? false)) return;
-      final hasMedia =
-          widget.player.state.duration != Duration.zero || _youtubeUrl != null;
-      if (!hasMedia &&
-          !_isModeSelectionDialogOpen &&
-          !_isYouTubeUrlDialogOpen) {
+      final hasMedia = widget.player.state.duration != Duration.zero || _youtubeUrl != null;
+      if (!hasMedia && !_isModeSelectionDialogOpen && !_isYouTubeUrlDialogOpen) {
         _showModeSelectionDialog();
       }
     });
@@ -382,6 +419,8 @@ class _RoomScreenState extends State<RoomScreen>
     _menuData.dispose();
     _chatCurve.dispose();
     _chatAnim.dispose();
+    _gateCurve.dispose();
+    _gateAnim.dispose();
     _youtubeController?.dispose();
     _sync?.dispose();
     _av?.dispose();
@@ -402,10 +441,7 @@ class _RoomScreenState extends State<RoomScreen>
       final members = await RoomService.instance.fetchMembers(widget.roomId);
       if (!mounted) return;
       setState(() => _members = members);
-      final selfRole = members
-          .where((m) => m.userId == _sync?.userId)
-          .firstOrNull
-          ?.role;
+      final selfRole = members.where((m) => m.userId == _sync?.userId).firstOrNull?.role;
       if (selfRole != null) {
         final wasHost = _sync?.isHost ?? false;
         _sync?.updateRole(selfRole);
@@ -421,7 +457,12 @@ class _RoomScreenState extends State<RoomScreen>
         }
       }
       _publishMenuData();
-    } catch (_) {}
+    } catch (e, s) {
+      // Presence still landed; only the membership refresh behind it failed.
+      // The cost is a stale roster: a host succession we didn't notice, or a
+      // kick the overflow menu keeps showing.
+      reportNonFatal(e, s, during: 'refreshing members after a presence change');
+    }
   }
 
   /// Republish the overflow menu's snapshot. Cheap and idempotent (nothing
@@ -444,28 +485,24 @@ class _RoomScreenState extends State<RoomScreen>
 
   void _onRemoteAction(RemoteAction action) {
     final name =
-        _present
-            .where((m) => m.userId == action.senderId)
-            .firstOrNull
-            ?.displayName ??
-        _members
-            .where((m) => m.userId == action.senderId)
-            .firstOrNull
-            ?.displayName ??
+        _present.where((m) => m.userId == action.senderId).firstOrNull?.displayName ??
+        _members.where((m) => m.userId == action.senderId).firstOrNull?.displayName ??
         'Someone';
     _showActionToast(switch (action.kind) {
-      RemoteActionKind.seek =>
-        '$name jumped to ${_clock(action.position ?? Duration.zero)}',
+      RemoteActionKind.seek => '$name jumped to ${_clock(action.position ?? Duration.zero)}',
       RemoteActionKind.play => '$name resumed the video',
       RemoteActionKind.pause => '$name paused the video',
     });
   }
 
-  void _showActionToast(String text) {
+  /// [arrival] gets the one overshoot curve in the system — reserved for
+  /// "we're all here" moments, never for routine attribution.
+  void _showActionToast(String text, {bool arrival = false}) {
     if (!mounted) return;
     setState(() {
       _actionToastText = text;
       _actionToastVisible = true;
+      _actionToastArrival = arrival;
     });
     _actionToastTimer?.cancel();
     _actionToastTimer = Timer(const Duration(seconds: 3), () {
@@ -483,12 +520,23 @@ class _RoomScreenState extends State<RoomScreen>
   void _pushOverlayChat(ChatMessage message) {
     setState(() {
       _overlayChat.add(message);
-      if (_overlayChat.length > 3) _overlayChat.removeAt(0);
+      if (_overlayChat.length > 3) _expiringChat.remove(_overlayChat.removeAt(0));
     });
     late final Timer timer;
     timer = Timer(const Duration(seconds: 5), () {
       _overlayChatTimers.remove(timer);
-      if (mounted) setState(() => _overlayChat.remove(message));
+      if (!mounted) return;
+      setState(() => _expiringChat.add(message));
+      late final Timer removal;
+      removal = Timer(PTMotion.state, () {
+        _overlayChatTimers.remove(removal);
+        if (!mounted) return;
+        setState(() {
+          _overlayChat.remove(message);
+          _expiringChat.remove(message);
+        });
+      });
+      _overlayChatTimers.add(removal);
     });
     _overlayChatTimers.add(timer);
   }
@@ -498,6 +546,7 @@ class _RoomScreenState extends State<RoomScreen>
       t.cancel();
     }
     _overlayChatTimers.clear();
+    _expiringChat.clear();
   }
 
   // ---------------------------------------------------------------------------
@@ -509,8 +558,7 @@ class _RoomScreenState extends State<RoomScreen>
   /// Spinner shows only while the player is stalled AND meant to be playing —
   /// a buffer that fills behind a paused frame needs no indicator. YouTube's
   /// state reads `buffering` (not `playing`) mid-stall, so gate it on intent.
-  bool get _showBuffering =>
-      _buffering && (_mode == .youtube ? _ytIntendedPlaying : _playing);
+  bool get _showBuffering => _buffering && (_mode == .youtube ? _ytIntendedPlaying : _playing);
 
   void _remotePlay() {
     if (_mode == .youtube) {
@@ -557,9 +605,7 @@ class _RoomScreenState extends State<RoomScreen>
     if (controller == null) return;
     controller.seekTo(position);
     if (!_ytIntendedPlaying) {
-      _ytEventSuppressUntil = DateTime.now().add(
-        const Duration(milliseconds: 800),
-      );
+      _ytEventSuppressUntil = DateTime.now().add(const Duration(milliseconds: 800));
       controller.pause();
     }
   }
@@ -579,7 +625,7 @@ class _RoomScreenState extends State<RoomScreen>
 
   Future<void> _onRemoteModeSwitch(dynamic event) async {
     if (mounted) {
-      if (_awaitingFirstSource) setState(() => _awaitingFirstSource = false);
+      if (_awaitingFirstSource) _resolveFirstSource();
       // URL dialog sits on top of the source chooser; pop in that order.
       if (_isYouTubeUrlDialogOpen) {
         _urlDialogDismissedRemotely = true;
@@ -602,7 +648,7 @@ class _RoomScreenState extends State<RoomScreen>
   Future<void> _showModeSelectionDialog() async {
     _isModeSelectionDialogOpen = true;
     _updateReadiness();
-    if (_awaitingFirstSource) setState(() => _awaitingFirstSource = false);
+    if (_awaitingFirstSource) _resolveFirstSource();
     final mode = await showGlassDialog<InitialMode>(
       context: context,
       barrierDismissible: false,
@@ -718,9 +764,7 @@ class _RoomScreenState extends State<RoomScreen>
   Future<void> _probeYtDuration(yt.YoutubePlayerController controller) async {
     final gen = ++_ytDurationProbeGen;
     for (var attempt = 0; attempt < 15; attempt++) {
-      if (!mounted ||
-          gen != _ytDurationProbeGen ||
-          _youtubeController != controller) {
+      if (!mounted || gen != _ytDurationProbeGen || _youtubeController != controller) {
         return;
       }
       if (_mode != .youtube || _duration != Duration.zero) return;
@@ -734,10 +778,11 @@ class _RoomScreenState extends State<RoomScreen>
             source:
                 "typeof player !== 'undefined' && player.getDuration ? player.getDuration() : 0",
           );
-        } catch (_) {}
-        if (!mounted ||
-            gen != _ytDurationProbeGen ||
-            _youtubeController != controller) {
+        } catch (_) {
+          // Silent by design, unlike the reported catches elsewhere: this is a
+          // retrying poll, and a throw here just means the webview isn't up yet.
+        }
+        if (!mounted || gen != _ytDurationProbeGen || _youtubeController != controller) {
           return;
         }
         final seconds = switch (result) {
@@ -746,9 +791,7 @@ class _RoomScreenState extends State<RoomScreen>
           _ => 0.0,
         };
         if (seconds > 0) {
-          setState(
-            () => _duration = Duration(milliseconds: (seconds * 1000).round()),
-          );
+          setState(() => _duration = Duration(milliseconds: (seconds * 1000).round()));
           return;
         }
       }
@@ -809,10 +852,7 @@ class _RoomScreenState extends State<RoomScreen>
       if (!_ytIntendedPlaying && !suppressed) {
         _ytIntendedPlaying = true;
         _sync?.broadcastPlay();
-        _sync?.broadcastSeek(
-          controller.value.position,
-          reason: SyncActionReason.transport,
-        );
+        _sync?.broadcastSeek(controller.value.position, reason: SyncActionReason.transport);
       }
     } else if (!isPlaying && _youtubeWasPlaying && state == .paused) {
       _youtubeWasPlaying = false;
@@ -882,17 +922,12 @@ class _RoomScreenState extends State<RoomScreen>
   }
 
   Future<void> _pickVideo() async {
-    const videoTypeGroup = XTypeGroup(
-      label: 'Videos',
-      extensions: ['mp4', 'mkv'],
-    );
+    const videoTypeGroup = XTypeGroup(label: 'Videos', extensions: ['mp4', 'mkv']);
     _isFilePickerOpen = true;
     _updateReadiness();
     final FastFilePickerPath? response;
     try {
-      response = await FastFilePicker.pickFile(
-        acceptedTypeGroups: [videoTypeGroup],
-      );
+      response = await FastFilePicker.pickFile(acceptedTypeGroups: [videoTypeGroup]);
     } finally {
       _isFilePickerOpen = false;
     }
@@ -934,7 +969,9 @@ class _RoomScreenState extends State<RoomScreen>
       duration = await widget.player.stream.duration
           .firstWhere((d) => d != Duration.zero)
           .timeout(const Duration(seconds: 10));
-    } catch (_) {}
+    } catch (_) {
+      // Silent by design: the timeout *is* the fallback path described above.
+    }
     if (!mounted) return;
     await _sync?.broadcastFileInfo(name, duration);
     await _publishCanonicalMedia(
@@ -1007,9 +1044,7 @@ class _RoomScreenState extends State<RoomScreen>
   }
 
   ReadyStatus _computeReadiness() {
-    if (_isModeSelectionDialogOpen ||
-        _isYouTubeUrlDialogOpen ||
-        _isFilePickerOpen) {
+    if (_isModeSelectionDialogOpen || _isYouTubeUrlDialogOpen || _isFilePickerOpen) {
       return .selecting;
     }
     switch (_canonicalMedia.kind) {
@@ -1098,8 +1133,7 @@ class _RoomScreenState extends State<RoomScreen>
   // ---------------------------------------------------------------------------
 
   /// Non-host while the host holds the remote (D10).
-  bool get _transportLocked =>
-      (_sync?.transportLock ?? false) && !(_sync?.isHost ?? false);
+  bool get _transportLocked => (_sync?.transportLock ?? false) && !(_sync?.isHost ?? false);
 
   /// Why the transport can't be used right now, or null when it can.
   /// `indeterminate` deliberately reads as usable: before presence syncs we
@@ -1138,7 +1172,9 @@ class _RoomScreenState extends State<RoomScreen>
       // time, so an already-connected client keeps receiving until it
       // resubscribes. The broadcast is what actually removes them.
       await _sync?.broadcastMemberKicked(member.userId);
-      if (mounted) _snack('Removed ${member.displayName} from the room.');
+      if (mounted) {
+        _snack('Removed ${member.displayName} from the room.', kind: .success);
+      }
     } catch (e) {
       if (mounted) _snack(RoomErrorCode.fromError(e).message);
     }
@@ -1165,15 +1201,11 @@ class _RoomScreenState extends State<RoomScreen>
 
     final others = blockers.where((m) => m.userId != sync?.userId).toList();
     if (others.isEmpty) {
-      return _canonicalMedia.kind == .local
-          ? 'Load $what to join in.'
-          : 'Getting $what ready…';
+      return _canonicalMedia.kind == .local ? 'Load $what to join in.' : 'Getting $what ready…';
     }
     // The wrong-file case only reads well for a single person; past that,
     // "waiting for X and Y to load <name>" covers both situations.
-    if (others.length == 1 &&
-        _canonicalMedia.kind == .local &&
-        others.first.isReady) {
+    if (others.length == 1 && _canonicalMedia.kind == .local && others.first.isReady) {
       final wrong = others.first.loadedFileName ?? 'nothing';
       return 'Waiting for ${others.first.displayName} to pick the right file — '
           'they currently have $wrong.';
@@ -1194,7 +1226,8 @@ class _RoomScreenState extends State<RoomScreen>
   bool _blockTransport() {
     final reason = _transportBlockedReason;
     if (reason == null) return false;
-    _snack(reason);
+    // Informational, not a failure: the gate or the lock is doing its job.
+    _snack(reason, kind: .info);
     return true;
   }
 
@@ -1231,9 +1264,7 @@ class _RoomScreenState extends State<RoomScreen>
     _showControls();
     final clamped = position < Duration.zero
         ? Duration.zero
-        : (_duration != Duration.zero && position > _duration
-              ? _duration
-              : position);
+        : (_duration != Duration.zero && position > _duration ? _duration : position);
     if (_mode == .youtube) {
       if (!_ytReady) return false;
       _ytSeekKeepingPlayState(clamped);
@@ -1292,8 +1323,7 @@ class _RoomScreenState extends State<RoomScreen>
     // space, not toggle playback. Esc hands focus back to player shortcuts.
     final focusedContext = FocusManager.instance.primaryFocus?.context;
     if (focusedContext?.findAncestorStateOfType<EditableTextState>() != null) {
-      if (event is KeyDownEvent &&
-          event.logicalKey == LogicalKeyboardKey.escape) {
+      if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.escape) {
         _shortcutFocus.requestFocus();
         return KeyEventResult.handled;
       }
@@ -1382,20 +1412,30 @@ class _RoomScreenState extends State<RoomScreen>
 
   /// Fades the floating chrome; a pointer resting on it suspends auto-hide,
   /// and any press on it restarts the countdown (touch scrubs).
-  Widget _overlayControls(Widget child) {
+  ///
+  /// [fromTop] chrome drifts up as it goes and bottom chrome drifts down, so
+  /// the controls *retreat* off their edge rather than dissolving in place.
+  Widget _overlayControls(Widget child, {bool fromTop = false}) {
     return IgnorePointer(
       ignoring: !_controlsVisible,
-      child: AnimatedOpacity(
-        opacity: _controlsVisible ? 1 : 0,
-        duration: Durations.medium2,
-        child: MouseRegion(
-          opaque: false,
-          onEnter: (_) => _pointerOverControls = true,
-          onExit: (_) {
-            _pointerOverControls = false;
-            _scheduleControlsHide();
-          },
-          child: Listener(onPointerDown: (_) => _showControls(), child: child),
+      child: AnimatedSlide(
+        // Fractions of the child's own height, so the tall control bar and the
+        // thin top row travel a comparable number of pixels.
+        offset: _controlsVisible ? Offset.zero : Offset(0, fromTop ? -0.3 : 0.12),
+        duration: PTMotion.functional(context, PTMotion.state),
+        curve: _controlsVisible ? PTMotion.enter : PTMotion.exit,
+        child: AnimatedOpacity(
+          opacity: _controlsVisible ? 1 : 0,
+          duration: PTMotion.functional(context, Durations.medium2),
+          child: MouseRegion(
+            opaque: false,
+            onEnter: (_) => _pointerOverControls = true,
+            onExit: (_) {
+              _pointerOverControls = false;
+              _scheduleControlsHide();
+            },
+            child: Listener(onPointerDown: (_) => _showControls(), child: child),
+          ),
         ),
       ),
     );
@@ -1465,47 +1505,72 @@ class _RoomScreenState extends State<RoomScreen>
         child: Column(
           mainAxisSize: .min,
           children: [
-            Container(
-              width: 64,
-              height: 64,
-              decoration: BoxDecoration(
-                color: PTColors.primary.withValues(alpha: 0.18),
-                shape: .circle,
-                border: Border.all(
-                  color: const Color(0xFFA78BFA).withValues(alpha: 0.4),
+            // A slow glow behind the mark, so the room ending reads as
+            // deliberate rather than as something that just stopped.
+            Stack(
+              alignment: .center,
+              children: [
+                PTPulse(
+                  period: const Duration(seconds: 2),
+                  low: 0.18,
+                  high: 0.28,
+                  child: Container(
+                    width: 92,
+                    height: 92,
+                    decoration: const BoxDecoration(color: PTColors.primary, shape: .circle),
+                  ),
                 ),
-              ),
-              child: Icon(
-                icon ?? Symbols.bedtime_rounded,
-                size: 32,
-                fill: 1,
-                color: PTColors.textAccent,
-              ),
+                Container(
+                  width: 64,
+                  height: 64,
+                  decoration: BoxDecoration(
+                    color: PTColors.primary.withValues(alpha: 0.18),
+                    shape: .circle,
+                    border: Border.all(color: const Color(0xFFA78BFA).withValues(alpha: 0.4)),
+                  ),
+                  child: Icon(
+                    icon ?? Symbols.bedtime_rounded,
+                    size: 32,
+                    fill: 1,
+                    color: PTColors.textAccent,
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 18),
-            Text(
-              title ?? "That's a wrap!",
-              style: PTText.screenTitle.copyWith(fontSize: 21),
+            PTEntrance(
+              delay: const Duration(milliseconds: 60),
+              duration: PTMotion.state,
+              offset: 8,
+              child: Text(
+                title ?? "That's a wrap!",
+                style: PTText.screenTitle.copyWith(fontSize: 21),
+              ),
             ),
             const SizedBox(height: 10),
-            Text(
-              body ??
-                  'This room has ended. Head back to the lobby to start another one.',
-              textAlign: .center,
-              style: PTText.body.copyWith(
-                fontSize: 14,
-                color: PTColors.white(0.6),
-                height: 1.5,
+            PTEntrance(
+              delay: const Duration(milliseconds: 100),
+              duration: PTMotion.state,
+              offset: 8,
+              child: Text(
+                body ?? 'This room has ended. Head back to the lobby to start another one.',
+                textAlign: .center,
+                style: PTText.body.copyWith(fontSize: 14, color: PTColors.white(0.6), height: 1.5),
               ),
             ),
             const SizedBox(height: 24),
-            PTButton(
-              label: 'Back to lobby',
-              icon: Symbols.home_rounded,
-              onPressed: () {
-                Navigator.of(dialogContext).pop();
-                context.go('/lobby');
-              },
+            PTEntrance(
+              delay: const Duration(milliseconds: 140),
+              duration: PTMotion.state,
+              offset: 8,
+              child: PTButton(
+                label: 'Back to lobby',
+                icon: Symbols.home_rounded,
+                onPressed: () {
+                  Navigator.of(dialogContext).pop();
+                  context.go('/lobby');
+                },
+              ),
             ),
           ],
         ),
@@ -1516,7 +1581,12 @@ class _RoomScreenState extends State<RoomScreen>
   Future<void> _leaveRoom() async {
     try {
       await RoomService.instance.leaveRoom(widget.roomId);
-    } catch (_) {}
+    } catch (e, s) {
+      // Leave for the lobby regardless — trapping someone in a room they asked
+      // to leave is worse. But the membership is now stranded: it holds a slot
+      // against the 8-member cap and stays eligible for host succession.
+      reportNonFatal(e, s, during: 'leaving room ${widget.roomId}');
+    }
     // Safe here (unlike dispose): this path always lands on the lobby, never
     // straight into another room.
     await widget.player.stop();
@@ -1537,25 +1607,35 @@ class _RoomScreenState extends State<RoomScreen>
   // Misc UI actions
   // ---------------------------------------------------------------------------
 
-  void _snack(String message) {
+  /// Lifted clear of whatever owns the bottom edge in each layout: the floating
+  /// control bar on desktop/landscape, the chat input in portrait. A toast that
+  /// lands on the transport controls hides the thing the message is about.
+  void _snack(String message, {PTSnackKind kind = PTSnackKind.error}) {
     if (!mounted) return;
-    ScaffoldMessenger.of(
+    showPTSnack(
       context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+      message,
+      kind: kind,
+      bottomInset: switch (layoutOf(context)) {
+        .desktop => 180,
+        .landscape => 120,
+        .portrait => 70,
+      },
+    );
   }
 
   void _copyCode() {
     final room = _room;
     if (room == null) return;
     Clipboard.setData(ClipboardData(text: room.code));
-    _snack('Room code copied.');
+    _snack('Room code copied.', kind: .success);
   }
 
   void _copyInvite() {
     final room = _room;
     if (room == null) return;
     Clipboard.setData(ClipboardData(text: room.inviteLink));
-    _snack('Invite link copied — send it to your people.');
+    _snack('Invite link copied — send it to your people.', kind: .success);
   }
 
   void _openChat() {
@@ -1590,7 +1670,12 @@ class _RoomScreenState extends State<RoomScreen>
       final history = await _sync?.loadChatHistory();
       if (history == null || !mounted) return;
       setState(() => _mergeChatHistory(history));
-    } catch (_) {}
+    } catch (e, s) {
+      // Broadcasts don't replay, so this reload is the only way messages sent
+      // while we were disconnected ever arrive — losing it leaves a permanent
+      // hole in the transcript.
+      reportNonFatal(e, s, during: 'reloading chat history after a reconnect');
+    }
   }
 
   /// History rows carry DB timestamps while live broadcasts carry sender-clock
@@ -1618,9 +1703,7 @@ class _RoomScreenState extends State<RoomScreen>
       onEndRoom: _endRoomForEveryone,
       onTransportLockChanged: _setTransportLock,
       onKick: (member) {
-        final present = _present
-            .where((p) => p.userId == member.userId)
-            .firstOrNull;
+        final present = _present.where((p) => p.userId == member.userId).firstOrNull;
         _confirmKick(
           present ??
               PresentMember(
@@ -1646,9 +1729,8 @@ class _RoomScreenState extends State<RoomScreen>
       await _sync?.broadcastTransportLock(room.transportLock);
       if (mounted) {
         _snack(
-          locked
-              ? 'You have the remote now.'
-              : 'Everyone can use the controls again.',
+          locked ? 'You have the remote now.' : 'Everyone can use the controls again.',
+          kind: .info,
         );
       }
     } catch (e) {
@@ -1661,9 +1743,8 @@ class _RoomScreenState extends State<RoomScreen>
     final values = subtitles ? tracks.subtitle : tracks.audio;
     if (values.isEmpty) {
       _snack(
-        subtitles
-            ? 'No subtitle tracks in this video.'
-            : 'No audio tracks in this video.',
+        subtitles ? 'No subtitle tracks in this video.' : 'No audio tracks in this video.',
+        kind: .info,
       );
       return;
     }
@@ -1719,12 +1800,8 @@ class _RoomScreenState extends State<RoomScreen>
     onSkip: _skip,
     onMicToggle: (v) => _av?.setMicEnabled(v),
     onCamToggle: (v) => _av?.setCamEnabled(v),
-    onAudioTracks: _mode == .local
-        ? () => _showTrackChooser(subtitles: false)
-        : null,
-    onSubtitles: _mode == .local
-        ? () => _showTrackChooser(subtitles: true)
-        : null,
+    onAudioTracks: _mode == .local ? () => _showTrackChooser(subtitles: false) : null,
+    onSubtitles: _mode == .local ? () => _showTrackChooser(subtitles: true) : null,
     // D1: only the host chooses what the room watches. Members keep a picker
     // purely to locate their own copy of the canonical file.
     onSwitchSource: (_sync?.isHost ?? false) ? _handleSwitchSource : null,
@@ -1738,14 +1815,11 @@ class _RoomScreenState extends State<RoomScreen>
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator(color: PTColors.primary)),
-      );
-    }
     // The room sits on top of the lobby, so a system back gesture would pop
     // straight out of it — and a bare pop skips leave_room, stranding the
     // membership (member cap, authority election). Route it through _leaveRoom.
+    // PopScope stays outside the loading branch so a back gesture during the
+    // initial fetch is handled too.
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
@@ -1753,15 +1827,28 @@ class _RoomScreenState extends State<RoomScreen>
       },
       child: Scaffold(
         backgroundColor: PTColors.screenBg,
-        body: Focus(
-          focusNode: _shortcutFocus,
-          autofocus: true,
-          onKeyEvent: _handleKeyEvent,
-          child: PTResponsive(
-            desktop: (_) => _desktop(),
-            portrait: (_) => _portrait(),
-            landscape: (_) => _landscape(),
-          ),
+        // Cross-faded so the room *resolves* out of the spinner instead of the
+        // whole layout flashing into place under it.
+        body: AnimatedSwitcher(
+          duration: PTMotion.functional(context, PTMotion.panel),
+          switchInCurve: PTMotion.enter,
+          switchOutCurve: PTMotion.exit,
+          child: _loading
+              ? const Center(
+                  key: ValueKey('loading'),
+                  child: CircularProgressIndicator(color: PTColors.primary),
+                )
+              : Focus(
+                  key: const ValueKey('room'),
+                  focusNode: _shortcutFocus,
+                  autofocus: true,
+                  onKeyEvent: _handleKeyEvent,
+                  child: PTResponsive(
+                    desktop: (_) => _desktop(),
+                    portrait: (_) => _portrait(),
+                    landscape: (_) => _landscape(),
+                  ),
+                ),
         ),
       ),
     );
@@ -1802,9 +1889,7 @@ class _RoomScreenState extends State<RoomScreen>
           Video(
             controller: controller,
             controls: NoVideoControls,
-            subtitleViewConfiguration: const SubtitleViewConfiguration(
-              padding: EdgeInsets.all(32),
-            ),
+            subtitleViewConfiguration: const SubtitleViewConfiguration(padding: EdgeInsets.all(32)),
           ),
         if (_mode == .youtube && _youtubeController != null)
           // The embed is a display surface, not a control surface. Its own
@@ -1838,52 +1923,77 @@ class _RoomScreenState extends State<RoomScreen>
             ),
           ),
         ),
-        if (_showBuffering || _awaitingFirstSource)
-          ColoredBox(
-            color: const Color(0x59000000),
-            child: Center(
-              child: Column(
-                mainAxisSize: .min,
-                children: [
-                  const SizedBox.square(
-                    dimension: 44,
-                    child: CircularProgressIndicator(
-                      color: PTColors.primary,
-                      strokeWidth: 3,
-                    ),
+        // Cross-faded rather than mounted/unmounted: this covers every buffer
+        // stall, not just room entry, and popping a scrim over the video on
+        // each one is the flickeriest thing in the room.
+        AnimatedOpacity(
+          opacity: _showBuffering || _awaitingFirstSource ? 1 : 0,
+          duration: PTMotion.functional(context, PTMotion.panel),
+          // Opacity 0 skips painting but does NOT stop tickers, and this slot
+          // now stays mounted for the whole session so it can fade. Without
+          // TickerMode the spinner would drive a repaint every frame of every
+          // film, forever.
+          child: TickerMode(
+            enabled: _showBuffering || _awaitingFirstSource,
+            child: IgnorePointer(
+              child: ColoredBox(
+                color: const Color(0x59000000),
+                child: Center(
+                  child: Column(
+                    mainAxisSize: .min,
+                    children: [
+                      const SizedBox.square(
+                        dimension: 44,
+                        child: CircularProgressIndicator(color: PTColors.primary, strokeWidth: 3),
+                      ),
+                      if (_awaitingFirstSource) ...[
+                        const SizedBox(height: 18),
+                        Text('Setting up the room…', style: PTText.caption),
+                      ],
+                    ],
                   ),
-                  if (_awaitingFirstSource) ...[
-                    const SizedBox(height: 18),
-                    Text('Setting up the room…', style: PTText.caption),
-                  ],
-                ],
+                ),
               ),
             ),
           ),
+        ),
         // Covers the video only — chat, facecams and the member list stay
-        // interactive while the room waits (D2).
-        if (_gateState == GateState.closed && !_awaitingFirstSource)
-          Positioned.fill(
-            child: ReadinessOverlay(
-              headline: _gateHeadline,
-              members: _present,
-              media: _canonicalMedia,
-              selfId: _sync?.userId ?? '',
-              selfIsHost: _sync?.isHost ?? false,
-              compact: MediaQuery.sizeOf(context).width < 700,
-              onLocateFile: _selfBlocksGate && _canonicalMedia.kind == .local
-                  ? _pickVideo
-                  : null,
-              onKick: _confirmKick,
-            ),
+        // interactive while the room waits (D2). Mounted for as long as the
+        // reveal is non-zero rather than while the gate is shut, so the exit
+        // animation gets to play — and so the roster's entrance stagger fires
+        // when the overlay actually appears, not when the room screen builds.
+        Positioned.fill(
+          child: AnimatedBuilder(
+            animation: _gateCurve,
+            builder: (context, _) {
+              final t = _gateCurve.value;
+              // IgnorePointer even when empty: Positioned.fill hands down tight
+              // constraints, so a bare SizedBox still fills (and blocks) the slot.
+              if (t == 0) return const IgnorePointer(child: SizedBox.shrink());
+              return IgnorePointer(
+                ignoring: _gateAnim.status == AnimationStatus.reverse,
+                child: ReadinessOverlay(
+                  reveal: t,
+                  headline: _gateHeadline,
+                  members: _present,
+                  media: _canonicalMedia,
+                  selfId: _sync?.userId ?? '',
+                  selfIsHost: _sync?.isHost ?? false,
+                  compact: MediaQuery.sizeOf(context).width < 700,
+                  onLocateFile: _selfBlocksGate && _canonicalMedia.kind == .local
+                      ? _pickVideo
+                      : null,
+                  onKick: _confirmKick,
+                ),
+              );
+            },
           ),
+        ),
         if (_skipFlash != 0)
           Positioned.fill(
             child: IgnorePointer(
               child: Align(
-                alignment: _skipFlash < 0
-                    ? const Alignment(-0.55, 0)
-                    : const Alignment(0.55, 0),
+                alignment: _skipFlash < 0 ? const Alignment(-0.55, 0) : const Alignment(0.55, 0),
                 child: _skipFlashBadge(_skipFlash < 0),
               ),
             ),
@@ -1894,31 +2004,49 @@ class _RoomScreenState extends State<RoomScreen>
           right: 0,
           child: IgnorePointer(
             child: Center(
-              child: AnimatedOpacity(
-                opacity: _actionToastVisible ? 1 : 0,
-                duration: Durations.short4,
-                child: GlassPill(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 9,
-                  ),
-                  child: Row(
-                    mainAxisSize: .min,
-                    spacing: 8,
-                    children: [
-                      const Icon(
-                        Symbols.sync_alt_rounded,
-                        size: 16,
-                        color: PTColors.textAccent,
-                      ),
-                      Text(
-                        _actionToastText,
-                        style: PTText.body.copyWith(
-                          fontSize: 13,
-                          color: PTColors.white(0.85),
+              // Drops in from above and rises on the way out. The pill is glass,
+              // so fading it does flatten the blur for the duration — accepted
+              // here because `Opacity` skips painting entirely at zero, which
+              // keeps a dormant BackdropFilter off the playing video.
+              child: AnimatedSlide(
+                offset: _actionToastVisible ? Offset.zero : const Offset(0, -0.4),
+                duration: PTMotion.functional(context, PTMotion.state),
+                curve: !_actionToastVisible
+                    ? PTMotion.exit
+                    : _actionToastArrival
+                    ? PTMotion.arrive
+                    : PTMotion.enter,
+                child: AnimatedOpacity(
+                  opacity: _actionToastVisible ? 1 : 0,
+                  duration: PTMotion.functional(context, PTMotion.state),
+                  child: GlassPill(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+                    child: Row(
+                      mainAxisSize: .min,
+                      spacing: 8,
+                      children: [
+                        const Icon(Symbols.sync_alt_rounded, size: 16, color: PTColors.textAccent),
+                        // A second action landing while the toast is still up
+                        // swaps the line rather than hard-cutting it.
+                        AnimatedSize(
+                          duration: PTMotion.functional(context, PTMotion.state),
+                          curve: PTMotion.enter,
+                          child: AnimatedSwitcher(
+                            duration: PTMotion.functional(context, PTMotion.state),
+                            switchInCurve: PTMotion.enter,
+                            switchOutCurve: PTMotion.exit,
+                            child: Text(
+                              _actionToastText,
+                              key: ValueKey(_actionToastText),
+                              style: PTText.body.copyWith(
+                                fontSize: 13,
+                                color: PTColors.white(0.85),
+                              ),
+                            ),
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -1932,17 +2060,22 @@ class _RoomScreenState extends State<RoomScreen>
   Widget _skipFlashBadge(bool backward) {
     return TweenAnimationBuilder<double>(
       key: ValueKey(_skipFlashTimer),
-      tween: Tween(begin: 1, end: 0),
+      tween: Tween(begin: 0.0, end: 1.0),
       duration: const Duration(milliseconds: 650),
-      curve: Curves.easeIn,
-      builder: (_, t, child) => Opacity(opacity: t, child: child),
+      curve: Curves.linear,
+      // Grows into place over the first quarter, then fades for the rest, so
+      // the ±10 s stamp lands with some weight instead of just appearing.
+      builder: (_, t, child) => Opacity(
+        opacity: 1 - Curves.easeIn.transform(t),
+        child: Transform.scale(
+          scale: 0.85 + 0.15 * PTMotion.enter.transform((t * 4).clamp(0.0, 1.0)),
+          child: child,
+        ),
+      ),
       child: Container(
         width: 84,
         height: 84,
-        decoration: BoxDecoration(
-          color: Colors.black.withValues(alpha: 0.42),
-          shape: .circle,
-        ),
+        decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.42), shape: .circle),
         child: Column(
           mainAxisAlignment: .center,
           spacing: 2,
@@ -1952,10 +2085,7 @@ class _RoomScreenState extends State<RoomScreen>
               size: 32,
               color: Colors.white,
             ),
-            Text(
-              '10s',
-              style: PTText.mono.copyWith(fontSize: 12, color: Colors.white),
-            ),
+            Text('10s', style: PTText.mono.copyWith(fontSize: 12, color: Colors.white)),
           ],
         ),
       ),
@@ -1965,10 +2095,7 @@ class _RoomScreenState extends State<RoomScreen>
   Widget _roomPill({bool compact = false}) {
     final room = _room!;
     return GlassPill(
-      padding: EdgeInsets.symmetric(
-        horizontal: compact ? 14 : 18,
-        vertical: compact ? 8 : 10,
-      ),
+      padding: EdgeInsets.symmetric(horizontal: compact ? 14 : 18, vertical: compact ? 8 : 10),
       child: Row(
         mainAxisSize: .min,
         spacing: compact ? 12 : 16,
@@ -1980,26 +2107,32 @@ class _RoomScreenState extends State<RoomScreen>
               style: PTText.panelHeading.copyWith(fontSize: compact ? 13 : 15),
             ),
           ),
-          RoomCodeChip(
-            code: room.code,
-            onCopy: _copyCode,
-            fontSize: compact ? 11 : 13,
-          ),
+          RoomCodeChip(code: room.code, onCopy: _copyCode, fontSize: compact ? 11 : 13),
+          // Urgency without layout movement — this sits right next to the
+          // video, so nothing here may reflow or jitter.
           Row(
             mainAxisSize: .min,
             spacing: 6,
             children: [
-              Icon(
-                Symbols.schedule_rounded,
-                size: compact ? 13 : 16,
-                color: PTColors.white(0.7),
-              ),
-              Text(
-                _countdownLabel,
-                style: PTText.mono.copyWith(
-                  fontSize: compact ? 11 : 13,
+              PTPulse(
+                enabled: _timeLeft > Duration.zero && _timeLeft <= const Duration(minutes: 1),
+                low: 0.35,
+                child: Icon(
+                  Symbols.schedule_rounded,
+                  size: compact ? 13 : 16,
                   color: PTColors.white(0.7),
                 ),
+              ),
+              AnimatedDefaultTextStyle(
+                duration: PTMotion.functional(context, PTMotion.state),
+                curve: PTMotion.enter,
+                style: PTText.mono.copyWith(
+                  fontSize: compact ? 11 : 13,
+                  color: _timeLeft > Duration.zero && _timeLeft <= const Duration(minutes: 5)
+                      ? PTColors.warning
+                      : PTColors.white(0.7),
+                ),
+                child: Text(_countdownLabel),
               ),
             ],
           ),
@@ -2008,52 +2141,86 @@ class _RoomScreenState extends State<RoomScreen>
     );
   }
 
+  /// Banners, each sliding down into place instead of popping.
+  ///
+  /// The stable `ValueKey`s live on the *wrapper*, not the `PTBanner`: they are
+  /// what stops `_tickCountdown`'s per-second rebuild from restarting the T-5
+  /// auto-dismiss ring, and an unkeyed wrapper would reintroduce that by making
+  /// the list match children positionally again.
   List<Widget> _banners() {
     return [
       if (!_warningDismissed &&
           _timeLeft > Duration.zero &&
           _timeLeft <= const Duration(minutes: 5))
-        PTBanner(
-          // Stable key: _tickCountdown rebuilds this list every second, and
-          // without it the auto-dismiss timer would restart each tick and the
-          // banner would never go away.
+        PTEntrance(
           key: const ValueKey('t5-warning'),
-          autoDismissAfter: const Duration(seconds: 10),
-          kind: .warning,
-          icon: Symbols.timer_rounded,
-          title: () {
-            final mins = (_timeLeft.inSeconds / 60).ceil();
-            return '$mins minute${mins == 1 ? '' : 's'} left';
-          }(),
-          subtitle: 'Time to wrap up — this room ends at $_endsAtLabel.',
-          onDismiss: () => setState(() => _warningDismissed = true),
+          offset: -8,
+          duration: PTMotion.state,
+          child: PTBanner(
+            autoDismissAfter: const Duration(seconds: 10),
+            pulseOnArrival: true,
+            kind: .warning,
+            icon: Symbols.timer_rounded,
+            title: () {
+              final mins = (_timeLeft.inSeconds / 60).ceil();
+              return '$mins minute${mins == 1 ? '' : 's'} left';
+            }(),
+            subtitle: 'Time to wrap up — this room ends at $_endsAtLabel.',
+            onDismiss: () => setState(() => _warningDismissed = true),
+          ),
         ),
       if (!_connected)
-        const PTBanner(
+        const PTEntrance(
           key: ValueKey('reconnecting'),
-          kind: .info,
-          icon: Symbols.sync_rounded,
-          title: 'Reconnecting…',
-          subtitle: 'Hang tight, getting you back in sync.',
+          offset: -8,
+          duration: PTMotion.state,
+          child: PTBanner(
+            kind: .info,
+            icon: Symbols.sync_rounded,
+            spinIcon: true,
+            title: 'Reconnecting…',
+            subtitle: 'Hang tight, getting you back in sync.',
+          ),
         ),
       if (_durationDrifts)
-        PTBanner(
+        PTEntrance(
           key: const ValueKey('duration-drift'),
-          kind: .warning,
-          icon: Symbols.difference_rounded,
-          title: 'Same name, different length',
-          subtitle:
-              'Your copy of ${_roomFile!.name} runs a little different — you might drift apart.',
-          trailing: PTButton(
-            label: 'Pick another',
-            variant: .secondary,
-            height: 38,
-            expand: false,
-            onPressed: _pickVideo,
+          offset: -8,
+          duration: PTMotion.state,
+          child: PTBanner(
+            kind: .warning,
+            icon: Symbols.difference_rounded,
+            title: 'Same name, different length',
+            subtitle:
+                'Your copy of ${_roomFile!.name} runs a little different — you might drift apart.',
+            trailing: PTButton(
+              label: 'Pick another',
+              variant: .secondary,
+              height: 38,
+              expand: false,
+              onPressed: _pickVideo,
+            ),
+            onDismiss: () => setState(() => _mismatchDismissed = true),
           ),
-          onDismiss: () => setState(() => _mismatchDismissed = true),
         ),
     ];
+  }
+
+  /// Collapses to nothing when the last banner goes, so dismissing one doesn't
+  /// yank the layout by a banner height.
+  Widget _bannerStack({required double spacing, EdgeInsets padding = EdgeInsets.zero}) {
+    final banners = _banners();
+    return AnimatedSize(
+      duration: PTMotion.functional(context, PTMotion.state),
+      curve: PTMotion.enter,
+      alignment: .topCenter,
+      child: banners.isEmpty
+          ? const SizedBox.shrink()
+          : Padding(
+              padding: padding,
+              child: Column(spacing: spacing, children: banners),
+            ),
+    );
   }
 
   /// Floating stack of the last few incoming messages, shown while the chat
@@ -2062,30 +2229,38 @@ class _RoomScreenState extends State<RoomScreen>
   /// tap targets that open the panel, and the bare Column/Padding around them
   /// hit-tests children only, so the empty gaps still pass clicks to the video.
   Widget _chatOverlay() {
-    return Column(
-      mainAxisSize: .min,
-      mainAxisAlignment: .end,
-      crossAxisAlignment: .start,
-      children: [
-        for (final message in _overlayChat)
-          Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: TweenAnimationBuilder<double>(
+    return AnimatedSize(
+      duration: PTMotion.functional(context, PTMotion.state),
+      curve: PTMotion.enter,
+      alignment: .bottomLeft,
+      child: Column(
+        mainAxisSize: .min,
+        mainAxisAlignment: .end,
+        crossAxisAlignment: .start,
+        children: [
+          for (final message in _overlayChat)
+            Padding(
+              // Identity lives here, on the Column's direct child, so the
+              // animation wrappers below can't shuffle State between bubbles.
               key: ValueKey(message),
-              tween: Tween(begin: 0, end: 1),
-              duration: Durations.medium2,
-              curve: Curves.easeOut,
-              builder: (_, t, child) => Opacity(
-                opacity: t,
-                child: Transform.translate(
-                  offset: Offset(0, (1 - t) * 8),
-                  child: child,
+              padding: const EdgeInsets.only(top: 8),
+              child: AnimatedSlide(
+                offset: _expiringChat.contains(message) ? const Offset(-0.12, 0) : Offset.zero,
+                duration: PTMotion.functional(context, PTMotion.state),
+                curve: PTMotion.exit,
+                child: AnimatedOpacity(
+                  opacity: _expiringChat.contains(message) ? 0 : 1,
+                  duration: PTMotion.functional(context, PTMotion.state),
+                  child: PTEntrance(
+                    duration: PTMotion.panel,
+                    offset: 8,
+                    child: _overlayBubble(message),
+                  ),
                 ),
               ),
-              child: _overlayBubble(message),
             ),
-          ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -2108,11 +2283,7 @@ class _RoomScreenState extends State<RoomScreen>
       crossAxisAlignment: .end,
       spacing: 8,
       children: [
-        PTAvatar(
-          userId: message.senderId,
-          displayName: message.displayName,
-          size: 26,
-        ),
+        PTAvatar(userId: message.senderId, displayName: message.displayName, size: 26),
         Flexible(
           child: Container(
             constraints: const BoxConstraints(maxWidth: 260),
@@ -2141,10 +2312,7 @@ class _RoomScreenState extends State<RoomScreen>
                     color: PTColors.textAccent,
                   ),
                 ),
-                Text(
-                  message.content,
-                  style: PTText.body.copyWith(fontSize: 13),
-                ),
+                Text(message.content, style: PTText.body.copyWith(fontSize: 13)),
               ],
             ),
           ),
@@ -2169,10 +2337,7 @@ class _RoomScreenState extends State<RoomScreen>
         if (t == 0) return const IgnorePointer(child: SizedBox.shrink());
         return IgnorePointer(
           ignoring: _chatAnim.status == AnimationStatus.reverse,
-          child: Transform.translate(
-            offset: Offset((1 - t) * offscreen, 0),
-            child: child,
-          ),
+          child: Transform.translate(offset: Offset((1 - t) * offscreen, 0), child: child),
         );
       },
     );
@@ -2228,6 +2393,7 @@ class _RoomScreenState extends State<RoomScreen>
             // Expanded (not Flexible+Spacer: they'd split the free space 50/50,
             // stranding the action icons mid-screen) pins the icons to the edge.
             child: _overlayControls(
+              fromTop: true,
               Row(
                 crossAxisAlignment: .start,
                 children: [
@@ -2252,7 +2418,7 @@ class _RoomScreenState extends State<RoomScreen>
             top: 90,
             left: 240,
             right: _chatOpen ? 378 : 240,
-            child: Column(spacing: 12, children: _banners()),
+            child: _bannerStack(spacing: 12),
           ),
           if (_av != null && _camsVisible)
             Positioned(
@@ -2297,12 +2463,7 @@ class _RoomScreenState extends State<RoomScreen>
               ),
             ),
           if (_overlayChat.isNotEmpty)
-            Positioned(
-              left: 24,
-              bottom: 170,
-              width: 340,
-              child: _chatDisplaced(_chatOverlay()),
-            ),
+            Positioned(left: 24, bottom: 170, width: 340, child: _chatDisplaced(_chatOverlay())),
           Positioned(
             bottom: 24,
             left: 0,
@@ -2354,22 +2515,11 @@ class _RoomScreenState extends State<RoomScreen>
                       Row(
                         spacing: 8,
                         children: [
-                          RoomCodeChip(
-                            code: room.code,
-                            onCopy: _copyCode,
-                            fontSize: 11,
-                          ),
-                          Icon(
-                            Symbols.schedule_rounded,
-                            size: 13,
-                            color: PTColors.white(0.6),
-                          ),
+                          RoomCodeChip(code: room.code, onCopy: _copyCode, fontSize: 11),
+                          Icon(Symbols.schedule_rounded, size: 13, color: PTColors.white(0.6)),
                           Text(
                             _countdownLabel,
-                            style: PTText.mono.copyWith(
-                              fontSize: 11,
-                              color: PTColors.white(0.6),
-                            ),
+                            style: PTText.mono.copyWith(fontSize: 11, color: PTColors.white(0.6)),
                           ),
                         ],
                       ),
@@ -2414,18 +2564,12 @@ class _RoomScreenState extends State<RoomScreen>
               compact: true,
             ),
           ),
-          for (final banner in _banners())
-            Padding(
-              padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
-              child: banner,
-            ),
+          _bannerStack(spacing: 10, padding: const EdgeInsets.fromLTRB(14, 10, 14, 0)),
           Expanded(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
               child: ClipRRect(
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(20),
-                ),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
                 child: DecoratedBox(
                   decoration: BoxDecoration(
                     color: const Color(0xFF141022).withValues(alpha: 0.5),
@@ -2470,14 +2614,12 @@ class _RoomScreenState extends State<RoomScreen>
                 left: 0,
                 right: 0,
                 child: _overlayControls(
+                  fromTop: true,
                   Row(
                     crossAxisAlignment: .start,
                     children: [
                       Expanded(
-                        child: Align(
-                          alignment: .topLeft,
-                          child: _roomPill(compact: true),
-                        ),
+                        child: Align(alignment: .topLeft, child: _roomPill(compact: true)),
                       ),
                       const SizedBox(width: 12),
                       _chatToggleButton(),
@@ -2526,19 +2668,9 @@ class _RoomScreenState extends State<RoomScreen>
                     ),
                   ),
                 ),
-              Positioned(
-                top: 66,
-                left: 0,
-                width: 340,
-                child: Column(spacing: 8, children: _banners()),
-              ),
+              Positioned(top: 66, left: 0, width: 340, child: _bannerStack(spacing: 8)),
               if (_overlayChat.isNotEmpty)
-                Positioned(
-                  left: 0,
-                  bottom: 96,
-                  width: 300,
-                  child: _chatDisplaced(_chatOverlay()),
-                ),
+                Positioned(left: 0, bottom: 96, width: 300, child: _chatDisplaced(_chatOverlay())),
               Positioned(
                 bottom: 22,
                 left: 0,

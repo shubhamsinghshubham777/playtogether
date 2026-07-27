@@ -1,7 +1,9 @@
+import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
+import 'pt_motion.dart';
 import 'pt_theme.dart';
 
 /// Glass recipe: bg rgba(22,18,38,.5–.6) · blur(28–32) saturate(160%) ·
@@ -108,47 +110,117 @@ class GlassPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final pill = GlassPanel(radius: 999, opacity: opacity, blur: 24, padding: padding, child: child);
+    final pill = GlassPanel(
+      radius: 999,
+      opacity: opacity,
+      blur: 24,
+      padding: padding,
+      child: child,
+    );
     if (onTap == null) return pill;
+    // Scale, never fade: PTPressable animates a Transform, which leaves the
+    // pill's BackdropFilter sampling a real backdrop.
     return MouseRegion(
       cursor: SystemMouseCursors.click,
-      child: GestureDetector(onTap: onTap, child: pill),
+      child: PTPressable(onTap: onTap, child: pill),
     );
   }
 }
 
 /// Ambient violet glow blobs behind empty screens (Login, Lobby, Profile).
-class AmbientBackground extends StatelessWidget {
+/// Never used in the room — nothing ambient may move near playing video.
+///
+/// The blobs drift along phase-offset elliptical paths with coprime-ish periods
+/// so they never visibly sync up. **Translation only, no scale**: these are
+/// 640–720 px circles under a sigma-45+ blur, and a per-frame scale would
+/// invalidate the raster cache and re-blur them every frame. A pure
+/// `Transform.translate` moves the cached layer instead.
+class AmbientBackground extends StatefulWidget {
   const AmbientBackground({super.key, required this.child});
 
   final Widget child;
 
   @override
+  State<AmbientBackground> createState() => _AmbientBackgroundState();
+}
+
+class _AmbientBackgroundState extends State<AmbientBackground> with SingleTickerProviderStateMixin {
+  // One controller for all three; TickerMode pauses it for free while the
+  // route is offstage, so the lobby stops animating behind an open room.
+  late final AnimationController _drift = AnimationController(
+    vsync: this,
+    duration: PTMotion.ambient,
+  )..repeat();
+
+  @override
+  void dispose() {
+    _drift.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final still = reducedMotion(context);
     return DecoratedBox(
       decoration: const BoxDecoration(color: PTColors.screenBg),
       child: Stack(
         fit: .expand,
         clipBehavior: Clip.hardEdge,
         children: [
-          const Positioned(
+          Positioned(
             top: -180,
             left: -120,
-            child: _GlowBlob(size: 640, color: Color(0x387C3AED), blur: 110),
+            child: _drifting(
+              0,
+              44,
+              30,
+              1.0,
+              still,
+              const _GlowBlob(size: 640, color: Color(0x387C3AED), blur: 110),
+            ),
           ),
-          const Positioned(
+          Positioned(
             bottom: -220,
             right: -100,
-            child: _GlowBlob(size: 720, color: Color(0x24C084FC), blur: 120),
+            child: _drifting(
+              0.37,
+              38,
+              34,
+              0.78,
+              still,
+              const _GlowBlob(size: 720, color: Color(0x24C084FC), blur: 120),
+            ),
           ),
-          const Positioned(
+          Positioned(
             top: 270,
             right: 300,
-            child: _GlowBlob(size: 280, color: Color(0x296366F1), blur: 90),
+            child: _drifting(
+              0.71,
+              30,
+              26,
+              1.31,
+              still,
+              const _GlowBlob(size: 280, color: Color(0x296366F1), blur: 90),
+            ),
           ),
-          child,
+          widget.child,
         ],
       ),
+    );
+  }
+
+  Widget _drifting(double phase, double ampX, double ampY, double rate, bool still, Widget blob) {
+    if (still) return blob;
+    return AnimatedBuilder(
+      animation: _drift,
+      child: RepaintBoundary(child: blob),
+      builder: (context, child) {
+        final t = (_drift.value * rate + phase) * 2 * math.pi;
+        return Transform.translate(
+          offset: Offset(math.sin(t) * ampX, math.cos(t * 0.6) * ampY),
+          child: child,
+        );
+      },
     );
   }
 }
@@ -186,7 +258,7 @@ Future<T?> showGlassDialog<T>({
     barrierDismissible: barrierDismissible,
     barrierLabel: 'dialog',
     barrierColor: const Color(0x8C06050A),
-    transitionDuration: const Duration(milliseconds: 180),
+    transitionDuration: PTMotion.panel,
     pageBuilder: (context, _, _) {
       return Center(
         child: ConstrainedBox(
@@ -202,15 +274,16 @@ Future<T?> showGlassDialog<T>({
       );
     },
     transitionBuilder: (context, animation, _, child) {
-      final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
+      final curved = CurvedAnimation(
+        parent: animation,
+        curve: PTMotion.enter,
+        reverseCurve: PTMotion.exit,
+      );
       return BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 6 * animation.value, sigmaY: 6 * animation.value),
         child: FadeTransition(
           opacity: curved,
-          child: ScaleTransition(
-            scale: Tween(begin: 0.96, end: 1.0).animate(curved),
-            child: child,
-          ),
+          child: ScaleTransition(scale: Tween(begin: 0.96, end: 1.0).animate(curved), child: child),
         ),
       );
     },

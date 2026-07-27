@@ -6,10 +6,12 @@ import 'package:playtogether/auth/auth_service.dart';
 import 'package:playtogether/profile/profile_service.dart';
 import 'package:playtogether/rooms/room_models.dart';
 import 'package:playtogether/rooms/room_service.dart';
+import 'package:playtogether/ui/banners.dart';
 import 'package:playtogether/ui/buttons.dart';
 import 'package:playtogether/ui/glass.dart';
 import 'package:playtogether/ui/identity.dart';
 import 'package:playtogether/ui/inputs.dart';
+import 'package:playtogether/ui/pt_motion.dart';
 import 'package:playtogether/ui/pt_theme.dart';
 import 'package:playtogether/ui/responsive.dart';
 
@@ -27,17 +29,22 @@ class _LobbyScreenState extends State<LobbyScreen> {
   String _code = '';
   bool _creating = false;
   bool _joining = false;
+  int _codeShake = 0;
+
+  /// The entrance choreography is a *first impression*, not a transition.
+  /// Static so coming back from a room is instant familiarity rather than a
+  /// re-performance of the same arrival.
+  static bool _introPlayed = false;
+  late final bool _playIntro = !_introPlayed;
 
   @override
   void initState() {
     super.initState();
+    _introPlayed = true;
     if (ProfileService.instance.profile == null) {
       // Consume the parked invite even if the profile fetch fails — the join
       // itself doesn't need the profile.
-      ProfileService.instance
-          .load()
-          .catchError((_) => null)
-          .whenComplete(_consumePendingJoin);
+      ProfileService.instance.load().catchError((_) => null).whenComplete(_consumePendingJoin);
     } else {
       WidgetsBinding.instance.addPostFrameCallback((_) => _consumePendingJoin());
     }
@@ -89,6 +96,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
   Future<void> _join(String code) async {
     if (code.length != PTCodeInput.length) {
       _snack('Enter the 6-character room code.');
+      setState(() => _codeShake++);
       return;
     }
     setState(() => _joining = true);
@@ -99,14 +107,15 @@ class _LobbyScreenState extends State<LobbyScreen> {
       if (mounted) {
         _snack(RoomErrorCode.fromError(e).message);
         _codeKey.currentState?.clear();
+        setState(() => _codeShake++);
       }
     } finally {
       if (mounted) setState(() => _joining = false);
     }
   }
 
-  void _snack(String message) =>
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  void _snack(String message, {PTSnackKind kind = PTSnackKind.error}) =>
+      showPTSnack(context, message, kind: kind);
 
   Future<void> _showGuestLimitDialog() async {
     final live = await RoomService.instance.fetchLiveHostedRoom();
@@ -120,7 +129,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
           Navigator.of(dialogContext).pop();
           if (live != null) {
             await RoomService.instance.endRoom(live.id);
-            _snack("That's a wrap — your old room has ended.");
+            _snack("That's a wrap — your old room has ended.", kind: .success);
           }
         },
         onRejoin: () {
@@ -176,11 +185,14 @@ class _LobbyScreenState extends State<LobbyScreen> {
             padding: const EdgeInsets.only(top: 36, bottom: 48),
             child: Column(
               children: [
-                const _Greeting(style: PTText.display),
+                _intro(child: const _Greeting(style: PTText.display)),
                 const SizedBox(height: 12),
-                Text(
-                  'Start a room or hop into one your friends made.',
-                  style: PTText.body.copyWith(fontSize: 16, color: PTColors.white(0.55)),
+                _intro(
+                  delay: const Duration(milliseconds: 60),
+                  child: Text(
+                    'Start a room or hop into one your friends made.',
+                    style: PTText.body.copyWith(fontSize: 16, color: PTColors.white(0.55)),
+                  ),
                 ),
                 const SizedBox(height: 52),
                 // IntrinsicHeight: equal-height cards; a bare .stretch Row here
@@ -191,8 +203,14 @@ class _LobbyScreenState extends State<LobbyScreen> {
                     crossAxisAlignment: .stretch,
                     spacing: 28,
                     children: [
-                      SizedBox(width: 430, child: _createCard()),
-                      SizedBox(width: 430, child: _joinCard()),
+                      SizedBox(
+                        width: 430,
+                        child: _createCard(delay: const Duration(milliseconds: 120)),
+                      ),
+                      SizedBox(
+                        width: 430,
+                        child: _joinCard(delay: const Duration(milliseconds: 180)),
+                      ),
                     ],
                   ),
                 ),
@@ -212,23 +230,19 @@ class _LobbyScreenState extends State<LobbyScreen> {
           crossAxisAlignment: .start,
           spacing: 18,
           children: [
-            Row(
-              children: [
-                const _Wordmark(compact: true),
-                const Spacer(),
-                _avatarButton(),
-              ],
-            ),
+            Row(children: [const _Wordmark(compact: true), const Spacer(), _avatarButton()]),
             Padding(
               padding: const EdgeInsets.only(top: 8),
-              child: _Greeting(
-                style: PTText.display.copyWith(fontSize: 26),
-                twoLine: true,
-                align: .centerLeft,
+              child: _intro(
+                child: _Greeting(
+                  style: PTText.display.copyWith(fontSize: 26),
+                  twoLine: true,
+                  align: .centerLeft,
+                ),
               ),
             ),
-            _createCard(compact: true),
-            _joinCard(compact: true),
+            _createCard(compact: true, delay: const Duration(milliseconds: 60)),
+            _joinCard(compact: true, delay: const Duration(milliseconds: 120)),
           ],
         ),
       ),
@@ -258,8 +272,20 @@ class _LobbyScreenState extends State<LobbyScreen> {
                 crossAxisAlignment: .stretch,
                 spacing: 18,
                 children: [
-                  Expanded(child: _createCard(compact: true, scroll: true)),
-                  Expanded(child: _joinCard(compact: true, scroll: true)),
+                  Expanded(
+                    child: _createCard(
+                      compact: true,
+                      scroll: true,
+                      delay: const Duration(milliseconds: 60),
+                    ),
+                  ),
+                  Expanded(
+                    child: _joinCard(
+                      compact: true,
+                      scroll: true,
+                      delay: const Duration(milliseconds: 120),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -307,7 +333,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
     );
   }
 
-  Widget _createCard({bool compact = false, bool scroll = false}) {
+  Widget _createCard({bool compact = false, bool scroll = false, Duration delay = Duration.zero}) {
     final content = Column(
       mainAxisSize: .min,
       crossAxisAlignment: .start,
@@ -328,23 +354,49 @@ class _LobbyScreenState extends State<LobbyScreen> {
               children: [
                 Text('Duration', style: PTText.caption.copyWith(fontSize: compact ? 12 : 13)),
                 const Spacer(),
-                Text(
-                  _durationLabel,
-                  style: PTText.mono.copyWith(fontSize: compact ? 13 : 14, color: PTColors.textAccent),
+                // Ticks over as the slider moves — the label the user is
+                // actually looking at while choosing.
+                AnimatedSwitcher(
+                  duration: PTMotion.functional(context, PTMotion.hover),
+                  switchInCurve: PTMotion.enter,
+                  switchOutCurve: PTMotion.exit,
+                  transitionBuilder: (child, animation) => FadeTransition(
+                    opacity: animation,
+                    child: SlideTransition(
+                      position: Tween(
+                        begin: const Offset(0, 0.35),
+                        end: Offset.zero,
+                      ).animate(animation),
+                      child: child,
+                    ),
+                  ),
+                  child: Text(
+                    _durationLabel,
+                    key: ValueKey(_durationLabel),
+                    style: PTText.mono.copyWith(
+                      fontSize: compact ? 13 : 14,
+                      color: PTColors.textAccent,
+                    ),
+                  ),
                 ),
               ],
             ),
             PTSlider(
               value: (_durationMinutes - 5) / 235,
-              onChanged: (v) =>
-                  setState(() => _durationMinutes = 5 + ((v * 235) / 5).round() * 5),
+              onChanged: (v) => setState(() => _durationMinutes = 5 + ((v * 235) / 5).round() * 5),
             ),
             if (!compact)
               Row(
                 mainAxisAlignment: .spaceBetween,
                 children: [
-                  Text('5 min', style: PTText.mono.copyWith(fontSize: 11, color: PTColors.white(0.35))),
-                  Text('4 hours max', style: PTText.mono.copyWith(fontSize: 11, color: PTColors.white(0.35))),
+                  Text(
+                    '5 min',
+                    style: PTText.mono.copyWith(fontSize: 11, color: PTColors.white(0.35)),
+                  ),
+                  Text(
+                    '4 hours max',
+                    style: PTText.mono.copyWith(fontSize: 11, color: PTColors.white(0.35)),
+                  ),
                 ],
               ),
           ],
@@ -357,10 +409,10 @@ class _LobbyScreenState extends State<LobbyScreen> {
         ),
       ],
     );
-    return _card(content, compact: compact, scroll: scroll);
+    return _card(content, compact: compact, scroll: scroll, delay: delay);
   }
 
-  Widget _joinCard({bool compact = false, bool scroll = false}) {
+  Widget _joinCard({bool compact = false, bool scroll = false, Duration delay = Duration.zero}) {
     final content = Column(
       mainAxisSize: .min,
       crossAxisAlignment: .start,
@@ -377,10 +429,13 @@ class _LobbyScreenState extends State<LobbyScreen> {
           spacing: 8,
           children: [
             if (!compact) Text('Room code', style: PTText.caption),
-            PTCodeInput(
-              key: _codeKey,
-              boxHeight: compact ? 52 : 58,
-              onChanged: (v) => _code = v,
+            PTShake(
+              trigger: _codeShake,
+              child: PTCodeInput(
+                key: _codeKey,
+                boxHeight: compact ? 52 : 58,
+                onChanged: (v) => _code = v,
+              ),
             ),
           ],
         ),
@@ -413,17 +468,33 @@ class _LobbyScreenState extends State<LobbyScreen> {
         ),
       ],
     );
-    return _card(content, compact: compact, scroll: scroll);
+    return _card(content, compact: compact, scroll: scroll, delay: delay);
   }
 
-  Widget _card(Widget content, {required bool compact, required bool scroll}) {
-    return GlassPanel(
-      radius: compact ? 24 : 26,
-      opacity: compact ? 0.55 : 0.5,
-      blur: compact ? 28 : 32,
-      padding: EdgeInsets.all(compact ? 22 : 34),
-      child: scroll ? SingleChildScrollView(child: content) : content,
+  Widget _card(
+    Widget content, {
+    required bool compact,
+    required bool scroll,
+    Duration delay = Duration.zero,
+  }) {
+    return _intro(
+      delay: delay,
+      // fade: false — this is a GlassPanel. An Opacity layer around a
+      // BackdropFilter leaves it sampling an empty layer, so the card would
+      // render flat for the whole entrance and then snap to blurred.
+      fade: false,
+      child: GlassPanel(
+        radius: compact ? 24 : 26,
+        opacity: compact ? 0.55 : 0.5,
+        blur: compact ? 28 : 32,
+        padding: EdgeInsets.all(compact ? 22 : 34),
+        child: scroll ? SingleChildScrollView(child: content) : content,
+      ),
     );
+  }
+
+  Widget _intro({required Widget child, Duration delay = Duration.zero, bool fade = true}) {
+    return PTEntrance(enabled: _playIntro, delay: delay, fade: fade, offset: 14, child: child);
   }
 
   Widget _cardHeader(IconData icon, String title, String subtitle, {required bool compact}) {
@@ -443,7 +514,10 @@ class _LobbyScreenState extends State<LobbyScreen> {
         Column(
           crossAxisAlignment: .start,
           children: [
-            Text(title, style: compact ? PTText.cardHeading.copyWith(fontSize: 17) : PTText.cardHeading),
+            Text(
+              title,
+              style: compact ? PTText.cardHeading.copyWith(fontSize: 17) : PTText.cardHeading,
+            ),
             Text(
               subtitle,
               style: PTText.caption.copyWith(fontSize: compact ? 12 : 13, fontWeight: .w400),
@@ -471,12 +545,19 @@ class _Greeting extends StatelessWidget {
       builder: (context, _) {
         final name = ProfileService.instance.profile?.displayName.split(' ').first ?? 'there';
         return AnimatedSwitcher(
-          duration: const Duration(milliseconds: 180),
+          duration: PTMotion.functional(context, PTMotion.state),
+          switchInCurve: PTMotion.enter,
+          switchOutCurve: PTMotion.exit,
           // Same as the default layout builder, but the stack alignment has to
           // follow the host layout or the outgoing line jumps as it fades.
-          layoutBuilder: (current, previous) => Stack(
-            alignment: align,
-            children: [...previous, if (current != null) current],
+          layoutBuilder: (current, previous) =>
+              Stack(alignment: align, children: [...previous, if (current != null) current]),
+          transitionBuilder: (child, animation) => FadeTransition(
+            opacity: animation,
+            child: SlideTransition(
+              position: Tween(begin: const Offset(0, 0.12), end: Offset.zero).animate(animation),
+              child: child,
+            ),
           ),
           child: Text(
             twoLine ? 'Hey $name,\nready to watch?' : 'Hey $name, ready to watch?',
@@ -518,7 +599,12 @@ class _GuestLimitDialogBody extends StatelessWidget {
                 border: Border.all(color: PTColors.warningBorder.withValues(alpha: 0.3)),
                 borderRadius: BorderRadius.circular(14),
               ),
-              child: const Icon(Symbols.hourglass_top_rounded, size: 24, fill: 1, color: PTColors.warning),
+              child: const Icon(
+                Symbols.hourglass_top_rounded,
+                size: 24,
+                fill: 1,
+                color: PTColors.warning,
+              ),
             ),
             Text('One room at a time', style: PTText.cardHeading),
           ],
@@ -527,7 +613,10 @@ class _GuestLimitDialogBody extends StatelessWidget {
           TextSpan(
             text: 'Guests can host one live room at a time. ',
             children: [
-              TextSpan(text: roomName, style: TextStyle(color: PTColors.white(0.85))),
+              TextSpan(
+                text: roomName,
+                style: TextStyle(color: PTColors.white(0.85)),
+              ),
               const TextSpan(
                 text: ' is still running — end it first, or sign in with Google to host more.',
               ),
@@ -541,9 +630,16 @@ class _GuestLimitDialogBody extends StatelessWidget {
             spacing: 11,
             children: [
               Expanded(
-                child: PTButton(label: 'End that room', variant: .secondary, height: 48, onPressed: onEnd),
+                child: PTButton(
+                  label: 'End that room',
+                  variant: .secondary,
+                  height: 48,
+                  onPressed: onEnd,
+                ),
               ),
-              Expanded(child: PTButton(label: 'Rejoin it', height: 48, onPressed: onRejoin)),
+              Expanded(
+                child: PTButton(label: 'Rejoin it', height: 48, onPressed: onRejoin),
+              ),
             ],
           ),
         ),

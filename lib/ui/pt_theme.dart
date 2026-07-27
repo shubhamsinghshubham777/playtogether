@@ -166,6 +166,9 @@ ThemeData buildPTTheme() {
       overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
     ),
     dividerTheme: DividerThemeData(color: PTColors.white(0.09), thickness: 1, space: 1),
+    // Fallback only — every toast in the app goes through `showPTSnack`, which
+    // supplies its own surface (see banners.dart). This just keeps a bare
+    // `showSnackBar` from any future caller looking foreign.
     snackBarTheme: SnackBarThemeData(
       backgroundColor: PTColors.dialogGlass(0.95),
       contentTextStyle: PTText.body,

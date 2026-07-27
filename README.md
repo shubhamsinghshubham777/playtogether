@@ -1,9 +1,13 @@
+<img src="assets/icon/app_icon_macos.png" width="96" align="left" alt="PlayTogether app icon">
+
 # PlayTogether
 
 Watch stuff together, perfectly in sync. PlayTogether is a Flutter app where you
 create a **room**, share a 6-character code (or a `playtogether://join/<code>`
 invite link), and everyone's playback stays in lockstep — play, pause, and seeks
 broadcast to every member in real time, with chat and live facecams alongside.
+
+<br clear="left">
 
 ## Features
 

@@ -5,6 +5,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import 'package:playtogether/sync/sync_service.dart';
 import 'package:playtogether/ui/glass.dart';
 import 'package:playtogether/ui/identity.dart';
+import 'package:playtogether/ui/pt_motion.dart';
 import 'package:playtogether/ui/pt_theme.dart';
 
 class RoomChatPanel extends StatefulWidget {
@@ -52,10 +53,24 @@ class _RoomChatPanelState extends State<RoomChatPanel> {
   DateTime? _seenLast;
   bool _seenTyping = false;
 
+  /// Messages whose entrance has already played. Required, not an optimisation:
+  /// `itemBuilder` re-runs every time a row scrolls back into view, so a
+  /// one-shot animation keyed only by message identity would replay on every
+  /// scroll. Keyed by *value* rather than object identity so the reconnect
+  /// history merge — which swaps equivalent rows in place — doesn't re-animate
+  /// the entire backlog.
+  final _animated = <String>{};
+
+  static String _keyOf(ChatMessage m) =>
+      '${m.senderId}|${m.sentAt.microsecondsSinceEpoch}|${m.content}';
+
   @override
   void initState() {
     super.initState();
     _snapshot();
+    // Everything already loaded is history: it renders statically, only
+    // messages appended after mount animate in.
+    _animated.addAll(widget.messages.map(_keyOf));
     // The panel mounts with history already loaded (and remounts every time it
     // is reopened), so land on the newest message instead of the top.
     _scrollToBottom(animate: false);
@@ -100,11 +115,7 @@ class _RoomChatPanelState extends State<RoomChatPanel> {
       if (!mounted || !_scrollController.hasClients) return;
       final target = _scrollController.position.maxScrollExtent;
       if (animate) {
-        _scrollController.animateTo(
-          target,
-          duration: Durations.short4,
-          curve: Curves.easeOut,
-        );
+        _scrollController.animateTo(target, duration: Durations.short4, curve: Curves.easeOut);
       } else {
         _scrollController.jumpTo(target);
       }
@@ -174,7 +185,7 @@ class _RoomChatPanelState extends State<RoomChatPanel> {
               if (!widget.embedded)
                 MouseRegion(
                   cursor: SystemMouseCursors.click,
-                  child: GestureDetector(
+                  child: PTPressable(
                     onTap: widget.onClose,
                     child: SizedBox.square(
                       dimension: 34,
@@ -189,15 +200,23 @@ class _RoomChatPanelState extends State<RoomChatPanel> {
           child: ListView.separated(
             controller: _scrollController,
             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-            itemCount: widget.messages.length + (widget.typingNames.isNotEmpty ? 1 : 0),
-            separatorBuilder: (_, _) => const SizedBox(height: 14),
+            // The typing slot is always present so it can collapse rather than
+            // pop; its own gap lives inside it, which is why the separator
+            // before it is suppressed.
+            itemCount: widget.messages.length + 1,
+            separatorBuilder: (_, index) => index == widget.messages.length - 1
+                ? const SizedBox.shrink()
+                : const SizedBox(height: 14),
             itemBuilder: (context, index) {
               if (index == widget.messages.length) {
                 return _typingRow();
               }
               final message = widget.messages[index];
               final own = message.senderId == widget.sync.userId;
-              return own ? _ownBubble(message) : _otherBubble(message);
+              final bubble = own ? _ownBubble(message) : _otherBubble(message);
+              final key = _keyOf(message);
+              if (!_animated.add(key)) return bubble;
+              return PTEntrance(duration: PTMotion.state, offset: 6, child: bubble);
             },
           ),
         ),
@@ -242,8 +261,9 @@ class _RoomChatPanelState extends State<RoomChatPanel> {
               ),
               MouseRegion(
                 cursor: SystemMouseCursors.click,
-                child: GestureDetector(
+                child: PTPressable(
                   onTap: _send,
+                  pressedScale: 0.92,
                   child: Container(
                     width: 42,
                     height: 42,
@@ -286,15 +306,28 @@ class _RoomChatPanelState extends State<RoomChatPanel> {
         : names.length == 2
         ? '${names[0]}, ${names[1]} are typing'
         : 'Several people are typing';
-    return Row(
-      spacing: 8,
-      children: [
-        Text(
-          label,
-          style: PTText.finePrint.copyWith(fontStyle: .italic, color: PTColors.white(0.5)),
-        ),
-        const TypingDots(),
-      ],
+    return AnimatedSize(
+      duration: PTMotion.functional(context, PTMotion.state),
+      curve: PTMotion.enter,
+      alignment: .topLeft,
+      child: names.isEmpty
+          ? const SizedBox(width: double.infinity)
+          : Padding(
+              padding: const EdgeInsets.only(top: 14),
+              child: Row(
+                spacing: 8,
+                children: [
+                  Text(
+                    label,
+                    style: PTText.finePrint.copyWith(
+                      fontStyle: .italic,
+                      color: PTColors.white(0.5),
+                    ),
+                  ),
+                  const TypingDots(),
+                ],
+              ),
+            ),
     );
   }
 

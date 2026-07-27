@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:media_kit/media_kit.dart';
+import 'package:playtogether/diagnostics.dart';
 import 'package:playtogether/profile/profile_models.dart';
 import 'package:playtogether/rooms/room_models.dart';
 import 'package:playtogether/rooms/room_service.dart';
@@ -555,7 +556,11 @@ class SyncService {
           message: content,
         ).toPayload(),
       );
-    } catch (_) {}
+    } catch (e, s) {
+      // The row below still persists it, so the message survives — but nobody
+      // sees it until their next history reload.
+      reportNonFatal(e, s, during: 'broadcasting a chat message');
+    }
     unawaited(() async {
       try {
         await _client.from('messages').insert({
@@ -563,7 +568,12 @@ class SyncService {
           'sender_id': userId,
           'content': content,
         });
-      } catch (_) {}
+      } catch (e, s) {
+        // Worse than a failed broadcast: the message showed up live for
+        // everyone present and then silently ceases to exist, so it is gone
+        // from history after any reconnect and for every later joiner.
+        reportNonFatal(e, s, during: 'persisting a chat message');
+      }
     }());
     return message;
   }
@@ -755,7 +765,12 @@ class SyncService {
       if (_disposed || fresh == null) return;
       _setTransportLock(fresh.transportLock);
       _adoptCanonicalMedia(RoomMedia.fromRoom(fresh));
-    } catch (_) {}
+    } catch (e, s) {
+      // The row is the source of truth for the readiness gate, and this refetch
+      // is what a reconnecting client relies on. Failing it leaves the gate
+      // deciding against stale media.
+      reportNonFatal(e, s, during: 'refetching canonical media for room ${room.id}');
+    }
   }
 
   /// Host only (the RPC enforces it). Adopts locally first because the channel

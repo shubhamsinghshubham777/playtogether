@@ -3,6 +3,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import 'package:playtogether/ui/buttons.dart';
 import 'package:playtogether/ui/glass.dart';
 import 'package:playtogether/ui/inputs.dart';
+import 'package:playtogether/ui/pt_motion.dart';
 import 'package:playtogether/ui/pt_theme.dart';
 
 class RoomControlBarActions {
@@ -28,6 +29,7 @@ class RoomControlBarActions {
   final ValueChanged<bool> onCamToggle;
   final VoidCallback? onAudioTracks;
   final VoidCallback? onSubtitles;
+
   /// Null for members — choosing what the room watches is host-only (D1), and
   /// omitting the callback is how this kit hides an action.
   final VoidCallback? onSwitchSource;
@@ -109,45 +111,70 @@ class _RoomControlBarState extends State<RoomControlBar> {
       blur: 32,
       baseColor: const Color(0xFF141022),
       padding: EdgeInsets.symmetric(horizontal: compact ? 16 : 26, vertical: compact ? 14 : 18),
+      // Two nested columns on purpose: the hint sits *outside* the spaced
+      // column so its collapsed state costs nothing. As a spaced sibling, an
+      // empty hint would still leave a row gap behind it.
       child: Column(
         mainAxisSize: .min,
-        spacing: compact ? 10 : 14,
         children: [
-          Row(
-            spacing: compact ? 10 : 16,
+          Column(
+            mainAxisSize: .min,
+            spacing: compact ? 10 : 14,
             children: [
-              Text(_fmt(shownPosition), style: PTText.mono.copyWith(fontSize: compact ? 11 : 13)),
-              Expanded(
-                child: CompositedTransformTarget(
-                  link: _sliderLink,
-                  child: PTSlider(
-                    value: drag ?? _progress,
-                    trackHeight: compact ? 4 : 5,
-                    thumbRadius: compact ? 6 : 7,
-                    enabled: widget.transportEnabled,
-                    onChanged: (v) => setState(() => _dragValue = v),
-                    onChangeEnd: _endScrub,
-                    onHover: (v) => setState(() => _hoverValue = v),
+              Row(
+                spacing: compact ? 10 : 16,
+                children: [
+                  Text(
+                    _fmt(shownPosition),
+                    style: PTText.mono.copyWith(fontSize: compact ? 11 : 13),
                   ),
-                ),
+                  Expanded(
+                    child: CompositedTransformTarget(
+                      link: _sliderLink,
+                      child: PTSlider(
+                        value: drag ?? _progress,
+                        trackHeight: compact ? 4 : 5,
+                        thumbRadius: compact ? 6 : 7,
+                        enabled: widget.transportEnabled,
+                        onChanged: (v) => setState(() => _dragValue = v),
+                        onChangeEnd: _endScrub,
+                        onHover: (v) => setState(() => _hoverValue = v),
+                      ),
+                    ),
+                  ),
+                  Text(
+                    _fmt(widget.duration),
+                    style: PTText.mono.copyWith(
+                      fontSize: compact ? 11 : 13,
+                      color: PTColors.white(0.5),
+                    ),
+                  ),
+                ],
               ),
-              Text(
-                _fmt(widget.duration),
-                style: PTText.mono.copyWith(fontSize: compact ? 11 : 13, color: PTColors.white(0.5)),
-              ),
+              compact ? _compactRow() : _fullRow(),
             ],
           ),
-          compact ? _compactRow() : _fullRow(),
-          if (!widget.transportEnabled && widget.transportHint != null)
-            Text(
-              widget.transportHint!,
-              textAlign: .center,
-              // Media names get long; the overlay is where the full name is
-              // readable, this is only a nudge.
-              maxLines: 2,
-              overflow: .ellipsis,
-              style: PTText.finePrint.copyWith(color: PTColors.white(0.55)),
-            ),
+          // Grows and collapses rather than appearing: the gate can flap, and
+          // a bar that jumps a row height each time is worse than the hint.
+          AnimatedSize(
+            duration: PTMotion.functional(context, PTMotion.state),
+            curve: PTMotion.enter,
+            alignment: .topCenter,
+            child: !widget.transportEnabled && widget.transportHint != null
+                ? Padding(
+                    padding: EdgeInsets.only(top: compact ? 10 : 14),
+                    child: Text(
+                      widget.transportHint!,
+                      textAlign: .center,
+                      // Media names get long; the overlay is where the full name is
+                      // readable, this is only a nudge.
+                      maxLines: 2,
+                      overflow: .ellipsis,
+                      style: PTText.finePrint.copyWith(color: PTColors.white(0.55)),
+                    ),
+                  )
+                : const SizedBox(width: double.infinity),
+          ),
         ],
       ),
     );
@@ -172,7 +199,16 @@ class _RoomControlBarState extends State<RoomControlBar> {
               offset: Offset(hover * (_sliderLink.leaderSize?.width ?? 0), -8),
               child: FractionalTranslation(
                 translation: const Offset(-0.5, 0),
-                child: IgnorePointer(child: _previewChip(widget.duration * hover)),
+                child: IgnorePointer(
+                  // Rises into place on the first hover. It tracks the cursor
+                  // instantly after that — the follower offset is not animated,
+                  // so the chip never lags the pointer.
+                  child: PTEntrance(
+                    duration: PTMotion.hover,
+                    offset: 6,
+                    child: _previewChip(widget.duration * hover),
+                  ),
+                ),
               ),
             ),
           ),
@@ -188,7 +224,11 @@ class _RoomControlBarState extends State<RoomControlBar> {
         borderRadius: BorderRadius.circular(9),
         border: Border.all(color: PTColors.white(0.14)),
         boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.45), blurRadius: 14, offset: const Offset(0, 5)),
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.45),
+            blurRadius: 14,
+            offset: const Offset(0, 5),
+          ),
         ],
       ),
       child: Text(_fmt(position), style: PTText.mono.copyWith(fontSize: 12)),
@@ -259,6 +299,7 @@ class _RoomControlBarState extends State<RoomControlBar> {
                 icon: Symbols.replay_10_rounded,
                 glass: false,
                 iconSize: 26,
+                spinOnPress: -40,
                 onPressed: widget.transportEnabled
                     ? () => actions.onSkip(const Duration(seconds: -10))
                     : null,
@@ -271,6 +312,7 @@ class _RoomControlBarState extends State<RoomControlBar> {
                 icon: Symbols.forward_10_rounded,
                 glass: false,
                 iconSize: 26,
+                spinOnPress: 40,
                 onPressed: widget.transportEnabled
                     ? () => actions.onSkip(const Duration(seconds: 10))
                     : null,
@@ -369,6 +411,7 @@ class _RoomControlBarState extends State<RoomControlBar> {
                 icon: Symbols.replay_10_rounded,
                 glass: false,
                 iconSize: 24,
+                spinOnPress: -40,
                 onPressed: widget.transportEnabled
                     ? () => actions.onSkip(const Duration(seconds: -10))
                     : null,
@@ -382,6 +425,7 @@ class _RoomControlBarState extends State<RoomControlBar> {
                 icon: Symbols.forward_10_rounded,
                 glass: false,
                 iconSize: 24,
+                spinOnPress: 40,
                 onPressed: widget.transportEnabled
                     ? () => actions.onSkip(const Duration(seconds: 10))
                     : null,

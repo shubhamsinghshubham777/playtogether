@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show AuthChangeEvent;
@@ -12,6 +12,7 @@ import 'profile/profile_service.dart';
 import 'rooms/lobby_screen.dart';
 import 'rooms/room_screen.dart';
 import 'rooms/room_service.dart';
+import 'ui/pt_motion.dart';
 
 /// Profile and rooms are *sub-routes* of the lobby, so the lobby is always the
 /// page beneath them in the navigator stack. That is what makes `go('/lobby')`
@@ -38,27 +39,105 @@ GoRouter buildRouter(Player player) {
       return null;
     },
     routes: [
-      GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
+      GoRoute(
+        path: '/login',
+        pageBuilder: (context, state) => _fadeThrough(state, const LoginScreen()),
+      ),
       GoRoute(
         path: '/lobby',
-        builder: (context, state) => const LobbyScreen(),
+        pageBuilder: (context, state) => _fadeThrough(state, const LobbyScreen()),
         routes: [
-          GoRoute(path: 'profile', builder: (context, state) => const ProfileScreen()),
+          GoRoute(
+            path: 'profile',
+            pageBuilder: (context, state) => _sharedAxis(state, const ProfileScreen()),
+          ),
           GoRoute(
             path: 'room/:id',
             // Keyed by room id: go_router reuses the page for room A → room B
             // (same route pattern), and without the key the old room's State —
             // sync channel, countdown, chat — would survive the navigation.
-            builder: (context, state) => RoomScreen(
-              key: ValueKey(state.pathParameters['id']!),
-              roomId: state.pathParameters['id']!,
-              player: player,
+            pageBuilder: (context, state) => _rise(
+              state,
+              RoomScreen(
+                key: ValueKey(state.pathParameters['id']!),
+                roomId: state.pathParameters['id']!,
+                player: player,
+              ),
             ),
           ),
         ],
       ),
     ],
   );
+}
+
+/// Every transition is fade-dominant and short. The room mounts a media_kit
+/// texture and (in YouTube mode) a platform-view WebView, and heavy transforms
+/// over those jank — so the translate legs stay small and nothing scales.
+///
+/// `key: state.pageKey` is not optional: it is what makes go_router treat a
+/// re-navigation to the same location as the same page rather than a new one.
+CustomTransitionPage<void> _page(
+  GoRouterState state,
+  Widget child,
+  RouteTransitionsBuilder transitions,
+) {
+  return CustomTransitionPage<void>(
+    key: state.pageKey,
+    child: child,
+    transitionDuration: PTMotion.page,
+    reverseTransitionDuration: PTMotion.page,
+    transitionsBuilder: transitions,
+  );
+}
+
+/// Auth swaps the whole world, so login ⇄ lobby reads as a scene change rather
+/// than navigation: no directional slide at all.
+CustomTransitionPage<void> _fadeThrough(GoRouterState state, Widget child) {
+  return _page(state, child, (context, animation, secondary, child) {
+    return FadeTransition(
+      opacity: CurvedAnimation(parent: animation, curve: PTMotion.enter),
+      child: child,
+    );
+  });
+}
+
+/// Entering the theater: the room rises into place, and sinks back down on
+/// every `go('/lobby')` exit — leave, eviction, end-room — because the nested
+/// lobby→room stack makes those genuine pops.
+CustomTransitionPage<void> _rise(GoRouterState state, Widget child) {
+  return _page(state, child, (context, animation, secondary, child) {
+    final curved = CurvedAnimation(
+      parent: animation,
+      curve: PTMotion.enter,
+      reverseCurve: PTMotion.exit,
+    );
+    return FadeTransition(
+      opacity: curved,
+      child: SlideTransition(
+        position: Tween(begin: const Offset(0, 0.035), end: Offset.zero).animate(curved),
+        child: child,
+      ),
+    );
+  });
+}
+
+/// Sibling detail page — a subtle horizontal shared axis.
+CustomTransitionPage<void> _sharedAxis(GoRouterState state, Widget child) {
+  return _page(state, child, (context, animation, secondary, child) {
+    final curved = CurvedAnimation(
+      parent: animation,
+      curve: PTMotion.enter,
+      reverseCurve: PTMotion.exit,
+    );
+    return FadeTransition(
+      opacity: curved,
+      child: SlideTransition(
+        position: Tween(begin: const Offset(0.03, 0), end: Offset.zero).animate(curved),
+        child: child,
+      ),
+    );
+  });
 }
 
 /// Re-runs router redirects on every auth event; also keeps the loaded

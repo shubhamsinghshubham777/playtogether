@@ -5,6 +5,7 @@ import 'package:playtogether/sync/sync_service.dart';
 import 'package:playtogether/ui/buttons.dart';
 import 'package:playtogether/ui/glass.dart';
 import 'package:playtogether/ui/identity.dart';
+import 'package:playtogether/ui/pt_motion.dart';
 import 'package:playtogether/ui/pt_theme.dart';
 
 /// What one member's readiness looks like in the roster.
@@ -35,6 +36,12 @@ class ReadinessChipStyle {
 /// Covers the video surface while the readiness gate is shut. Scoped to the
 /// video only, on purpose (D2): chat, facecams and the member list stay
 /// usable while the room waits.
+///
+/// [reveal] drives the whole in/out animation, 0 → 1. The glass is faded by
+/// tweening `GlassPanel`'s own `opacity`/`blur` arguments rather than by any
+/// enclosing `Opacity`: an opacity layer around a `BackdropFilter` leaves it
+/// sampling an empty layer, so the panel would go flat exactly while it is
+/// most visible. The scrim is a plain colour and animates freely.
 class ReadinessOverlay extends StatelessWidget {
   const ReadinessOverlay({
     super.key,
@@ -46,6 +53,7 @@ class ReadinessOverlay extends StatelessWidget {
     required this.onLocateFile,
     required this.onKick,
     this.compact = false,
+    this.reveal = 1,
   });
 
   final String headline;
@@ -58,88 +66,108 @@ class ReadinessOverlay extends StatelessWidget {
   final VoidCallback? onLocateFile;
   final void Function(PresentMember member)? onKick;
   final bool compact;
+  final double reveal;
 
   @override
   Widget build(BuildContext context) {
+    final t = reveal.clamp(0.0, 1.0);
+    var row = 0;
     return Container(
-      color: const Color(0xB30A0812),
+      color: const Color(0xFF0A0812).withValues(alpha: 0.7 * t),
       alignment: .center,
       padding: EdgeInsets.all(compact ? 16 : 28),
       child: SingleChildScrollView(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 460),
-          child: GlassPanel(
-            radius: compact ? 20 : 24,
-            opacity: 0.72,
-            blur: 34,
-            baseColor: const Color(0xFF141022),
-            borderColor: PTColors.white(0.14),
-            padding: EdgeInsets.all(compact ? 18 : 24),
-            child: Column(
-              mainAxisSize: .min,
-              crossAxisAlignment: .stretch,
-              spacing: compact ? 14 : 18,
-              children: [
-                Row(
-                  crossAxisAlignment: .start,
-                  spacing: 12,
+          child: Transform.scale(
+            scale: 0.96 + 0.04 * t,
+            child: GlassPanel(
+              radius: compact ? 20 : 24,
+              opacity: 0.72 * t,
+              // Never exactly zero: a zero-sigma ImageFilter.blur is degenerate.
+              blur: 6 + 28 * t,
+              baseColor: const Color(0xFF141022),
+              borderColor: PTColors.white(0.14 * t),
+              shadow: false,
+              padding: EdgeInsets.all(compact ? 18 : 24),
+              // Safe to fade: this sits *inside* the panel, above its
+              // BackdropFilter, so no blur is sampling through it.
+              child: Opacity(
+                opacity: t,
+                child: Column(
+                  mainAxisSize: .min,
+                  crossAxisAlignment: .stretch,
+                  spacing: compact ? 14 : 18,
                   children: [
-                    Padding(
-                      padding: const EdgeInsets.only(top: 1),
-                      child: Icon(
-                        Symbols.hourglass_top_rounded,
-                        size: compact ? 19 : 22,
-                        color: PTColors.textAccent,
-                      ),
-                    ),
-                    Expanded(
-                      child: Text(
-                        headline,
-                        // Media names run long ("Movie.2005.1080p.BluRay…"), and
-                        // at the headline size they turn the panel into a wall
-                        // of bold text. Step down once past a sentence or so.
-                        style: PTText.body.copyWith(
-                          fontSize: headline.length > 90
-                              ? (compact ? 13 : 14)
-                              : (compact ? 14.5 : 16),
-                          fontWeight: .w600,
-                          height: 1.4,
+                    Row(
+                      crossAxisAlignment: .start,
+                      spacing: 12,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.only(top: 1),
+                          child: Icon(
+                            Symbols.hourglass_top_rounded,
+                            size: compact ? 19 : 22,
+                            color: PTColors.textAccent,
+                          ),
                         ),
-                      ),
+                        Expanded(
+                          child: Text(
+                            headline,
+                            // Media names run long ("Movie.2005.1080p.BluRay…"), and
+                            // at the headline size they turn the panel into a wall
+                            // of bold text. Step down once past a sentence or so.
+                            style: PTText.body.copyWith(
+                              fontSize: headline.length > 90
+                                  ? (compact ? 13 : 14)
+                                  : (compact ? 14.5 : 16),
+                              fontWeight: .w600,
+                              height: 1.4,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
+                    if (members.isNotEmpty)
+                      Column(
+                        mainAxisSize: .min,
+                        children: [
+                          for (final member in members)
+                            // Watching friends' chips flip green one by one is the
+                            // "we're all here" moment; stagger the roster so it
+                            // assembles rather than appearing whole.
+                            PTEntrance(
+                              delay: Duration(milliseconds: 40 * row++),
+                              offset: 8,
+                              child: _MemberStatusRow(
+                                member: member,
+                                media: media,
+                                isSelf: member.userId == selfId,
+                                compact: compact,
+                                // Reserve the kick column on every row, not just the
+                                // kickable ones, so the status chips share a left
+                                // edge instead of jumping about per row.
+                                reserveKickSlot: selfIsHost,
+                                onKick: selfIsHost && member.userId != selfId && !member.isHost
+                                    ? () => onKick?.call(member)
+                                    : null,
+                              ),
+                            ),
+                        ],
+                      ),
+                    if (onLocateFile != null)
+                      PTButton(
+                        // Just the action — the headline directly above already
+                        // names the file, and release names are long enough to
+                        // swamp the panel if repeated here.
+                        label: 'Locate your copy',
+                        icon: Symbols.folder_open_rounded,
+                        expand: true,
+                        onPressed: onLocateFile,
+                      ),
                   ],
                 ),
-                if (members.isNotEmpty)
-                  Column(
-                    mainAxisSize: .min,
-                    children: [
-                      for (final member in members)
-                        _MemberStatusRow(
-                          member: member,
-                          media: media,
-                          isSelf: member.userId == selfId,
-                          compact: compact,
-                          // Reserve the kick column on every row, not just the
-                          // kickable ones, so the status chips share a left
-                          // edge instead of jumping about per row.
-                          reserveKickSlot: selfIsHost,
-                          onKick: selfIsHost && member.userId != selfId && !member.isHost
-                              ? () => onKick?.call(member)
-                              : null,
-                        ),
-                    ],
-                  ),
-                if (onLocateFile != null)
-                  PTButton(
-                    // Just the action — the headline directly above already
-                    // names the file, and release names are long enough to
-                    // swamp the panel if repeated here.
-                    label: 'Locate your copy',
-                    icon: Symbols.folder_open_rounded,
-                    expand: true,
-                    onPressed: onLocateFile,
-                  ),
-              ],
+              ),
             ),
           ),
         ),
@@ -204,19 +232,7 @@ class _MemberStatusRow extends StatelessWidget {
             width: compact ? 128 : 156,
             child: Align(
               alignment: .centerLeft,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-                decoration: BoxDecoration(
-                  color: status.color.withValues(alpha: 0.13),
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(color: status.color.withValues(alpha: 0.3)),
-                ),
-                child: Text(
-                  status.label,
-                  overflow: .ellipsis,
-                  style: PTText.finePrint.copyWith(color: status.color, fontWeight: .w500),
-                ),
-              ),
+              child: _StatusChip(status: status),
             ),
           ),
           if (onKick != null)
@@ -231,6 +247,48 @@ class _MemberStatusRow extends StatelessWidget {
           else if (reserveKickSlot)
             const SizedBox(width: _kickSlot),
         ],
+      ),
+    );
+  }
+}
+
+/// Loading → Ready → Wrong file, animated. The tint crossfades with
+/// `AnimatedContainer` while the label swaps through an `AnimatedSwitcher`, so
+/// a member going green reads as a change of state rather than a redraw.
+/// The chip's width is fixed by its parent, so nothing reflows as labels swap.
+class _StatusChip extends StatelessWidget {
+  const _StatusChip({required this.status});
+
+  final ReadinessChipStyle status;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: PTMotion.functional(context, PTMotion.state),
+      curve: PTMotion.enter,
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+      decoration: BoxDecoration(
+        color: status.color.withValues(alpha: 0.13),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: status.color.withValues(alpha: 0.3)),
+      ),
+      child: AnimatedSwitcher(
+        duration: PTMotion.functional(context, PTMotion.state),
+        switchInCurve: PTMotion.enter,
+        switchOutCurve: PTMotion.exit,
+        transitionBuilder: (child, animation) => FadeTransition(
+          opacity: animation,
+          child: SlideTransition(
+            position: Tween(begin: const Offset(0, 0.4), end: Offset.zero).animate(animation),
+            child: child,
+          ),
+        ),
+        child: Text(
+          status.label,
+          key: ValueKey(status.label),
+          overflow: .ellipsis,
+          style: PTText.finePrint.copyWith(color: status.color, fontWeight: .w500),
+        ),
       ),
     );
   }

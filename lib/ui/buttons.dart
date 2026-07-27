@@ -1,6 +1,9 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import 'glass.dart';
+import 'pt_motion.dart';
 import 'pt_theme.dart';
 
 enum PTButtonVariant { primary, secondary, destructive }
@@ -38,8 +41,12 @@ class _PTButtonState extends State<PTButton> {
   Widget build(BuildContext context) {
     final enabled = widget.onPressed != null && !widget.loading;
 
-    final (Gradient? gradient, Color? color, Border? border, Color foreground) = switch (widget
-        .variant) {
+    final (
+      Gradient? gradient,
+      Color? color,
+      Border? border,
+      Color foreground,
+    ) = switch (widget.variant) {
       PTButtonVariant.primary => (PTColors.buttonGradient, null, null, Colors.white),
       PTButtonVariant.secondary => (
         null,
@@ -68,29 +75,37 @@ class _PTButtonState extends State<PTButton> {
       ),
     );
 
-    final content = widget.loading
-        ? SizedBox.square(
-            dimension: 20,
-            child: CircularProgressIndicator(strokeWidth: 2.4, color: foreground),
-          )
-        : Row(
-            mainAxisSize: .min,
-            mainAxisAlignment: .center,
-            spacing: 10,
-            children: [
-              if (widget.icon != null) Icon(widget.icon, size: 19, color: foreground),
-              Flexible(child: label),
-              if (widget.trailingIcon != null)
-                Icon(widget.trailingIcon, size: 19, color: foreground),
-            ],
-          );
+    final content = AnimatedSwitcher(
+      duration: PTMotion.functional(context, PTMotion.state),
+      switchInCurve: PTMotion.enter,
+      switchOutCurve: PTMotion.exit,
+      child: widget.loading
+          ? SizedBox.square(
+              key: const ValueKey('loading'),
+              dimension: 20,
+              child: CircularProgressIndicator(strokeWidth: 2.4, color: foreground),
+            )
+          : Row(
+              key: const ValueKey('label'),
+              mainAxisSize: .min,
+              mainAxisAlignment: .center,
+              spacing: 10,
+              children: [
+                if (widget.icon != null) Icon(widget.icon, size: 19, color: foreground),
+                Flexible(child: label),
+                if (widget.trailingIcon != null)
+                  Icon(widget.trailingIcon, size: 19, color: foreground),
+              ],
+            ),
+    );
 
     return MouseRegion(
       cursor: enabled ? SystemMouseCursors.click : MouseCursor.defer,
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
-      child: GestureDetector(
-        onTap: enabled ? widget.onPressed : null,
+      child: PTPressable(
+        enabled: enabled,
+        onTap: widget.onPressed,
         child: AnimatedOpacity(
           duration: Durations.short2,
           opacity: enabled || widget.loading ? 1 : 0.45,
@@ -141,6 +156,7 @@ class PTIconButton extends StatefulWidget {
     this.glass = true,
     this.color,
     this.borderRadius,
+    this.spinOnPress = 0,
   });
 
   final IconData icon;
@@ -157,12 +173,29 @@ class PTIconButton extends StatefulWidget {
   final Color? color;
   final BorderRadius? borderRadius;
 
+  /// Degrees the glyph swings and springs back on tap — signed, so the ∓10 s
+  /// skip buttons confirm their direction the way the flash badge does.
+  final double spinOnPress;
+
   @override
   State<PTIconButton> createState() => _PTIconButtonState();
 }
 
-class _PTIconButtonState extends State<PTIconButton> {
+class _PTIconButtonState extends State<PTIconButton> with SingleTickerProviderStateMixin {
   bool _hovered = false;
+
+  late final AnimationController _spin = AnimationController(vsync: this, duration: PTMotion.state);
+
+  @override
+  void dispose() {
+    _spin.dispose();
+    super.dispose();
+  }
+
+  void _handleTap() {
+    if (widget.spinOnPress != 0 && !reducedMotion(context)) _spin.forward(from: 0);
+    widget.onPressed!.call();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -185,22 +218,39 @@ class _PTIconButtonState extends State<PTIconButton> {
             borderRadius: radius,
           );
 
+    final iconColor =
+        widget.color ?? (widget.active ? const Color(0xFFE9DCFF) : PTColors.white(0.85));
+    // Keyed by glyph so every icon swap in the kit — volume_up ⇄ volume_off,
+    // mic on/off, chat open/closed — cross-fades instead of snapping.
+    Widget glyph = AnimatedSwitcher(
+      duration: PTMotion.functional(context, PTMotion.hover),
+      child: Icon(widget.icon, key: ValueKey(widget.icon), size: widget.iconSize, color: iconColor),
+    );
+
+    if (widget.spinOnPress != 0) {
+      final radians = widget.spinOnPress * math.pi / 180;
+      glyph = AnimatedBuilder(
+        animation: _spin,
+        child: glyph,
+        // Out and back within the one controller: sin() peaks at the midpoint
+        // and lands exactly on zero, so the glyph never rests off-axis.
+        builder: (context, child) =>
+            Transform.rotate(angle: radians * math.sin(_spin.value * math.pi), child: child),
+      );
+    }
+
     Widget button = MouseRegion(
       cursor: widget.onPressed != null ? SystemMouseCursors.click : MouseCursor.defer,
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
-      child: GestureDetector(
-        onTap: widget.onPressed,
+      child: PTPressable(
+        onTap: widget.onPressed == null ? null : _handleTap,
         child: AnimatedContainer(
-          duration: Durations.short2,
+          duration: PTMotion.functional(context, PTMotion.hover),
           width: widget.size,
           height: widget.size,
           decoration: decoration,
-          child: Icon(
-            widget.icon,
-            size: widget.iconSize,
-            color: widget.color ?? (widget.active ? const Color(0xFFE9DCFF) : PTColors.white(0.85)),
-          ),
+          child: glyph,
         ),
       ),
     );
@@ -214,12 +264,7 @@ class _PTIconButtonState extends State<PTIconButton> {
 
 /// The 58px gradient play/pause button.
 class PTPlayButton extends StatelessWidget {
-  const PTPlayButton({
-    super.key,
-    required this.playing,
-    required this.onPressed,
-    this.size = 58,
-  });
+  const PTPlayButton({super.key, required this.playing, required this.onPressed, this.size = 58});
 
   final bool playing;
 
@@ -232,10 +277,12 @@ class PTPlayButton extends StatelessWidget {
     final enabled = onPressed != null;
     return MouseRegion(
       cursor: enabled ? SystemMouseCursors.click : MouseCursor.defer,
-      child: GestureDetector(
+      child: PTPressable(
+        enabled: enabled,
         onTap: onPressed,
+        pressedScale: 0.93,
         child: AnimatedOpacity(
-          duration: Durations.short2,
+          duration: PTMotion.functional(context, PTMotion.hover),
           opacity: enabled ? 1 : 0.45,
           child: Container(
             width: size,
@@ -251,10 +298,26 @@ class PTPlayButton extends StatelessWidget {
                 ),
               ],
             ),
-            child: Icon(
-              playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
-              size: size * 0.55,
-              color: Colors.white,
+            // Cross-faded rather than an AnimatedIcon: AnimatedIcons.play_pause
+            // draws Material's *sharp* glyphs, which read as a foreign icon set
+            // next to the rounded family this app uses everywhere else.
+            child: AnimatedSwitcher(
+              duration: PTMotion.functional(context, PTMotion.state),
+              switchInCurve: PTMotion.enter,
+              switchOutCurve: PTMotion.exit,
+              transitionBuilder: (child, animation) => FadeTransition(
+                opacity: animation,
+                child: ScaleTransition(
+                  scale: Tween(begin: 0.75, end: 1.0).animate(animation),
+                  child: child,
+                ),
+              ),
+              child: Icon(
+                playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                key: ValueKey(playing),
+                size: size * 0.55,
+                color: Colors.white,
+              ),
             ),
           ),
         ),
@@ -285,31 +348,40 @@ class _GoogleButtonState extends State<GoogleButton> {
       cursor: enabled ? SystemMouseCursors.click : MouseCursor.defer,
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
-      child: GestureDetector(
-        onTap: enabled ? widget.onPressed : null,
-        child: Container(
+      child: PTPressable(
+        enabled: enabled,
+        onTap: widget.onPressed,
+        child: AnimatedContainer(
+          duration: PTMotion.functional(context, PTMotion.hover),
           height: 52,
           alignment: .center,
           decoration: BoxDecoration(
             color: Colors.white.withValues(alpha: _hovered && enabled ? 1 : 0.92),
             borderRadius: BorderRadius.circular(16),
           ),
-          child: widget.loading
-              ? const SizedBox.square(
-                  dimension: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2.4, color: Color(0xFF1A1625)),
-                )
-              : Row(
-                  mainAxisSize: .min,
-                  spacing: 12,
-                  children: [
-                    const _GoogleMark(),
-                    Text(
-                      widget.label,
-                      style: PTText.buttonLabel.copyWith(color: const Color(0xFF1A1625)),
-                    ),
-                  ],
-                ),
+          child: AnimatedSwitcher(
+            duration: PTMotion.functional(context, PTMotion.state),
+            switchInCurve: PTMotion.enter,
+            switchOutCurve: PTMotion.exit,
+            child: widget.loading
+                ? const SizedBox.square(
+                    key: ValueKey('loading'),
+                    dimension: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2.4, color: Color(0xFF1A1625)),
+                  )
+                : Row(
+                    key: const ValueKey('label'),
+                    mainAxisSize: .min,
+                    spacing: 12,
+                    children: [
+                      const _GoogleMark(),
+                      Text(
+                        widget.label,
+                        style: PTText.buttonLabel.copyWith(color: const Color(0xFF1A1625)),
+                      ),
+                    ],
+                  ),
+          ),
         ),
       ),
     );

@@ -6,10 +6,12 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:playtogether/app_router.dart';
 import 'package:playtogether/auth/auth_service.dart';
+import 'package:playtogether/diagnostics.dart';
 import 'package:playtogether/env.dart';
 import 'package:playtogether/platform.dart';
 import 'package:playtogether/rooms/room_models.dart';
 import 'package:playtogether/rooms/room_service.dart';
+import 'package:playtogether/ui/banners.dart';
 import 'package:playtogether/ui/pt_theme.dart';
 import 'package:playtogether/ui/responsive.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -87,12 +89,20 @@ class _MainAppState extends State<MainApp> {
       if (currentId != null && currentId.isNotEmpty && currentId != room.id) {
         try {
           await RoomService.instance.leaveRoom(currentId);
-        } catch (_) {}
+        } catch (e, s) {
+          // Still navigate — the invite is what the user asked for. But the old
+          // membership row survives, and it keeps counting against that room's
+          // 8-member cap and its authority election until expiry.
+          reportNonFatal(e, s, during: 'leaving room $currentId after an invite');
+        }
       }
       router.go(roomPath(room.id));
     } catch (e) {
-      final message = RoomErrorCode.fromError(e).message;
-      _scaffoldMessengerKey.currentState?.showSnackBar(SnackBar(content: Text(message)));
+      showPTSnackVia(
+        _scaffoldMessengerKey.currentState,
+        RoomErrorCode.fromError(e).message,
+        kind: .error,
+      );
     }
   }
 

@@ -7,6 +7,7 @@ import 'package:playtogether/sync/sync_service.dart';
 import 'package:playtogether/ui/buttons.dart';
 import 'package:playtogether/ui/glass.dart';
 import 'package:playtogether/ui/identity.dart';
+import 'package:playtogether/ui/pt_motion.dart';
 import 'package:playtogether/ui/pt_theme.dart';
 
 /// Everything the overflow menu renders, as one snapshot.
@@ -46,8 +47,7 @@ class RoomMenuData {
   /// ready" can never disagree.
   Set<String> get onlineIds => {for (final m in present) m.userId};
 
-  PresentMember? presenceOf(String userId) =>
-      present.where((p) => p.userId == userId).firstOrNull;
+  PresentMember? presenceOf(String userId) => present.where((p) => p.userId == userId).firstOrNull;
 }
 
 /// Anchored top-right glass menu: member list (presence + Host badge) and
@@ -210,10 +210,7 @@ class _OverflowMenuPanelState extends State<_OverflowMenuPanel> {
                       isSelf: member.userId == data.selfId,
                       media: data.media,
                       presence: data.presenceOf(member.userId),
-                      onKick:
-                          data.selfIsHost &&
-                              member.userId != data.selfId &&
-                              !member.isHost
+                      onKick: data.selfIsHost && member.userId != data.selfId && !member.isHost
                           ? () => _dismiss(() => widget.onKick(member))
                           : null,
                     ),
@@ -242,18 +239,11 @@ class _OverflowMenuPanelState extends State<_OverflowMenuPanel> {
                   ),
                   if (data.selfIsHost)
                     _ActionRow(
-                      icon: data.transportLock
-                          ? Symbols.lock_rounded
-                          : Symbols.lock_open_rounded,
-                      iconColor: data.transportLock
-                          ? PTColors.warningBorder
-                          : PTColors.white(0.7),
-                      label: data.transportLock
-                          ? 'You have the remote'
-                          : 'Take the remote',
-                      onTap: () => _dismiss(
-                        () => widget.onTransportLockChanged(!data.transportLock),
-                      ),
+                      icon: data.transportLock ? Symbols.lock_rounded : Symbols.lock_open_rounded,
+                      iconColor: data.transportLock ? PTColors.warningBorder : PTColors.white(0.7),
+                      label: data.transportLock ? 'You have the remote' : 'Take the remote',
+                      onTap: () =>
+                          _dismiss(() => widget.onTransportLockChanged(!data.transportLock)),
                     ),
                   if (data.selfIsHost)
                     _ActionRow(
@@ -295,8 +285,9 @@ class _MemberRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Opacity(
+    return AnimatedOpacity(
       opacity: online ? 1 : 0.55,
+      duration: PTMotion.functional(context, PTMotion.state),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
         child: Row(
@@ -330,7 +321,7 @@ class _MemberRow extends StatelessWidget {
                 style: PTText.body.copyWith(fontSize: 14, fontWeight: .w500),
               ),
             ),
-            if (presence != null && media.isSet) _chip(),
+            if (presence != null && media.isSet) _chip(context),
             if (member.isHost) const HostBadge(),
             if (onKick != null)
               PTIconButton(
@@ -347,9 +338,13 @@ class _MemberRow extends StatelessWidget {
     );
   }
 
-  Widget _chip() {
+  /// Same treatment as the readiness overlay's chip — the two are read side by
+  /// side often enough that they must not behave differently.
+  Widget _chip(BuildContext context) {
     final status = ReadinessChipStyle.of(presence!, media);
-    return Container(
+    return AnimatedContainer(
+      duration: PTMotion.functional(context, PTMotion.state),
+      curve: PTMotion.enter,
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       constraints: const BoxConstraints(maxWidth: 116),
       decoration: BoxDecoration(
@@ -357,10 +352,16 @@ class _MemberRow extends StatelessWidget {
         borderRadius: BorderRadius.circular(999),
         border: Border.all(color: status.color.withValues(alpha: 0.3)),
       ),
-      child: Text(
-        status.label,
-        overflow: .ellipsis,
-        style: PTText.finePrint.copyWith(color: status.color, fontWeight: .w500),
+      child: AnimatedSwitcher(
+        duration: PTMotion.functional(context, PTMotion.state),
+        switchInCurve: PTMotion.enter,
+        switchOutCurve: PTMotion.exit,
+        child: Text(
+          status.label,
+          key: ValueKey(status.label),
+          overflow: .ellipsis,
+          style: PTText.finePrint.copyWith(color: status.color, fontWeight: .w500),
+        ),
       ),
     );
   }
@@ -394,9 +395,10 @@ class _ActionRowState extends State<_ActionRow> {
       cursor: SystemMouseCursors.click,
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
-      child: GestureDetector(
+      child: PTPressable(
         onTap: widget.onTap,
-        child: Container(
+        child: AnimatedContainer(
+          duration: PTMotion.functional(context, PTMotion.hover),
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 11),
           decoration: BoxDecoration(
             color: _hovered
