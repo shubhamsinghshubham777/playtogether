@@ -11,6 +11,7 @@ import 'package:playtogether/profile/profile_models.dart';
 import 'package:playtogether/profile/profile_service.dart';
 import 'package:playtogether/ui/banners.dart';
 import 'package:playtogether/ui/buttons.dart';
+import 'package:playtogether/ui/desktop_chrome.dart';
 import 'package:playtogether/ui/glass.dart';
 import 'package:playtogether/ui/identity.dart';
 import 'package:playtogether/ui/inputs.dart';
@@ -299,22 +300,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _backHeader({double iconSize = 20, double size = 44, double? titleSize}) {
-    return Row(
-      spacing: 14,
-      children: [
-        PTIconButton(
-          icon: Symbols.arrow_back_rounded,
-          iconSize: iconSize,
-          size: size,
-          onPressed: () => context.go('/lobby'),
-        ),
-        Text(
-          'Profile',
-          style: titleSize == null
-              ? PTText.cardHeading
-              : PTText.cardHeading.copyWith(fontSize: titleSize),
-        ),
-      ],
+    return DesktopDragBar(
+      child: Row(
+        spacing: 14,
+        children: [
+          SizedBox(width: desktopLeadingChromeInset),
+          PTIconButton(
+            icon: Symbols.arrow_back_rounded,
+            iconSize: iconSize,
+            size: size,
+            onPressed: () => context.go('/lobby'),
+          ),
+          Text(
+            'Profile',
+            style: titleSize == null
+                ? PTText.cardHeading
+                : PTText.cardHeading.copyWith(fontSize: titleSize),
+          ),
+        ],
+      ),
     );
   }
 

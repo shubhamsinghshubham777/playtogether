@@ -22,7 +22,18 @@ Future<void> main() async {
   await dotenv.load(fileName: ".env");
   MediaKit.ensureInitialized();
   // OS-window fullscreen (F key in a room) needs the manager ready up front.
-  if (isDesktop) await windowManager.ensureInitialized();
+  if (isDesktop) {
+    await windowManager.ensureInitialized();
+    // Hide the native title bar; window_manager still shows the window once
+    // the style is applied, so `show`/`focus` here replace the default show.
+    await windowManager.waitUntilReadyToShow(
+      const WindowOptions(titleBarStyle: TitleBarStyle.hidden),
+      () async {
+        await windowManager.show();
+        await windowManager.focus();
+      },
+    );
+  }
   await Supabase.initialize(url: Env.supabaseUrl, publishableKey: Env.supabasePublishableKey);
   runApp(const MainApp());
 }

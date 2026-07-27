@@ -7,6 +7,7 @@ import 'package:playtogether/profile/profile_service.dart';
 import 'package:playtogether/rooms/room_models.dart';
 import 'package:playtogether/rooms/room_service.dart';
 import 'package:playtogether/ui/banners.dart';
+import 'package:playtogether/ui/desktop_chrome.dart';
 import 'package:playtogether/ui/buttons.dart';
 import 'package:playtogether/ui/glass.dart';
 import 'package:playtogether/ui/identity.dart';
@@ -164,20 +165,24 @@ class _LobbyScreenState extends State<LobbyScreen> {
       children: [
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 28),
-          child: Row(
-            children: [
-              const _Wordmark(),
-              const Spacer(),
-              _profilePill(),
-              const SizedBox(width: 12),
-              PTIconButton(
-                icon: Symbols.logout_rounded,
-                iconSize: 20,
-                size: 42,
-                tooltip: 'Log out',
-                onPressed: AuthService.instance.signOut,
-              ),
-            ],
+          child: DesktopDragBar(
+            child: Row(
+              children: [
+                SizedBox(width: desktopLeadingChromeInset),
+                const _Wordmark(),
+                const Spacer(),
+                _profilePill(),
+                const SizedBox(width: 12),
+                PTIconButton(
+                  icon: Symbols.logout_rounded,
+                  iconSize: 20,
+                  size: 42,
+                  tooltip: 'Log out',
+                  onPressed: AuthService.instance.signOut,
+                ),
+                SizedBox(width: desktopTrailingChromeInset),
+              ],
+            ),
           ),
         ),
         Expanded(
@@ -230,7 +235,17 @@ class _LobbyScreenState extends State<LobbyScreen> {
           crossAxisAlignment: .start,
           spacing: 18,
           children: [
-            Row(children: [const _Wordmark(compact: true), const Spacer(), _avatarButton()]),
+            DesktopDragBar(
+              child: Row(
+                children: [
+                  SizedBox(width: desktopLeadingChromeInset),
+                  const _Wordmark(compact: true),
+                  const Spacer(),
+                  _avatarButton(),
+                  SizedBox(width: desktopTrailingChromeInset),
+                ],
+              ),
+            ),
             Padding(
               padding: const EdgeInsets.only(top: 8),
               child: _intro(
@@ -258,14 +273,18 @@ class _LobbyScreenState extends State<LobbyScreen> {
           crossAxisAlignment: .start,
           spacing: 14,
           children: [
-            Row(
-              children: [
-                const _Wordmark(compact: true),
-                const SizedBox(width: 10),
-                const _Greeting(style: PTText.panelHeading, align: .centerLeft),
-                const Spacer(),
-                _avatarButton(size: 36),
-              ],
+            DesktopDragBar(
+              child: Row(
+                children: [
+                  SizedBox(width: desktopLeadingChromeInset),
+                  const _Wordmark(compact: true),
+                  const SizedBox(width: 10),
+                  const _Greeting(style: PTText.panelHeading, align: .centerLeft),
+                  const Spacer(),
+                  _avatarButton(size: 36),
+                  SizedBox(width: desktopTrailingChromeInset),
+                ],
+              ),
             ),
             Expanded(
               child: Row(

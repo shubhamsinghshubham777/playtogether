@@ -27,6 +27,7 @@ import 'package:playtogether/sync/sync_events.dart';
 import 'package:playtogether/sync/sync_service.dart';
 import 'package:playtogether/ui/banners.dart';
 import 'package:playtogether/ui/buttons.dart';
+import 'package:playtogether/ui/desktop_chrome.dart';
 import 'package:playtogether/ui/glass.dart';
 import 'package:playtogether/ui/identity.dart';
 import 'package:playtogether/ui/pt_motion.dart';
@@ -134,6 +135,10 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
   // OS-window fullscreen (desktop only). Kept in sync with the actual window
   // via WindowListener so Esc/toggle never desync from a native fullscreen.
   bool _fullscreen = false;
+
+  // True title bar / traffic-light clearance and window-drag regions only
+  // apply outside OS fullscreen, where that native chrome doesn't exist.
+  bool get _showDesktopChrome => isDesktop && !_fullscreen;
 
   // Floating chrome (topbar + control bar) auto-hides while playing; tap the
   // video to toggle it manually. Only applies to the overlay layouts
@@ -2386,6 +2391,17 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
               child: _video(),
             ),
           ),
+          // Independent of _overlayControls' fade — the window must stay
+          // draggable even while the top bar itself is hidden. Skipped in OS
+          // fullscreen, where there's no native chrome to clear or drag by.
+          if (_showDesktopChrome)
+            const Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              height: 78,
+              child: DragToMoveArea(child: SizedBox.expand()),
+            ),
           Positioned(
             top: 24,
             left: 24,
@@ -2397,6 +2413,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
               Row(
                 crossAxisAlignment: .start,
                 children: [
+                  SizedBox(width: _showDesktopChrome ? desktopLeadingChromeInset : 0),
                   Expanded(
                     child: Align(alignment: .topLeft, child: _roomPill()),
                   ),
@@ -2408,6 +2425,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
                     iconSize: 22,
                     onPressed: _openOverflowMenu,
                   ),
+                  SizedBox(width: _showDesktopChrome ? desktopTrailingChromeInset : 0),
                 ],
               ),
             ),
@@ -2500,38 +2518,42 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: .start,
-                    spacing: 3,
-                    children: [
-                      Text(
-                        room.name,
-                        overflow: .ellipsis,
-                        style: PTText.panelHeading.copyWith(fontSize: 16),
-                      ),
-                      Row(
-                        spacing: 8,
-                        children: [
-                          RoomCodeChip(code: room.code, onCopy: _copyCode, fontSize: 11),
-                          Icon(Symbols.schedule_rounded, size: 13, color: PTColors.white(0.6)),
-                          Text(
-                            _countdownLabel,
-                            style: PTText.mono.copyWith(fontSize: 11, color: PTColors.white(0.6)),
-                          ),
-                        ],
-                      ),
-                    ],
+            child: DesktopDragBar(
+              child: Row(
+                children: [
+                  SizedBox(width: _showDesktopChrome ? desktopLeadingChromeInset : 0),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: .start,
+                      spacing: 3,
+                      children: [
+                        Text(
+                          room.name,
+                          overflow: .ellipsis,
+                          style: PTText.panelHeading.copyWith(fontSize: 16),
+                        ),
+                        Row(
+                          spacing: 8,
+                          children: [
+                            RoomCodeChip(code: room.code, onCopy: _copyCode, fontSize: 11),
+                            Icon(Symbols.schedule_rounded, size: 13, color: PTColors.white(0.6)),
+                            Text(
+                              _countdownLabel,
+                              style: PTText.mono.copyWith(fontSize: 11, color: PTColors.white(0.6)),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                PTIconButton(
-                  icon: Symbols.more_vert_rounded,
-                  iconSize: 22,
-                  onPressed: _openOverflowMenu,
-                ),
-              ],
+                  PTIconButton(
+                    icon: Symbols.more_vert_rounded,
+                    iconSize: 22,
+                    onPressed: _openOverflowMenu,
+                  ),
+                  SizedBox(width: _showDesktopChrome ? desktopTrailingChromeInset : 0),
+                ],
+              ),
             ),
           ),
           AspectRatio(
@@ -2609,6 +2631,14 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
           minimum: const EdgeInsets.symmetric(horizontal: 56),
           child: Stack(
             children: [
+              if (_showDesktopChrome)
+                const Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: 68,
+                  child: DragToMoveArea(child: SizedBox.expand()),
+                ),
               Positioned(
                 top: 16,
                 left: 0,
@@ -2618,6 +2648,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
                   Row(
                     crossAxisAlignment: .start,
                     children: [
+                      SizedBox(width: _showDesktopChrome ? desktopLeadingChromeInset : 0),
                       Expanded(
                         child: Align(alignment: .topLeft, child: _roomPill(compact: true)),
                       ),
@@ -2629,6 +2660,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
                         iconSize: 21,
                         onPressed: _openOverflowMenu,
                       ),
+                      SizedBox(width: _showDesktopChrome ? desktopTrailingChromeInset : 0),
                     ],
                   ),
                 ),
