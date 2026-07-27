@@ -48,11 +48,23 @@ jobs:
       - name: Clean build
         run: flutter clean
 
-      - name: Build Windows App
+      - name: Resolve dependencies
         run: |
           flutter config --enable-windows-desktop
           flutter pub get
-          flutter build windows --release
+
+      # flutter_webrtc's third_party/CMakeLists.txt downloads libwebrtc.zip and
+      # extracts it into its own package dir — which the Windows build reaches
+      # through windows/flutter/ephemeral/.plugin_symlinks/flutter_webrtc.
+      # Recent CMake (bundled with Visual Studio, so not pinnable here) refuses
+      # to extract through a symlink. Its guard skips the download+extract when
+      # both the zip and third_party/libwebrtc already exist, so we do the
+      # extraction ourselves against the real pub-cache path.
+      - name: Pre-extract libwebrtc
+        run: ./.github/scripts/preextract-libwebrtc.ps1
+
+      - name: Build Windows App
+        run: flutter build windows --release
 
       - name: Build iss script
         run: dart run inno_bundle --no-app --release --no-installer

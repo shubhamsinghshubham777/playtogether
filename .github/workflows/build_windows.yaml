@@ -32,11 +32,18 @@ jobs:
       - name: Clean build
         run: flutter clean
 
-      - name: Build Windows App
+      - name: Resolve dependencies
         run: |
           flutter config --enable-windows-desktop
           flutter pub get
-          flutter build windows --release
+
+      # See the script header: recent CMake refuses to extract flutter_webrtc's
+      # libwebrtc.zip through the plugin symlink, so we extract it ourselves.
+      - name: Pre-extract libwebrtc
+        run: ./.github/scripts/preextract-libwebrtc.ps1
+
+      - name: Build Windows App
+        run: flutter build windows --release
 
       - name: Build iss script
         run: dart run inno_bundle --no-app --release --no-installer
