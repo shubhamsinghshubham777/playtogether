@@ -35,7 +35,7 @@ jobs:
       - name: Get Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.38.1'
+          flutter-version: '3.44.8'
           cache: true
 
       - name: Create .env file
@@ -82,7 +82,7 @@ jobs:
       - name: Get Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.38.1'
+          flutter-version: '3.44.8'
           cache: true
 
       - name: Cache Flutter build outputs

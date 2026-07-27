@@ -26,7 +26,7 @@ supabase config push                # auth config (needs supabase/.env for Googl
 
 To test room sync on one Mac, run instance A normally and instance B via `./build/pt-instance-b.sh` — the sandboxed app shares one container (= one Supabase session) across instances of the same bundle id, so the script clones the debug build under `app.playtogether.macos.b` to get a second identity. Re-run it after rebuilds; logs go to `/tmp/pt-b.log`.
 
-There are no tests (no `test/` directory). CI (`.github/workflows/`) is manual-trigger only (`workflow_dispatch`) and builds installers: Windows via `dart run inno_bundle` + Inno Setup (configured in pubspec.yaml under `inno_bundle:`), macOS via DMG. CI uses Flutter 3.38.1 and writes `.env` from the `ENV_FILE` secret.
+There are no tests (no `test/` directory). CI (`.github/workflows/`) is manual-trigger only (`workflow_dispatch`) and builds installers: Windows via `dart run inno_bundle` + Inno Setup (configured in pubspec.yaml under `inno_bundle:`), macOS via DMG. CI uses Flutter 3.44.8 and writes `.env` from the `ENV_FILE` secret.
 
 ## Conventions
 
