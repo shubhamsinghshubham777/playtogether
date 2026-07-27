@@ -76,6 +76,12 @@ jobs:
       - name: Build iss script
         run: dart run inno_bundle --no-app --release --no-installer
 
+      # Adds the playtogether:// protocol handler (OAuth callbacks) and the
+      # WebView2 runtime (guest captcha) — neither is expressible in the
+      # inno_bundle config, and it rewrites the script on every build.
+      - name: Patch installer script
+        run: ./.github/scripts/patch-installer-script.ps1
+
       - name: Build installer
         uses: Minionguyjpro/Inno-Setup-Action@v1.2.2
         with:

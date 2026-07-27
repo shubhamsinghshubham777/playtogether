@@ -1,12 +1,17 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:playtogether/diagnostics.dart';
 import 'package:playtogether/env.dart';
 import 'package:playtogether/ui/glass.dart';
 import 'package:playtogether/ui/pt_theme.dart';
 
 /// Runs a Cloudflare Turnstile challenge in a webview and returns the
-/// captcha token (null on cancel/failure). The page claims `localhost` as
-/// its origin — that hostname must stay in the Turnstile widget allow-list.
+/// captcha token (null on cancel/failure). The page is served from a throwaway
+/// loopback server so its origin really is `localhost` — that hostname must
+/// stay in the Turnstile widget allow-list.
 Future<String?> showTurnstileDialog(BuildContext context) {
   return showGlassDialog<String>(
     context: context,
@@ -24,6 +29,53 @@ class _TurnstileBody extends StatefulWidget {
 
 class _TurnstileBodyState extends State<_TurnstileBody> {
   bool _failed = false;
+  HttpServer? _server;
+  Uri? _pageUrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _serve();
+  }
+
+  /// Hands the challenge page a real `http://localhost:<port>` origin.
+  ///
+  /// Loading it as inline data instead would be simpler, but Windows drops
+  /// `InAppWebViewInitialData.baseUrl` on the floor — the WebView2 backend maps
+  /// initial data straight onto `NavigateToString`, which has no baseUrl
+  /// parameter and always yields an opaque origin. Turnstile then sees a
+  /// hostname that is not on its allow-list, refuses to issue a token, and
+  /// guest sign-in is impossible on Windows. A loopback server is the one form
+  /// of origin every platform's webview agrees on.
+  Future<void> _serve() async {
+    try {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      if (!mounted) {
+        await server.close(force: true);
+        return;
+      }
+      _server = server;
+      server.listen((request) {
+        request.response
+          ..headers.contentType = ContentType.html
+          ..write(_html);
+        request.response.close();
+      });
+      // `localhost` rather than 127.0.0.1: Turnstile matches on hostname, and
+      // the literal IP is not what the widget is registered for. Webviews
+      // resolve it dual-stack and fall back to the IPv4 loopback we bound.
+      setState(() => _pageUrl = Uri.parse('http://localhost:${server.port}/'));
+    } catch (e, s) {
+      reportNonFatal(e, s, during: 'starting the Turnstile loopback server');
+      if (mounted) setState(() => _failed = true);
+    }
+  }
+
+  @override
+  void dispose() {
+    _server?.close(force: true);
+    super.dispose();
+  }
 
   String get _html =>
       '''
@@ -75,30 +127,27 @@ function onloadTurnstile() {
           borderRadius: BorderRadius.circular(12),
           child: SizedBox(
             height: 80,
-            child: InAppWebView(
-              initialData: InAppWebViewInitialData(
-                data: _html,
-                // Turnstile only issues tokens to allow-listed hostnames;
-                // `localhost` is the one registered for this widget.
-                baseUrl: WebUri('http://localhost/'),
-              ),
-              initialSettings: InAppWebViewSettings(transparentBackground: true),
-              onWebViewCreated: (controller) {
-                controller.addJavaScriptHandler(
-                  handlerName: 'turnstileToken',
-                  callback: (args) {
-                    final token = args.isNotEmpty ? args.first as String : null;
-                    if (mounted && token != null) Navigator.of(context).pop(token);
-                  },
-                );
-                controller.addJavaScriptHandler(
-                  handlerName: 'turnstileError',
-                  callback: (_) {
-                    if (mounted) setState(() => _failed = true);
-                  },
-                );
-              },
-            ),
+            child: _pageUrl == null
+                ? const SizedBox.shrink()
+                : InAppWebView(
+                    initialUrlRequest: URLRequest(url: WebUri.uri(_pageUrl!)),
+                    initialSettings: InAppWebViewSettings(transparentBackground: true),
+                    onWebViewCreated: (controller) {
+                      controller.addJavaScriptHandler(
+                        handlerName: 'turnstileToken',
+                        callback: (args) {
+                          final token = args.isNotEmpty ? args.first as String : null;
+                          if (mounted && token != null) Navigator.of(context).pop(token);
+                        },
+                      );
+                      controller.addJavaScriptHandler(
+                        handlerName: 'turnstileError',
+                        callback: (_) {
+                          if (mounted) setState(() => _failed = true);
+                        },
+                      );
+                    },
+                  ),
           ),
         ),
       ],
