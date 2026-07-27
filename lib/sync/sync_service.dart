@@ -441,6 +441,40 @@ class SyncService {
     _readyStatus = status;
     _loadedFileName = loadedFileName;
     _trackPresence();
+    _checkSelfGateSatisfaction();
+  }
+
+  bool _selfSatisfiesGate = false;
+
+  /// Watches our own crossing into "has the room's media open". Readiness and
+  /// the canonical media arrive from different directions (presence vs. the
+  /// `rooms` row) and in either order, so both paths funnel through here.
+  void _checkSelfGateSatisfaction() {
+    final satisfies = _canonicalMedia.isSet && memberSatisfiesGate(_selfPresence);
+    if (satisfies == _selfSatisfiesGate) return;
+    _selfSatisfiesGate = satisfies;
+    if (satisfies) _resyncRoomPosition();
+  }
+
+  /// The room's position, asked for again now that there is something to apply
+  /// it to. A late joiner's entry `state_request` is answered while the file
+  /// picker is still open, so the seek lands on an empty player and is lost —
+  /// and opening a file afterwards starts at 0.
+  ///
+  /// A *playing* room heals itself: the joiner's arrival shuts the gate, which
+  /// pauses everyone at a held position, and the reopen broadcasts a seek back
+  /// to it. A room that was already paused has no such moment — nothing moves,
+  /// so nothing is broadcast — which is how the joiner ends up parked at 0
+  /// while everyone else sits where the host paused.
+  void _resyncRoomPosition() {
+    if (_disposed || _channel == null) return;
+    if (_roomPlaying || _pausedByGate) return;
+    // Alone in the room: nobody to answer, and our own position *is* the room's.
+    if (_hasPresenceSynced && _presentMembers.every((m) => m.userId == userId)) {
+      return;
+    }
+    _hasReceivedInitialState = false;
+    _requestInitialState();
   }
 
   void _handlePresenceSync(RealtimePresenceSyncPayload payload) {
@@ -653,6 +687,7 @@ class SyncService {
     if (!media.isNewerThan(_canonicalMedia)) return;
     _canonicalMedia = media;
     _canonicalMediaController.add(media);
+    _checkSelfGateSatisfaction();
     _evaluateGate();
   }
 
@@ -832,26 +867,46 @@ class SyncService {
     });
   }
 
-  bool get _isAuthority {
-    final present = _presentMembers.where((m) => m.userId != userId).toList();
-    final self = PresentMember(
-      userId: userId,
-      displayName: profile.displayName,
-      role: _role,
-      joinedAt: _membershipJoinedAt ?? DateTime.now(),
-    );
-    final candidates = [...present, self];
+  /// Presence as *we* would broadcast it — [_presentMembers] carries everyone
+  /// else's, but a client's own entry can lag its local state by a round trip.
+  PresentMember get _selfPresence => PresentMember(
+    userId: userId,
+    displayName: profile.displayName,
+    role: _role,
+    joinedAt: _membershipJoinedAt ?? DateTime.now(),
+    readyStatus: _readyStatus,
+    loadedFileName: _loadedFileName,
+  );
+
+  List<PresentMember> get _authorityCandidates => [
+    ..._presentMembers.where((m) => m.userId != userId),
+    _selfPresence,
+  ];
+
+  /// Host if present, else the earliest joiner; user id breaks ties so every
+  /// client elects the same person.
+  String? _authorityAmong(Iterable<PresentMember> candidates) {
+    if (candidates.isEmpty) return null;
     final host = candidates.where((m) => m.isHost).firstOrNull;
-    final authority = host ?? candidates.reduce((a, b) {
+    if (host != null) return host.userId;
+    return candidates.reduce((a, b) {
       final cmp = a.joinedAt.compareTo(b.joinedAt);
       if (cmp != 0) return cmp < 0 ? a : b;
       return a.userId.compareTo(b.userId) < 0 ? a : b;
-    });
-    return authority.userId == userId;
+    }).userId;
   }
 
+  bool get _isAuthority => _authorityAmong(_authorityCandidates) == userId;
+
   void _handleStateRequest(Map<String, dynamic> payload) {
-    if (!_isAuthority) return;
+    // The authority answers — except when the authority is the one asking (a
+    // host reopening their own room), where the next in line answers instead.
+    // Excluding the requester keeps it to exactly one responder either way.
+    final requesterId = payload['senderId'] as String?;
+    final responder = _authorityAmong(
+      _authorityCandidates.where((m) => m.userId != requesterId),
+    );
+    if (responder != userId) return;
     final hasMedia = _player.state.duration != Duration.zero || _currentYoutubeUrl != null;
     if (!hasMedia) return;
 
