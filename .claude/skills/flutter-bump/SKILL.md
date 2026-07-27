@@ -47,9 +47,9 @@ or CI.
 
 5. **Sync the workflows.** Update **every** `flutter-version:` line in
    `.github/workflows/*.yaml` to the new version (quoted, e.g.
-   `flutter-version: '3.44.2'`). Currently that's `build_installers.yaml`
-   (twice — windows and macos jobs), `build_windows.yaml`, and
-   `build_macos.yaml`, but grep rather than assume:
+   `flutter-version: '3.44.2'`). Currently that's `build_windows.yaml` and
+   `build_macos.yaml` — `build_installers.yaml` calls those two as reusable
+   workflows and pins nothing itself — but grep rather than assume:
 
    ```bash
    grep -rn 'flutter-version' .github/workflows/

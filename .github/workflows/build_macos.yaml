@@ -1,17 +1,33 @@
 name: Build App Installer (macOS)
 on:
   workflow_dispatch:
+  # Called by build_installers.yaml. Keep this workflow self-contained (it
+  # computes its own version and names its own artifact) so dispatching it
+  # directly produces exactly what the release job would consume.
+  workflow_call:
+    outputs:
+      app_version:
+        description: Version from pubspec.yaml, e.g. 0.4.0
+        value: ${{ jobs.macos-dmg.outputs.app_version }}
+      artifact_name:
+        description: Name of the uploaded artifact
+        value: macos-dmg
 permissions:
   contents: read
 
-# Cancel previous runs when a new commit is pushed
+# Cancel previous runs when a new commit is pushed. The platform suffix is
+# load-bearing: when called from build_installers.yaml, `github.workflow`
+# resolves to the *caller's* name, so without it the windows and macos jobs
+# would share one cancel-in-progress group and cancel each other.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}-macos
   cancel-in-progress: true
 
 jobs:
   macos-dmg:
     runs-on: macos-latest
+    outputs:
+      app_version: ${{ steps.version.outputs.APP_VERSION }}
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v6
@@ -32,6 +48,12 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-flutter-build-
 
+      - name: Extract version from pubspec.yaml
+        id: version
+        run: |
+          VERSION=$(grep '^version:' pubspec.yaml | cut -d ' ' -f 2 | cut -d '+' -f 1)
+          echo "APP_VERSION=$VERSION" >> "$GITHUB_OUTPUT"
+
       - name: Create .env file
         run: |
           echo "${{ secrets.ENV_FILE }}" > .env
@@ -49,12 +71,6 @@ jobs:
           flutter config --enable-macos-desktop
           flutter build macos --release
 
-      - name: Extract version from pubspec.yaml
-        id: version
-        run: |
-          VERSION=$(grep '^version:' pubspec.yaml | cut -d ' ' -f 2 | cut -d '+' -f 1)
-          echo "APP_VERSION=$VERSION" >> $GITHUB_OUTPUT
-
       - name: Install create-dmg
         run: brew install create-dmg
 
@@ -71,7 +87,7 @@ jobs:
             "PlayTogether-${{ steps.version.outputs.APP_VERSION }}-macOS.dmg" \
             "build/macos/Build/Products/Release/PlayTogether.app"
 
-      - name: Upload DMG artifact
+      - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
         with:
           name: macos-dmg

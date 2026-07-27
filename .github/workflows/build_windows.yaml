@@ -1,17 +1,33 @@
 name: Build App Installer (Windows)
 on:
   workflow_dispatch:
+  # Called by build_installers.yaml. Keep this workflow self-contained (it
+  # computes its own version and names its own artifact) so dispatching it
+  # directly produces exactly what the release job would consume.
+  workflow_call:
+    outputs:
+      app_version:
+        description: Version from pubspec.yaml, e.g. 0.4.0
+        value: ${{ jobs.windows-installer.outputs.app_version }}
+      artifact_name:
+        description: Name of the uploaded artifact
+        value: windows-installer
 permissions:
   contents: read
 
-# Cancel previous runs when a new commit is pushed
+# Cancel previous runs when a new commit is pushed. The platform suffix is
+# load-bearing: when called from build_installers.yaml, `github.workflow`
+# resolves to the *caller's* name, so without it the windows and macos jobs
+# would share one cancel-in-progress group and cancel each other.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}-windows
   cancel-in-progress: true
 
 jobs:
   windows-installer:
     runs-on: windows-latest
+    outputs:
+      app_version: ${{ steps.version.outputs.APP_VERSION }}
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v6
@@ -21,6 +37,13 @@ jobs:
         with:
           flutter-version: '3.44.8'
           cache: true  # Enable caching for Flutter SDK and pub dependencies
+
+      - name: Extract version from pubspec.yaml
+        id: version
+        shell: bash  # runner default is pwsh; this needs grep/cut
+        run: |
+          VERSION=$(grep '^version:' pubspec.yaml | cut -d ' ' -f 2 | cut -d '+' -f 1)
+          echo "APP_VERSION=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Create .env file
         run: |
@@ -37,8 +60,13 @@ jobs:
           flutter config --enable-windows-desktop
           flutter pub get
 
-      # See the script header: recent CMake refuses to extract flutter_webrtc's
-      # libwebrtc.zip through the plugin symlink, so we extract it ourselves.
+      # flutter_webrtc's third_party/CMakeLists.txt downloads libwebrtc.zip and
+      # extracts it into its own package dir — which the Windows build reaches
+      # through windows/flutter/ephemeral/.plugin_symlinks/flutter_webrtc.
+      # Recent CMake (bundled with Visual Studio, so not pinnable here) refuses
+      # to extract through a symlink. Its guard skips the download+extract when
+      # both the zip and third_party/libwebrtc already exist, so we do the
+      # extraction ourselves against the real pub-cache path.
       - name: Pre-extract libwebrtc
         run: ./.github/scripts/preextract-libwebrtc.ps1
 
@@ -48,18 +76,17 @@ jobs:
       - name: Build iss script
         run: dart run inno_bundle --no-app --release --no-installer
 
-      - name: Output config into github output
-        id: envs
-        # thanks to https://github.com/actions/runner/issues/2224#issuecomment-1289925992
-        run: echo $(dart run inno_bundle --envs --no-hf) | Out-File -FilePath $Env:GITHUB_OUTPUT -Encoding utf8 -Append
-
       - name: Build installer
         uses: Minionguyjpro/Inno-Setup-Action@v1.2.2
         with:
           path: ./build/windows/x64/installer/Release/inno-script.iss
 
-      - name: Upload installer artifact
+      - name: Rename installer
+        run: |
+          mv "./build/windows/x64/installer/Release/PlayTogether-x86_64-${{ steps.version.outputs.APP_VERSION }}-Installer.exe" "./PlayTogether-${{ steps.version.outputs.APP_VERSION }}-Windows.exe"
+
+      - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
           name: windows-installer
-          path: ./build/windows/x64/installer/Release/${{ steps.envs.outputs.APP_NAME_CAMEL_CASE }}-x86_64-${{ steps.envs.outputs.APP_VERSION }}-Installer.exe
+          path: ./PlayTogether-${{ steps.version.outputs.APP_VERSION }}-Windows.exe
