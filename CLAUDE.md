@@ -35,6 +35,7 @@ There are no tests (no `test/` directory). CI (`.github/workflows/`) is manual-t
 - App version lives in pubspec.yaml `version:`; CI extracts it for installer names.
 - **Design system**: dark mode only. All colors/typography come from `lib/ui/pt_theme.dart` (violet glass aesthetic; fonts Space Grotesk / Outfit / JetBrains Mono bundled in `assets/fonts/`; icons via `material_symbols_icons`). Screens must not hardcode hex values — extend `PTColors`/`PTText` instead. Reusable widgets: `lib/ui/` (GlassPanel, PTButton, PTIconButton, PTSlider, PTCodeInput, PTAvatar, PTBanner, showGlassDialog…).
 - Error copy is friendly/casual ("Hmm, that doesn't look like a YouTube link."), never raw codes.
+- **App icon**: source art in `assets/icon/` is generated, not hand-drawn — `tool/generate_app_icon.py` (needs `fonttools` + `rsvg-convert`) rebuilds the lobby `_Wordmark` tile as SVG, lifting the `Icons.play_arrow_rounded` outline out of the MaterialIcons font so the icon can't drift from the on-screen logo. Regenerate with `python3 tool/generate_app_icon.py && fvm dart run flutter_launcher_icons` (config in pubspec.yaml under `flutter_launcher_icons:`); edit the script, never the PNGs. The script also writes the multi-size `windows/runner/resources/app_icon.ico` itself — flutter_launcher_icons' Windows generator is off on purpose because it emits only a 256px frame.
 
 ## Architecture
 
