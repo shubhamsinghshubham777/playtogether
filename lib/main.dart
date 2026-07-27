@@ -14,6 +14,7 @@ import 'package:playtogether/rooms/room_service.dart';
 import 'package:playtogether/ui/banners.dart';
 import 'package:playtogether/ui/pt_theme.dart';
 import 'package:playtogether/ui/responsive.dart';
+import 'package:playtogether/ui/splash_screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:window_manager/window_manager.dart';
 
@@ -135,7 +136,11 @@ class _MainAppState extends State<MainApp> {
       theme: buildPTTheme(),
       themeMode: ThemeMode.dark,
       routerConfig: router,
-      builder: buildResponsiveWrapper,
+      // The splash is an overlay inside the app, not a route: routing, auth
+      // redirects and the deep-link handler above all keep running underneath
+      // it, so an invite that arrives during the splash is not lost.
+      builder: (context, child) =>
+          buildResponsiveWrapper(context, PTSplash(child: child ?? const SizedBox.shrink())),
     );
   }
 }
