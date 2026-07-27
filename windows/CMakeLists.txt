@@ -32,6 +32,14 @@ set(CMAKE_CXX_FLAGS_PROFILE "${CMAKE_CXX_FLAGS_RELEASE}")
 # Use Unicode for all projects.
 add_definitions(-DUNICODE -D_UNICODE)
 
+# flutter_inappwebview_windows includes <winrt/base.h>, and C++/WinRT falls back
+# to <experimental/coroutine> when built as C++17 (which the plugin pins). As of
+# MSVC 14.51 that header is a hard error (STL1011) rather than a warning, so the
+# plugin no longer compiles. Take the escape hatch the compiler itself suggests;
+# it must be set here, before the plugin subdirectories are added below, since
+# the plugin's own CMakeLists lives in the read-only pub cache.
+add_compile_definitions(_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS)
+
 # Compilation settings that should be applied to most targets.
 #
 # Be cautious about adding new options here, as plugins use this function by
