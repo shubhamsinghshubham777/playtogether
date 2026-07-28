@@ -13,7 +13,7 @@ import 'package:playtogether/env.dart';
 import 'package:playtogether/platform.dart';
 import 'package:playtogether/rooms/room_models.dart';
 import 'package:playtogether/rooms/room_service.dart';
-import 'package:playtogether/tls_diagnostics.dart';
+import 'package:playtogether/tls.dart';
 import 'package:playtogether/ui/banners.dart';
 import 'package:playtogether/ui/pt_theme.dart';
 import 'package:playtogether/ui/responsive.dart';
@@ -42,9 +42,10 @@ Future<void> main() async {
 }
 
 Future<void> _bootstrap() async {
-  // Before anything opens a socket, so a handshake that fails on the very first
-  // Supabase call still says which certificate it was offered.
-  installTlsDiagnostics();
+  // Before anything opens a socket, so the very first Supabase call already has
+  // the bundled roots — and, if it still fails, says which certificate it was
+  // offered.
+  await installTlsOverrides();
   MediaKit.ensureInitialized();
   // OS-window fullscreen (F key in a room) needs the manager ready up front.
   if (isDesktop) await windowManager.ensureInitialized();
