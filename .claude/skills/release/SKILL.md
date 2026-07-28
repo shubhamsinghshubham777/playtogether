@@ -47,6 +47,10 @@ would be a duplicate that matches nothing.
      that drove the decision**, then proceed — no confirmation needed unless
      the analysis is genuinely ambiguous.
 
+   Even when the user passed an explicit version and the bump analysis is
+   skipped, still read `git log <last-tag>..HEAD --oneline` — the release
+   notes in step 6 are written from it either way.
+
 4. **Bump** — edit the `version:` line in pubspec.yaml (bare `X.Y.Z`, no
    `+build` suffix — CI's version extraction and installer names depend on
    this format).
@@ -59,10 +63,28 @@ would be a duplicate that matches nothing.
 
    No co-author trailers. Then `git push origin main`.
 
-6. **Trigger the workflow:**
+6. **Write the release notes and trigger the workflow.** Compose a Markdown
+   "What's Changed" section from the commits since the last tag — user-facing
+   summaries grouped by theme, not raw commit subjects. Lead with features,
+   then fixes; fold internal work (CI, refactors, docs) into a single line or
+   omit it. Keep it short — a handful of bullets. Include the heading, e.g.:
+
+   ```markdown
+   ## What's Changed
+   - The desktop app now opens in fullscreen
+   - Room names are length-limited on both client and server
+   - Faster CI builds (Windows 14 min → 90 s)
+   ```
+
+   Pass it via the workflow's `release_notes` input (it lands at the top of
+   the GitHub release body, above the auto-generated Downloads section):
 
    ```bash
-   gh workflow run build_installers.yaml --ref main
+   gh workflow run build_installers.yaml --ref main -f release_notes="$(cat <<'EOF'
+   ## What's Changed
+   - ...
+   EOF
+   )"
    ```
 
    The dispatch is async — poll until the new run appears:

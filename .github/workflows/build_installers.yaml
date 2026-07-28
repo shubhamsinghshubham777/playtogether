@@ -1,6 +1,15 @@
 name: Build App Installers
 on:
   workflow_dispatch:
+    inputs:
+      release_notes:
+        description: >-
+          Markdown "What's Changed" section for the release body (include the
+          heading). Shown above the Downloads section; empty keeps the old
+          downloads-only body.
+        type: string
+        required: false
+        default: ""
 permissions:
   contents: read
 
@@ -48,6 +57,8 @@ jobs:
           target_commitish: "${{ github.sha }}"
           tag_name: "v${{ needs.windows.outputs.app_version }}_${{ github.run_id }}"
           body: |
+            ${{ inputs.release_notes }}
+
             ## Downloads
             - **Windows**: `PlayTogether-${{ needs.windows.outputs.app_version }}-Windows.exe`
             - **macOS**: `PlayTogether-${{ needs.macos.outputs.app_version }}-macOS.dmg`
