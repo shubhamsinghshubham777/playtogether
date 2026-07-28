@@ -38,6 +38,23 @@ jobs:
           flutter-version: '3.44.8'
           cache: true  # Enable caching for Flutter SDK and pub dependencies
 
+      # The expensive translation units here belong to plugins (inappwebview,
+      # flutter_webrtc), and those sources live in the pub cache, which
+      # flutter-action restores with their original mtimes — so MSBuild's
+      # timestamp check accepts the cached .obj files instead of rebuilding them.
+      # Deliberately no restore-keys: a prefix hit would pair objects with a
+      # different set of plugin versions, and a subtly stale installer is a worse
+      # outcome than a slow one. A pubspec.lock change simply pays full price.
+      # Measured on a 2-core runner: 676s cold, 89s warm, ~6s to restore. Note
+      # that Actions caches do not travel from a branch to main — only main's own
+      # caches are visible everywhere — so the first run after a change here, and
+      # after every dependency bump, is a cold one.
+      - name: Cache Windows build outputs
+        uses: actions/cache@v4
+        with:
+          path: build/windows
+          key: ${{ runner.os }}-flutter-build-${{ hashFiles('pubspec.lock') }}
+
       - name: Extract version from pubspec.yaml
         id: version
         shell: bash  # runner default is pwsh; this needs grep/cut
@@ -49,13 +66,10 @@ jobs:
         run: |
           echo "${{ secrets.ENV_FILE }}" | Out-File -FilePath .env -Encoding utf8
 
+      # `flutter clean` used to sit between two `pub get`s here, which meant the
+      # first one only ever produced a .dart_tool for clean to delete. The runner
+      # is a fresh checkout, so there is nothing to clean in the first place.
       - name: Install dependencies
-        run: flutter pub get
-
-      - name: Clean build
-        run: flutter clean
-
-      - name: Resolve dependencies
         run: |
           flutter config --enable-windows-desktop
           flutter pub get

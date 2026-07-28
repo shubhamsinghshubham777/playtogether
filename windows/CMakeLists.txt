@@ -40,6 +40,15 @@ add_definitions(-DUNICODE -D_UNICODE)
 # the plugin's own CMakeLists lives in the read-only pub cache.
 add_compile_definitions(_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS)
 
+# Compile each project's translation units in parallel. Flutter runs
+# `cmake --build` without `--parallel`, and the Visual Studio generator neither
+# passes MSBuild `/m` nor sets MultiProcessorCompilation, so out of the box every
+# .cpp in the build compiles one at a time on one core. /MP lets cl.exe fan its
+# batched source list out across the machine's logical processors. It has to be
+# set here for the same reason the definition above does: the expensive targets
+# are plugins whose CMakeLists live in the read-only pub cache.
+add_compile_options(/MP)
+
 # Compilation settings that should be applied to most targets.
 #
 # Be cautious about adding new options here, as plugins use this function by
