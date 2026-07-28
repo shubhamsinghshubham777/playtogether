@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:playtogether/auth/webview_runtime.dart';
 import 'package:playtogether/diagnostics.dart';
 import 'package:playtogether/env.dart';
 import 'package:playtogether/ui/glass.dart';
@@ -39,10 +40,18 @@ class _TurnstileBodyState extends State<_TurnstileBody> {
   Uri? _pageUrl;
   Timer? _timeout;
   bool _pageRequested = false;
+  bool _webViewCreated = false;
 
   @override
   void initState() {
     super.initState();
+    // Known before anything is drawn, and no amount of waiting or retrying
+    // changes it — so say so immediately instead of after the full deadline.
+    if (PTWebView.runtimeMissing) {
+      _failed = true;
+      _errorCode = 'webview2-missing';
+      return;
+    }
     _serve();
   }
 
@@ -59,14 +68,22 @@ class _TurnstileBodyState extends State<_TurnstileBody> {
         StateError(
           'Turnstile produced neither a token nor an error in '
           '${_kChallengeTimeout.inSeconds}s '
-          '(page requested: $_pageRequested)',
+          '(webview created: $_webViewCreated, page requested: $_pageRequested)',
         ),
         StackTrace.current,
         during: 'running the Turnstile challenge',
       );
       setState(() {
         _failed = true;
-        _errorCode = _pageRequested ? 'no-response' : 'page-never-requested';
+        // Three distinct causes, and the first two were previously
+        // indistinguishable: a webview the platform refused to build at all,
+        // one that built but never navigated, and one that loaded the page and
+        // then heard nothing back from Cloudflare.
+        _errorCode = !_webViewCreated
+            ? 'webview-not-created'
+            : _pageRequested
+            ? 'no-response'
+            : 'page-never-requested';
       });
     });
   }
@@ -155,6 +172,14 @@ function onloadTurnstile() {
 </html>
 ''';
 
+  /// "Try again" is the right advice for a challenge that timed out, and the
+  /// wrong advice for a PC that is missing the component this renders in —
+  /// retrying that forever is precisely what people did.
+  String get _failureMessage => _errorCode == 'webview2-missing'
+      ? "Your PC is missing a Windows component this check needs. "
+            "Reinstalling PlayTogether will add it."
+      : "Hmm, the check didn't load. Close this and try again.";
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -165,7 +190,7 @@ function onloadTurnstile() {
         Text('Quick check', style: PTText.cardHeading),
         Text(
           _failed
-              ? "Hmm, the check didn't load. Close this and try again."
+              ? _failureMessage
               : "Just making sure you're human — takes a second.",
           style: PTText.body.copyWith(fontSize: 13.5, color: PTColors.white(0.6)),
         ),
@@ -185,6 +210,8 @@ function onloadTurnstile() {
                 : InAppWebView(
                     initialUrlRequest: URLRequest(url: WebUri.uri(_pageUrl!)),
                     initialSettings: InAppWebViewSettings(transparentBackground: true),
+                    // Null off Windows, where the plugin's own default is right.
+                    webViewEnvironment: PTWebView.environment,
                     // Turnstile reports its own diagnostics to the JS console
                     // (an unlisted hostname says so there in as many words),
                     // and that output is otherwise invisible in a release build.
@@ -209,6 +236,10 @@ function onloadTurnstile() {
                       data: {'url': '$url'},
                     ),
                     onWebViewCreated: (controller) {
+                      // Never fires if the platform could not build the webview
+                      // — which is the failure this dialog could not previously
+                      // distinguish from Cloudflare never answering.
+                      _webViewCreated = true;
                       controller.addJavaScriptHandler(
                         handlerName: 'turnstileToken',
                         callback: (args) {

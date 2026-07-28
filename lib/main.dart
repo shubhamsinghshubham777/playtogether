@@ -7,6 +7,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:playtogether/app_router.dart';
 import 'package:playtogether/auth/auth_service.dart';
+import 'package:playtogether/auth/webview_runtime.dart';
 import 'package:playtogether/diagnostics.dart';
 import 'package:playtogether/env.dart';
 import 'package:playtogether/platform.dart';
@@ -54,7 +55,13 @@ Future<void> _bootstrap() async {
       },
     );
   }
+  // Windows needs a WebView2 environment rooted somewhere writable before the
+  // guest captcha can render; everywhere else this returns immediately.
+  await PTWebView.init();
   await Supabase.initialize(url: Env.supabaseUrl, publishableKey: Env.supabasePublishableKey);
+  // Must follow initialize (it reads Supabase.instance) and precede runApp, so
+  // the auth stream has an error handler before the first deep link can land.
+  AuthService.instance.start();
   runApp(const MainApp());
 }
 
@@ -71,10 +78,17 @@ class _MainAppState extends State<MainApp> {
   late final router = buildRouter(player);
   final _appLinks = AppLinks();
   StreamSubscription<Uri>? _linkSub;
+  StreamSubscription<String>? _authFailureSub;
 
   @override
   void initState() {
     super.initState();
+    // The OAuth callback resolves inside supabase_flutter, long after the login
+    // button's own error handling has finished — so a failure there has no
+    // screen to report itself on. This is that screen.
+    _authFailureSub = AuthService.instance.failures.listen(
+      (message) => showPTSnackVia(_scaffoldMessengerKey.currentState, message, kind: .error),
+    );
     _linkSub = _appLinks.uriLinkStream.listen(_onDeepLink);
     // The native side replays the launch URL only to the FIRST stream
     // subscriber — which is supabase_flutter (it subscribes inside
@@ -142,6 +156,7 @@ class _MainAppState extends State<MainApp> {
   @override
   void dispose() {
     _linkSub?.cancel();
+    _authFailureSub?.cancel();
     player.dispose();
     super.dispose();
   }
