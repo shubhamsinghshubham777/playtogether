@@ -13,6 +13,7 @@ import 'package:playtogether/env.dart';
 import 'package:playtogether/platform.dart';
 import 'package:playtogether/rooms/room_models.dart';
 import 'package:playtogether/rooms/room_service.dart';
+import 'package:playtogether/tls_diagnostics.dart';
 import 'package:playtogether/ui/banners.dart';
 import 'package:playtogether/ui/pt_theme.dart';
 import 'package:playtogether/ui/responsive.dart';
@@ -41,20 +42,12 @@ Future<void> main() async {
 }
 
 Future<void> _bootstrap() async {
+  // Before anything opens a socket, so a handshake that fails on the very first
+  // Supabase call still says which certificate it was offered.
+  installTlsDiagnostics();
   MediaKit.ensureInitialized();
   // OS-window fullscreen (F key in a room) needs the manager ready up front.
-  if (isDesktop) {
-    await windowManager.ensureInitialized();
-    // Hide the native title bar; window_manager still shows the window once
-    // the style is applied, so `show`/`focus` here replace the default show.
-    await windowManager.waitUntilReadyToShow(
-      const WindowOptions(titleBarStyle: TitleBarStyle.hidden),
-      () async {
-        await windowManager.show();
-        await windowManager.focus();
-      },
-    );
-  }
+  if (isDesktop) await windowManager.ensureInitialized();
   // Windows needs a WebView2 environment rooted somewhere writable before the
   // guest captcha can render; everywhere else this returns immediately.
   await PTWebView.init();

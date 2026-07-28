@@ -4,7 +4,6 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:playtogether/diagnostics.dart';
-import 'package:playtogether/ui/desktop_chrome.dart';
 import 'package:playtogether/ui/pt_motion.dart';
 import 'package:playtogether/ui/pt_theme.dart';
 
@@ -162,9 +161,7 @@ class _PTSplashState extends State<PTSplash> with SingleTickerProviderStateMixin
             if (leaving >= 1) return const SizedBox.shrink();
             return Opacity(
               opacity: 1 - leaving,
-              // Desktop hides the native title bar, so without this the window
-              // is unmovable for the length of the splash.
-              child: DesktopDragBar(child: _Stage(_controller, exit: leaving)),
+              child: _Stage(_controller, exit: leaving),
             );
           },
         ),
