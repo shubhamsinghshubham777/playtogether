@@ -41,10 +41,22 @@ jobs:
       - name: Cache Flutter build outputs
         uses: actions/cache@v4
         with:
+          # macos/Pods is cached so that `flutter build` finds Manifest.lock
+          # already matching Podfile.lock and skips CocoaPods entirely. That is
+          # the point of caching it: `pod install` rewrites Pods.xcodeproj and
+          # the Target Support Files on every run, which invalidates each pod
+          # target in Xcode. media_kit, inappwebview and flutter_webrtc were
+          # recompiling on top of a perfectly warm cache because of it — worth
+          # 77s of the build step.
+          #
+          # The key is versioned because a change to what gets cached is inert
+          # while an older cache still satisfies the key: on an exact hit the
+          # action never re-saves.
           path: |
             build/macos
+            macos/Pods
             .dart_tool
-          key: ${{ runner.os }}-flutter-build-${{ hashFiles('**/pubspec.lock') }}
+          key: ${{ runner.os }}-flutter-build-v3-${{ hashFiles('**/pubspec.lock', 'macos/Podfile.lock') }}
           restore-keys: |
             ${{ runner.os }}-flutter-build-
 
@@ -61,31 +73,50 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Install CocoaPods dependencies
-        run: |
-          cd macos
-          pod install
-
+      # No explicit `pod install`: flutter runs CocoaPods itself when Podfile.lock
+      # and the pods' Manifest.lock disagree, and skips it when they agree. Doing
+      # it unconditionally is what dirtied every pod target on every build.
       - name: Build macOS App
         run: |
           flutter config --enable-macos-desktop
           flutter build macos --release
 
-      - name: Install create-dmg
-        run: brew install create-dmg
-
+      # This used to be create-dmg, which spent ~50s mounting a scratch image and
+      # driving Finder over AppleScript to place two icons and size the window —
+      # all of which it then persisted into the volume's .DS_Store. macos/dmg/
+      # dmg_ds_store IS that file, lifted out of the shipped v0.7.0 DMG, so
+      # staging it reproduces the same window with Finder never involved.
+      # Regenerate it (mount a DMG, copy .DS_Store) if the layout should change;
+      # the icon positions inside it are keyed to these exact filenames.
       - name: Create DMG
         run: |
-          create-dmg \
-            --volname "PlayTogether" \
-            --window-pos 200 120 \
-            --window-size 800 400 \
-            --icon-size 100 \
-            --icon "PlayTogether.app" 200 190 \
-            --hide-extension "PlayTogether.app" \
-            --app-drop-link 600 185 \
-            "PlayTogether-${{ steps.version.outputs.APP_VERSION }}-macOS.dmg" \
-            "build/macos/Build/Products/Release/PlayTogether.app"
+          STAGE="$RUNNER_TEMP/dmg"
+          rm -rf "$STAGE" && mkdir -p "$STAGE"
+          # ditto, not cp -R: it preserves the extended attributes and resource
+          # forks that the release build's ad-hoc code signature depends on.
+          ditto "build/macos/Build/Products/Release/PlayTogether.app" "$STAGE/PlayTogether.app"
+          ln -s /Applications "$STAGE/Applications"
+          cp macos/dmg/dmg_ds_store "$STAGE/.DS_Store"
+          # zlib-level=9 is what create-dmg asked for. The hdiutil default is
+          # ~15s faster to write and ~6 MB larger to download, which is the wrong
+          # way round for something every user fetches once.
+          hdiutil create \
+            -volname "PlayTogether" \
+            -srcfolder "$STAGE" \
+            -fs HFS+ \
+            -format UDZO \
+            -imagekey zlib-level=9 \
+            -ov \
+            "PlayTogether-${{ steps.version.outputs.APP_VERSION }}-macOS.dmg"
+
+      # Runs after the DMG is built and before the cache is saved at job end.
+      # Excluding these via a `!` pattern on the cache path does not work: when
+      # `path:` names a directory it is archived whole, and negations for files
+      # inside it are never applied — which is why the "trimmed" cache came out
+      # bigger than the one it replaced. FlutterMacOS.framework.dSYM alone is
+      # 505 MB of engine debug symbols riding along in a release build.
+      - name: Drop debug symbols before the cache is saved
+        run: rm -rf build/macos/Build/Products/Release/*.dSYM
 
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
