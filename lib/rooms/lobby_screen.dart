@@ -345,7 +345,15 @@ class _LobbyScreenState extends State<LobbyScreen> {
           "You'll be the host",
           compact: compact,
         ),
-        PTTextField(controller: _nameController, label: 'Room name', hint: 'Friday movie night'),
+        // Deliberately unvalidated: create_room defaults a blank name to "Watch
+        // party". The 60 mirrors the server's cap so the field stops short of
+        // silent truncation.
+        PTTextField(
+          controller: _nameController,
+          label: 'Room name',
+          hint: 'Friday movie night',
+          maxLength: 60,
+        ),
         Column(
           crossAxisAlignment: .start,
           spacing: 10,
