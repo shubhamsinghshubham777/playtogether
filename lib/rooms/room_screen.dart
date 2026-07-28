@@ -219,7 +219,15 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
   @override
   void initState() {
     super.initState();
-    if (isDesktop) windowManager.addListener(this);
+    if (isDesktop) {
+      windowManager.addListener(this);
+      // The window is already fullscreen by the time the first room opens (the
+      // app launches that way), and the listener only reports *transitions* —
+      // without seeding, Esc would fall through to nothing.
+      windowManager.isFullScreen().then((value) {
+        if (mounted && value != _fullscreen) setState(() => _fullscreen = value);
+      });
+    }
     // Bubbles are kept alive (fading) until the panel has fully covered them.
     _chatAnim.addStatusListener((status) {
       if (status == AnimationStatus.completed && _overlayChat.isNotEmpty) {

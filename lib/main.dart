@@ -57,6 +57,24 @@ Future<void> _bootstrap() async {
   // the auth stream has an error handler before the first deep link can land.
   AuthService.instance.start();
   runApp(const MainApp());
+  if (isDesktop) unawaited(_enterFullScreen());
+}
+
+/// Desktop starts in OS fullscreen — this is a media app, and the room screen's
+/// F/Esc toggle stays the way back out.
+///
+/// It has to wait for a frame: asked before the engine has drawn, macOS's
+/// `toggleFullScreen` on a window that has never rendered leaves the app with
+/// no window at all (frontmost, zero AXWindows) rather than a fullscreen one.
+/// Hence after runApp, and unawaited — nothing downstream may block on the
+/// window's shape, least of all a window manager that refuses outright.
+Future<void> _enterFullScreen() async {
+  try {
+    await WidgetsBinding.instance.endOfFrame;
+    await windowManager.setFullScreen(true);
+  } catch (e, s) {
+    reportNonFatal(e, s, during: 'launch fullscreen');
+  }
 }
 
 class MainApp extends StatefulWidget {
