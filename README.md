@@ -7,7 +7,14 @@ create a **room**, share a 6-character code (or a `playtogether://join/<code>`
 invite link), and everyone's playback stays in lockstep — play, pause, and seeks
 broadcast to every member in real time, with chat and live facecams alongside.
 
-<br clear="left">
+# Preview
+
+| Screen | Preview |
+|---|---|
+| Splash | <img src="https://github.com/user-attachments/assets/f6be89db-907d-4b2e-8553-87a2339f1e96" /> |
+| Home | <img src="https://github.com/user-attachments/assets/cbd1b2ae-ba97-48ec-8636-dd2fc29b03a8" /> |
+| Room | <img src="https://github.com/user-attachments/assets/520ddc80-dcb9-4588-a05e-9167e59ec2ca" /> |
+
 
 ## Features
 
