@@ -15,9 +15,13 @@
 #   2. The Evergreen WebView2 runtime, which flutter_inappwebview needs for the
 #      guest captcha dialog. It ships with Windows 11 and most Windows 10, but
 #      is absent on LTSC/Server and de-bloated images — where the captcha would
-#      silently fail to render and guest sign-in becomes impossible. The
-#      bootstrapper detects an existing runtime and exits without reinstalling,
-#      so running it unconditionally is safe.
+#      silently fail to render and guest sign-in becomes impossible. A [Code]
+#      check skips the bootstrapper when a runtime is already registered
+#      (Windows 11's inbox one, a previous PlayTogether install, or a manual
+#      install all count) — even in that case the bootstrapper costs seconds of
+#      EdgeUpdate round-trips, which is pure waste on every upgrade. When it
+#      does run, it detects concurrent installs itself, so racing EdgeUpdate is
+#      still safe.
 #
 # Inno Setup allows a section header to appear more than once and concatenates
 # the entries, so appending whole sections here is equivalent to having them
@@ -33,9 +37,15 @@ if (-not (Test-Path $iss)) {
 # The exe name is the pubspec `name`, which is also windows/CMakeLists.txt's
 # BINARY_NAME. Assert it landed in the script rather than hardcoding blind: a
 # rename would otherwise register a protocol handler pointing at nothing.
+$issContent = Get-Content $iss -Raw
+
 $exe = 'playtogether.exe'
-if ((Get-Content $iss -Raw) -notmatch [regex]::Escape('{app}\' + $exe)) {
+if ($issContent -notmatch [regex]::Escape('{app}\' + $exe)) {
     throw "$iss does not reference {app}\$exe — the executable may have been renamed."
+}
+
+if ($issContent -match '(?m)^\[Code\]') {
+    throw "$iss already contains a [Code] section — merge the WebView2 check into it instead of appending a duplicate."
 }
 
 # Permanent Microsoft fwlink for the Evergreen bootstrapper (~2 MB). It is
@@ -61,12 +71,31 @@ $lines = @(
     ('Root: HKA; Subkey: "Software\Classes\playtogether\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\' + $exe + '"" ""%1"""')
     ''
     '[Files]'
-    ('Source: "' + $bootstrapper + '"; DestDir: "{tmp}"; Flags: deleteafterinstall')
+    ('Source: "' + $bootstrapper + '"; DestDir: "{tmp}"; Flags: deleteafterinstall; Check: WebView2Needed')
     ''
     '[Run]'
     # No postinstall flag, so this runs during installation — before the finish
     # page where inno_bundle's own "launch the app" entry waits.
-    'Filename: "{tmp}\MicrosoftEdgeWebview2Setup.exe"; Parameters: "/silent /install"; StatusMsg: "Installing the WebView2 runtime..."; Flags: waituntilterminated'
+    'Filename: "{tmp}\MicrosoftEdgeWebview2Setup.exe"; Parameters: "/silent /install"; StatusMsg: "Installing the WebView2 runtime..."; Flags: waituntilterminated; Check: WebView2Needed'
+    ''
+    '[Code]'
+    'function RuntimeRegistered(const RootKey: Integer; const SubKey: String): Boolean;'
+    'var'
+    '  pv: String;'
+    'begin'
+    '  Result := RegQueryStringValue(RootKey, SubKey, ''pv'', pv)'
+    '    and (pv <> '''') and (pv <> ''0.0.0.0'');'
+    'end;'
+    ''
+    'function WebView2Needed(): Boolean;'
+    'begin'
+    '  Result := not ('
+    '    RuntimeRegistered(HKLM32, ''SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}'')'
+    '    or RuntimeRegistered(HKCU, ''Software\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}'')'
+    '  );'
+    '  if Result and IsWin64 then'
+    '    Result := not RuntimeRegistered(HKLM64, ''SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}'');'
+    'end;'
 )
 
 Add-Content -Path $iss -Value $lines
