@@ -1,6 +1,6 @@
 ---
 name: release
-description: Cut a PlayTogether release — analyze commits since the last release tag, bump the pubspec version accordingly, push to main, and trigger the build_installers GitHub workflow. Use when the user says "cut a release", "ship a release", "bump the version and build installers", or "/release". Optional arg overrides the computed version (e.g. "/release 0.5.0" or "/release patch").
+description: Cut a PlayTogether release or pre-release — analyze commits since the last release tag, bump the pubspec version accordingly, push to main, and trigger the build_installers GitHub workflow. Use when the user says "cut a release", "ship a release", "cut a pre-release", "bump the version and build installers", or "/release". Optional arg overrides the computed version (e.g. "/release 0.5.0" or "/release patch"); a "pre" arg (alone or combined, e.g. "/release pre" or "/release pre minor") publishes it as a GitHub pre-release.
 ---
 
 # Cut a release
@@ -10,6 +10,12 @@ Bumps `version:` in pubspec.yaml, commits and pushes to `main`, and triggers the
 workflow's `release` job tags the commit itself as `v<version>_<run_id>` (see
 `tag_name:` in `.github/workflows/build_installers.yaml`); a locally pushed tag
 would be a duplicate that matches nothing.
+
+A `pre` argument (alone or alongside a version/bump arg) cuts a **pre-release**:
+the flow is identical except that step 3 defaults the bump to patch, step 6
+passes `-f prerelease=true` to the dispatch, and step 7 reports it as a
+pre-release. Pre-releases still get a real version and tag — "promoting" one to
+stable later means cutting a new, higher version, not re-tagging.
 
 ## Steps
 
@@ -43,6 +49,9 @@ would be a duplicate that matches nothing.
      - **patch** — only fixes, polish, refactors, CI/docs/chores.
      - **major** (→ 1.0.0) — never infer this; only when the user explicitly
        asks for it.
+     - **pre-release** (`pre` with no version/bump arg) — default to **patch**
+       unless the commits clearly warrant minor; the eventual stable release
+       takes the next, higher version.
    - State the chosen version **with a one-line rationale citing the commits
      that drove the decision**, then proceed — no confirmation needed unless
      the analysis is genuinely ambiguous.
@@ -87,6 +96,9 @@ would be a duplicate that matches nothing.
    )"
    ```
 
+   For a pre-release, append `-f prerelease=true` to that command (the input
+   defaults to false, so stable releases never pass it).
+
    The dispatch is async — poll until the new run appears:
 
    ```bash
@@ -101,4 +113,5 @@ would be a duplicate that matches nothing.
    release, tag, and installer artifacts on its own. Remind the user the
    release will appear at
    `https://github.com/shubhamsinghshubham777/playtogether/releases` when the
-   run finishes.
+   run finishes. For a pre-release, say so and note it will carry the
+   Pre-release badge and stay excluded from "Latest".

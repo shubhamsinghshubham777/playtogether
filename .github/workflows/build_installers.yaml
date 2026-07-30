@@ -10,6 +10,13 @@ on:
         type: string
         required: false
         default: ""
+      prerelease:
+        description: >-
+          Publish the GitHub release as a pre-release (marked with the
+          Pre-release badge and excluded from "Latest").
+        type: boolean
+        required: false
+        default: false
 permissions:
   contents: read
 
@@ -50,6 +57,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          prerelease: ${{ inputs.prerelease }}
           files: |
             ./PlayTogether-${{ needs.windows.outputs.app_version }}-Windows.exe
             ./PlayTogether-${{ needs.macos.outputs.app_version }}-macOS.dmg
