@@ -20,6 +20,7 @@ class RoomControlBarActions {
     this.openFileTooltip,
     required this.onVolume,
     required this.onToggleMute,
+    this.onReact,
   });
 
   final VoidCallback onPlayPause;
@@ -40,6 +41,7 @@ class RoomControlBarActions {
   final String? openFileTooltip;
   final ValueChanged<double> onVolume;
   final VoidCallback onToggleMute;
+  final VoidCallback? onReact;
 }
 
 class RoomControlBar extends StatefulWidget {
@@ -54,6 +56,7 @@ class RoomControlBar extends StatefulWidget {
     required this.avAvailable,
     required this.actions,
     this.compact = false,
+    this.reactOpen = false,
     this.transportEnabled = true,
     this.transportHint,
   });
@@ -67,6 +70,7 @@ class RoomControlBar extends StatefulWidget {
   final bool avAvailable;
   final RoomControlBarActions actions;
   final bool compact;
+  final bool reactOpen;
 
   /// Affordance only — the real enforcement lives at RoomScreen's
   /// `_playPause`/`_seek`/`_skip` choke points, which keyboard shortcuts and
@@ -261,13 +265,26 @@ class _RoomControlBarState extends State<RoomControlBar> {
                 tooltip: widget.camOn ? 'Camera off' : 'Camera on',
                 onPressed: () => actions.onCamToggle(!widget.camOn),
               ),
+            ],
+            if (actions.onReact != null)
+              PTIconButton(
+                icon: Symbols.add_reaction_rounded,
+                active: widget.reactOpen,
+                glass: false,
+                borderRadius: BorderRadius.circular(12),
+                size: 42,
+                iconSize: 22,
+                tooltip: widget.reactOpen ? 'Close reactions' : 'React',
+                onPressed: actions.onReact,
+              ),
+            if ((widget.avAvailable || actions.onReact != null) &&
+                (actions.onAudioTracks != null || actions.onSubtitles != null))
               Container(
                 width: 1,
                 height: 26,
                 margin: const EdgeInsets.symmetric(horizontal: 4),
                 color: PTColors.white(0.12),
               ),
-            ],
             if (actions.onAudioTracks != null)
               PTIconButton(
                 icon: Symbols.audiotrack_rounded,
@@ -401,6 +418,16 @@ class _RoomControlBarState extends State<RoomControlBar> {
                 onPressed: () => actions.onCamToggle(!widget.camOn),
               ),
             ],
+          ),
+        if (actions.onReact != null)
+          PTIconButton(
+            icon: Symbols.add_reaction_rounded,
+            active: widget.reactOpen,
+            glass: false,
+            borderRadius: BorderRadius.circular(12),
+            iconSize: 21,
+            tooltip: widget.reactOpen ? 'Close reactions' : 'React',
+            onPressed: actions.onReact,
           ),
         Expanded(
           child: Row(

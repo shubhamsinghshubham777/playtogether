@@ -13,6 +13,7 @@ abstract class SyncEventType {
   static const String mediaSet = 'media_set';
   static const String memberKicked = 'member_kicked';
   static const String transportLock = 'transport_lock';
+  static const String reaction = 'reaction';
   static const String roomEnded = 'room_ended';
 }
 
@@ -355,6 +356,35 @@ class MediaSetEvent extends SyncEvent {
     'durationMs': durationMs,
     'url': url,
     'updatedAtMs': updatedAtMs,
+  };
+}
+
+class ReactionEvent extends SyncEvent {
+  final String emoji;
+  final String displayName;
+
+  const ReactionEvent({
+    required super.senderId,
+    required super.timestamp,
+    required this.emoji,
+    required this.displayName,
+  });
+
+  factory ReactionEvent.fromPayload(Map<String, dynamic> payload) {
+    return ReactionEvent(
+      senderId: payload['senderId'] as String? ?? '',
+      timestamp: payload['timestamp'] as int? ?? 0,
+      emoji: payload['emoji'] as String? ?? '',
+      displayName: payload['displayName'] as String? ?? 'Watcher',
+    );
+  }
+
+  @override
+  Map<String, dynamic> toPayload() => {
+    'senderId': senderId,
+    'timestamp': timestamp,
+    'emoji': emoji,
+    'displayName': displayName,
   };
 }
 

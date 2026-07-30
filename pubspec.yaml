@@ -18,6 +18,7 @@ dependencies:
   go_router: 17.3.0
   image: 4.9.1
   livekit_client: 2.8.1
+  lottie: 3.5.1
   material_symbols_icons: 4.2960.0
   media_kit: 1.2.6
   media_kit_video: 2.0.1
@@ -45,6 +46,7 @@ flutter:
     # Refreshed by tool/update_ca_bundle.py — CA roots trusted in addition to
     # the OS's, for machines whose own root store cannot complete our chains.
     - assets/ca/cacert.pem
+    - assets/emoji/
   fonts:
     - family: Space Grotesk
       fonts:

@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:playtogether/diagnostics.dart';
 import 'package:playtogether/profile/profile_models.dart';
+import 'package:playtogether/rooms/reactions.dart';
 import 'package:playtogether/rooms/room_models.dart';
 import 'package:playtogether/rooms/room_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -285,6 +286,7 @@ class SyncService {
         .onBroadcast(event: SyncEventType.mediaSet, callback: _guard(_handleMediaSet))
         .onBroadcast(event: SyncEventType.memberKicked, callback: _guard(_handleMemberKicked))
         .onBroadcast(event: SyncEventType.transportLock, callback: _guard(_handleTransportLock))
+        .onBroadcast(event: SyncEventType.reaction, callback: _guard(_handleReaction))
         .onBroadcast(event: SyncEventType.roomEnded, callback: _guard(_handleRoomEnded))
         .onPresenceSync(_handlePresenceSync)
         .subscribe((status, error) {
@@ -623,6 +625,70 @@ class SyncService {
   void _emitTyping() {
     if (_disposed) return;
     _typingController.add(_typingNames.values.toList());
+  }
+
+  final _reactionController = StreamController<ReactionEvent>.broadcast();
+  Stream<ReactionEvent> get reactionsStream => _reactionController.stream;
+
+  static const _reactionInterval = Duration(milliseconds: 250);
+  int _lastReactionSentMs = 0;
+  Timer? _reactionFlushTimer;
+  String? _queuedReactionEmoji;
+
+  void sendReaction(String emoji) {
+    if (_disposed) return;
+    if (reactionForEmoji(emoji) == null) return;
+    _reactionController.add(
+      ReactionEvent(
+        senderId: userId,
+        timestamp: _nextTimestamp(),
+        emoji: emoji,
+        displayName: profile.displayName,
+      ),
+    );
+
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final wait = _reactionInterval.inMilliseconds - (now - _lastReactionSentMs);
+    if (wait <= 0) {
+      _lastReactionSentMs = now;
+      _broadcastReaction(emoji);
+      return;
+    }
+    _queuedReactionEmoji = emoji;
+    if (_reactionFlushTimer?.isActive ?? false) return;
+    _reactionFlushTimer = Timer(Duration(milliseconds: wait), () {
+      final queued = _queuedReactionEmoji;
+      _queuedReactionEmoji = null;
+      if (_disposed || queued == null) return;
+      _lastReactionSentMs = DateTime.now().millisecondsSinceEpoch;
+      _broadcastReaction(queued);
+    });
+  }
+
+  void _broadcastReaction(String emoji) {
+    unawaited(() async {
+      try {
+        await _channel?.sendBroadcastMessage(
+          event: SyncEventType.reaction,
+          payload: ReactionEvent(
+            senderId: userId,
+            timestamp: _nextTimestamp(),
+            emoji: emoji,
+            displayName: profile.displayName,
+          ).toPayload(),
+        );
+      } catch (e, s) {
+        reportNonFatal(e, s, during: 'broadcasting a reaction');
+      }
+    }());
+  }
+
+  void _handleReaction(Map<String, dynamic> payload) {
+    if (_disposed) return;
+    final event = ReactionEvent.fromPayload(payload);
+    if (event.senderId == userId) return;
+    if (reactionForEmoji(event.emoji) == null) return;
+    _reactionController.add(event);
   }
 
   // ---------------------------------------------------------------------------
@@ -1150,6 +1216,7 @@ class SyncService {
     for (final t in _typingTimers.values) {
       t.cancel();
     }
+    _reactionFlushTimer?.cancel();
     _chatController.close();
     _presenceController.close();
     _typingController.close();
@@ -1163,6 +1230,7 @@ class SyncService {
     _roomEndedController.close();
     _connectionController.close();
     _remoteActionController.close();
+    _reactionController.close();
     disconnect();
   }
 }

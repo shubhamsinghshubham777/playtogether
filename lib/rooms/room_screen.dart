@@ -17,10 +17,13 @@ import 'package:playtogether/player/youtube/pt_youtube_controller.dart';
 import 'package:playtogether/player/youtube/pt_youtube_embed.dart';
 import 'package:playtogether/player/youtube_url_dialog.dart';
 import 'package:playtogether/profile/profile_service.dart';
+import 'package:playtogether/rooms/reactions.dart';
 import 'package:playtogether/rooms/room_models.dart';
 import 'package:playtogether/rooms/room_service.dart';
 import 'package:playtogether/rooms/widgets/facecam_rail.dart';
 import 'package:playtogether/rooms/widgets/kick_member_dialog.dart';
+import 'package:playtogether/rooms/widgets/reaction_overlay.dart';
+import 'package:playtogether/rooms/widgets/reaction_strip.dart';
 import 'package:playtogether/rooms/widgets/readiness_overlay.dart';
 import 'package:playtogether/rooms/widgets/room_chat_panel.dart';
 import 'package:playtogether/rooms/widgets/room_control_bar.dart';
@@ -91,6 +94,10 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
   bool _chatOpen = false;
   int _unread = 0;
   bool _camsVisible = true;
+
+  final _reactionAssets = ReactionAssets();
+  bool _reactOpen = false;
+  Stream<ReactionEvent>? _reactionStream;
 
   // Drives the chat panel's slide+fade in the overlay layouts *and* the
   // cross-fade of what it covers (facecam rail, floating bubbles), so the two
@@ -377,9 +384,12 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
     setState(() {
       _room = room;
       _sync = sync;
+      _reactionStream = sync.reactionsStream;
       _canonicalMedia = sync.canonicalMedia;
       _loading = false;
     });
+
+    unawaited(_reactionAssets.preload());
 
     await sync.connect();
     _updateReadiness();
@@ -1316,9 +1326,11 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
       case LogicalKeyboardKey.keyF:
         _toggleFullscreen();
       case LogicalKeyboardKey.escape:
-        // Ordered: text-field unfocus (handled above) → chat close →
-        // fullscreen exit → let Esc bubble.
-        if (_chatOpen) {
+        // Ordered: text-field unfocus (handled above) → reaction strip close →
+        // chat close → fullscreen exit → let Esc bubble.
+        if (_reactOpen) {
+          _closeReact();
+        } else if (_chatOpen) {
           _toggleChat();
         } else if (_fullscreen) {
           _exitFullscreen();
@@ -1345,17 +1357,38 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
   void _scheduleControlsHide() {
     _controlsHideTimer?.cancel();
     _controlsHideTimer = Timer(const Duration(seconds: 3), () {
-      if (!mounted || !_playing || _pointerOverControls || !_controlsVisible) {
+      if (!mounted || !_playing || _pointerOverControls || !_controlsVisible || _reactOpen) {
         return;
       }
       setState(() => _controlsVisible = false);
     });
   }
 
+  void _toggleReact() {
+    setState(() => _reactOpen = !_reactOpen);
+    _shortcutFocus.requestFocus();
+    _showControls();
+  }
+
+  void _closeReact() {
+    if (!_reactOpen) return;
+    setState(() => _reactOpen = false);
+    _shortcutFocus.requestFocus();
+    _showControls();
+  }
+
+  void _sendReaction(PTReaction reaction) {
+    _sync?.sendReaction(reaction.emoji);
+  }
+
   void _toggleControlsVisible() {
     // Tapping the video also steals focus from the chat input, so keyboard
     // shortcuts work again immediately.
     _shortcutFocus.requestFocus();
+    if (_reactOpen) {
+      _closeReact();
+      return;
+    }
     if (_controlsVisible) {
       _controlsHideTimer?.cancel();
       setState(() => _controlsVisible = false);
@@ -1776,6 +1809,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
         : 'Locate your copy of ${_canonicalMedia.name ?? 'the file'}',
     onVolume: _setVolume,
     onToggleMute: _toggleMute,
+    onReact: _sync != null ? _toggleReact : null,
   );
 
   @override
@@ -1808,10 +1842,29 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
                   focusNode: _shortcutFocus,
                   autofocus: true,
                   onKeyEvent: _handleKeyEvent,
-                  child: PTResponsive(
-                    desktop: (_) => _desktop(),
-                    portrait: (_) => _portrait(),
-                    landscape: (_) => _landscape(),
+                  child: Stack(
+                    children: [
+                      PTResponsive(
+                        desktop: (_) => _desktop(),
+                        portrait: (_) => _portrait(),
+                        landscape: (_) => _landscape(),
+                      ),
+                      if (_reactionStream != null)
+                        Positioned.fill(
+                          child: IgnorePointer(
+                            child: ReactionOverlay(
+                              reactions: _reactionStream!,
+                              assets: _reactionAssets,
+                              spawnBottom: switch (layoutOf(context)) {
+                                PTLayout.desktop => 180,
+                                PTLayout.landscape => 150,
+                                PTLayout.portrait => 96,
+                              },
+                              compact: layoutOf(context) != PTLayout.desktop,
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
         ),
@@ -2321,6 +2374,15 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
     );
   }
 
+  Widget _reactionStrip({bool compact = false}) {
+    return ReactionStrip(
+      open: _reactOpen,
+      assets: _reactionAssets,
+      compact: compact,
+      onPick: _sendReaction,
+    );
+  }
+
   Widget _chatToggleButton() {
     return UnreadBadge(
       count: _unread,
@@ -2433,17 +2495,24 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
               Center(
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 920),
-                  child: RoomControlBar(
-                    playing: _playing,
-                    position: _position,
-                    duration: _duration,
-                    volume: _volume,
-                    micOn: _av?.micEnabled ?? false,
-                    camOn: _av?.camEnabled ?? false,
-                    avAvailable: _av != null,
-                    actions: _controlActions,
-                    transportEnabled: _transportBlockedReason == null,
-                    transportHint: _transportBlockedReason,
+                  child: Column(
+                    mainAxisSize: .min,
+                    children: [
+                      _reactionStrip(),
+                      RoomControlBar(
+                        playing: _playing,
+                        position: _position,
+                        duration: _duration,
+                        volume: _volume,
+                        micOn: _av?.micEnabled ?? false,
+                        camOn: _av?.camEnabled ?? false,
+                        avAvailable: _av != null,
+                        actions: _controlActions,
+                        reactOpen: _reactOpen,
+                        transportEnabled: _transportBlockedReason == null,
+                        transportHint: _transportBlockedReason,
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -2511,18 +2580,25 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
             ),
           Padding(
             padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
-            child: RoomControlBar(
-              playing: _playing,
-              position: _position,
-              duration: _duration,
-              volume: _volume,
-              micOn: _av?.micEnabled ?? false,
-              camOn: _av?.camEnabled ?? false,
-              avAvailable: _av != null,
-              actions: _controlActions,
-              transportEnabled: _transportBlockedReason == null,
-              transportHint: _transportBlockedReason,
-              compact: true,
+            child: Column(
+              mainAxisSize: .min,
+              children: [
+                _reactionStrip(compact: true),
+                RoomControlBar(
+                  playing: _playing,
+                  position: _position,
+                  duration: _duration,
+                  volume: _volume,
+                  micOn: _av?.micEnabled ?? false,
+                  camOn: _av?.camEnabled ?? false,
+                  avAvailable: _av != null,
+                  actions: _controlActions,
+                  reactOpen: _reactOpen,
+                  transportEnabled: _transportBlockedReason == null,
+                  transportHint: _transportBlockedReason,
+                  compact: true,
+                ),
+              ],
             ),
           ),
           _bannerStack(spacing: 10, padding: const EdgeInsets.fromLTRB(14, 10, 14, 0)),
@@ -2637,18 +2713,25 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
                 left: 0,
                 right: 0,
                 child: _overlayControls(
-                  RoomControlBar(
-                    playing: _playing,
-                    position: _position,
-                    duration: _duration,
-                    volume: _volume,
-                    micOn: _av?.micEnabled ?? false,
-                    camOn: _av?.camEnabled ?? false,
-                    avAvailable: _av != null,
-                    actions: _controlActions,
-                    transportEnabled: _transportBlockedReason == null,
-                    transportHint: _transportBlockedReason,
-                    compact: true,
+                  Column(
+                    mainAxisSize: .min,
+                    children: [
+                      _reactionStrip(compact: true),
+                      RoomControlBar(
+                        playing: _playing,
+                        position: _position,
+                        duration: _duration,
+                        volume: _volume,
+                        micOn: _av?.micEnabled ?? false,
+                        camOn: _av?.camEnabled ?? false,
+                        avAvailable: _av != null,
+                        actions: _controlActions,
+                        reactOpen: _reactOpen,
+                        transportEnabled: _transportBlockedReason == null,
+                        transportHint: _transportBlockedReason,
+                        compact: true,
+                      ),
+                    ],
                   ),
                 ),
               ),

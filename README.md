@@ -27,6 +27,8 @@ broadcast to every member in real time, with chat and live facecams alongside.
   state sync for late joiners, host drift-correction heartbeat, automatic
   reconnection.
 - **Chat** — persisted per-room history, typing indicators, unread badge.
+- **Quick reactions** — Meet-style animated emoji that float up over the video
+  on everyone's screen, captioned with who sent them.
 - **Facecams** — voice + video tiles powered by LiveKit, with mic/cam toggles.
 - **Auth** — Google sign-in or instant guest accounts (Cloudflare Turnstile
   protected); guests can upgrade to Google later without losing their identity.
@@ -103,3 +105,10 @@ concern; macOS/iOS/Android register it via their app manifests.
 | `supabase/` | Migrations (schema/RLS/RPCs/cron), edge functions, auth config |
 
 `CLAUDE.md` documents the architecture and the sync-engine invariants in depth.
+
+## Credits
+
+Quick-reaction animations are [Noto Animated Emoji](https://googlefonts.github.io/noto-emoji-animation/)
+by Google, licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+They're bundled in `assets/emoji/` and refreshed by
+`python3 tool/fetch_reaction_emoji.py`.
