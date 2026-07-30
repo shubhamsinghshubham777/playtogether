@@ -24,19 +24,30 @@ default arrow and the pointing hand. Local-file mode is unaffected. Reported
 
 **Why only YouTube mode:** local video renders as a Flutter texture
 (media_kit), so Flutter owns the whole surface. The YouTube embed
-(`youtube_player_flutter` → `flutter_inappwebview`) is a **macOS platform
+(`lib/player/youtube/` → `flutter_inappwebview`) is a **macOS platform
 view** — a real `WKWebView` `NSView` inside the window. AppKit delivers mouse
 tracking to that view directly, *below Flutter's event layer*: WKWebView
 re-asserts the arrow cursor on mouse moves while FlutterView sets the pointing
 hand for hovered buttons, and the two alternate → flicker.
 
+**Still present after the IFrame migration (2026-07-31)** — the embed moved off
+`youtube_player_flutter` onto our own bridge, but it is the same
+`flutter_inappwebview` platform-view class, so nothing about the arbitration
+changed. **One thing did change and it invalidates the appendix below:** the
+reverted swizzle told the two webviews apart by `url.host`, skipping
+`localhost` so the Turnstile captcha stayed interactive. Both are now served
+from a loopback `HttpServer`, so **both are `localhost`** and host is no longer
+a discriminator. A future attempt needs a different one — the port
+(`PTYouTubeController.pageUrl`), or better, a marker the Dart side sets on the
+webview it owns.
+
 **Ruled out (don't retry these):**
 
 - **Dart-side `IgnorePointer` / `MouseRegion` around the embed** — cannot
-  work; the fight happens in AppKit, beneath Flutter's event pipeline.
-  `RawYoutubePlayer` inside the package *already* wraps its `InAppWebView` in
-  `IgnorePointer(ignoring: true)`, and its player HTML sets
-  `pointer-events: none` on the whole page, so DOM hover inside the webview
+  work; the fight happens in AppKit, beneath Flutter's event pipeline. The
+  embed is already wrapped in `IgnorePointer` and its page already sets
+  `pointer-events: none` on the whole body (both were true of the old package
+  too, and remain true of `PTYouTubeEmbed`), so DOM hover inside the webview
   was never the source either.
 - **`flutter_inappwebview` settings** — no interaction/cursor-related setting
   exists in the macOS implementation (checked 1.1.2 sources).
@@ -74,7 +85,9 @@ hand for hovered buttons, and the two alternate → flicker.
 Lived in `macos/Runner/MainFlutterWindow.swift`; installed from
 `awakeFromNib` via `WKWebView.ptInstallDisplayOnlyPatch()` after
 `RegisterGeneratedPlugins`. Did NOT fix the flicker, but did compile and run;
-a variant with different interception points could start from here.
+a variant with different interception points could start from here. **Its
+`ptIsDisplayOnly` host check is now wrong** — see the note above: the embed is
+served from `localhost`, which this code deliberately treats as the captcha.
 
 ```swift
 import WebKit

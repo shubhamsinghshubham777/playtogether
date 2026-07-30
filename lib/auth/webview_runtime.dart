@@ -4,7 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:playtogether/diagnostics.dart';
 
-/// Windows-only preparation for the one webview in the app — the guest captcha.
+/// Windows-only preparation for the webviews in the app — the guest captcha and
+/// the YouTube player embed, which share one environment.
 ///
 /// Everywhere else the plugin's defaults are right and every member here stays
 /// null/false, so callers can use them unconditionally.
@@ -50,7 +51,10 @@ abstract final class PTWebView {
       }
       final folder = await _userDataFolder();
       environment = await WebViewEnvironment.create(
-        settings: WebViewEnvironmentSettings(userDataFolder: folder),
+        settings: WebViewEnvironmentSettings(
+          userDataFolder: folder,
+          additionalBrowserArguments: '--autoplay-policy=no-user-gesture-required',
+        ),
       );
       trace(
         'webview2 ready',

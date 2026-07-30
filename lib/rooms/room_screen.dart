@@ -13,6 +13,8 @@ import 'package:playtogether/diagnostics.dart';
 import 'package:playtogether/platform.dart';
 import 'package:playtogether/player/chooser_dialog.dart';
 import 'package:playtogether/player/mode_selection_dialog.dart';
+import 'package:playtogether/player/youtube/pt_youtube_controller.dart';
+import 'package:playtogether/player/youtube/pt_youtube_embed.dart';
 import 'package:playtogether/player/youtube_url_dialog.dart';
 import 'package:playtogether/profile/profile_service.dart';
 import 'package:playtogether/rooms/room_models.dart';
@@ -33,7 +35,6 @@ import 'package:playtogether/ui/pt_motion.dart';
 import 'package:playtogether/ui/pt_theme.dart';
 import 'package:playtogether/ui/responsive.dart';
 import 'package:window_manager/window_manager.dart';
-import 'package:youtube_player_flutter/youtube_player_flutter.dart' as yt;
 
 enum PlaybackMode { local, youtube }
 
@@ -59,13 +60,13 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
 
   PlaybackMode _mode = .local;
   String? _youtubeUrl;
-  yt.YoutubePlayerController? _youtubeController;
+  PTYouTubeController? _youtubeController;
   bool _youtubeWasPlaying = false;
-  // YT sync uses an *intent* model: `seekTo` in youtube_player_flutter always
-  // calls play(), and iframe state transitions land 200-500 ms after commands
-  // (far outside SyncService's 100 ms settle window). `_ytIntendedPlaying` is
-  // the agreed play state; the player listener only broadcasts transitions
-  // that DIVERGE from it (i.e. the user acted on the iframe directly).
+  // YT sync uses an *intent* model: iframe state transitions land 200-500 ms
+  // after commands, far outside SyncService's 100 ms settle window.
+  // `_ytIntendedPlaying` is the agreed play state; the player listener only
+  // broadcasts transitions that DIVERGE from it (i.e. the user acted on the
+  // iframe directly).
   bool _ytIntendedPlaying = false;
   // Remote commands that arrive before the iframe is ready are queued and
   // flushed on the first ready event (late-joiner state_response).
@@ -164,7 +165,8 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
   bool _isFilePickerOpen = false;
   bool _ytBufferReady = false;
   Timer? _ytBufferFallbackTimer;
-  int _ytDurationProbeGen = 0;
+
+  int? _ytErrorShownFor;
 
   GateState _gateState = GateState.indeterminate;
 
@@ -561,7 +563,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
   // Remote playback routing (dual player)
   // ---------------------------------------------------------------------------
 
-  bool get _ytReady => _youtubeController?.value.isReady ?? false;
+  bool get _ytReady => _youtubeController?.isReady ?? false;
 
   /// Spinner shows only while the player is stalled AND meant to be playing —
   /// a buffer that fills behind a paused frame needs no indicator. YouTube's
@@ -606,8 +608,8 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
     }
   }
 
-  /// seekTo always play()s (youtube_player_flutter); restore the intended
-  /// pause and swallow the transient playing blip so it isn't re-broadcast.
+  /// Seeking a `cued` player starts it, so restore the intended pause and
+  /// swallow the transient playing blip rather than re-broadcasting it.
   void _ytSeekKeepingPlayState(Duration position) {
     final controller = _youtubeController;
     if (controller == null) return;
@@ -710,27 +712,24 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
       _snack("Hmm, that doesn't look like a YouTube link.");
       return;
     }
-    // Re-applying the video we already have embedded must NOT rebuild the
-    // player. `YoutubePlayer` binds its controller in initState and never
-    // rebinds (didUpdateWidget only moves the listener), so a fresh controller
-    // behind a reused element drives a disposed one: onReady never arrives,
-    // `_ytReady` stays false, and transport silently dies with no duration.
+    // Re-applying the video we already have embedded must NOT reset anything.
     // Duplicate switches are routine — a `state_response` after a reconnect
-    // replays the room's mode.
+    // replays the room's mode — and tearing readiness down for one would shut
+    // the gate on a room that never changed what it was watching.
     if (_mode == .youtube &&
         _youtubeController != null &&
         _extractVideoId(_youtubeUrl ?? '') == videoId) {
       _youtubeUrl = url;
       _sync?.updatePlaybackState('youtube', url);
-      _probeYtDuration(_youtubeController!);
       _updateReadiness();
       return;
     }
 
-    // A new embed re-runs the D6 buffer race from scratch.
+    // A new video re-runs the D6 buffer race from scratch.
     _ytBufferFallbackTimer?.cancel();
     _ytBufferFallbackTimer = null;
     _ytBufferReady = false;
+    final existing = _youtubeController;
     setState(() {
       _mode = .youtube;
       _youtubeUrl = url;
@@ -743,68 +742,18 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
       _ytIntendedPlaying = false;
       _pendingYtSeek = null;
       _pendingYtPlay = null;
+      _ytErrorShownFor = null;
 
-      _youtubeController?.dispose();
-      _youtubeController = yt.YoutubePlayerController(
-        initialVideoId: videoId,
-        flags: const yt.YoutubePlayerFlags(
-          autoPlay: false,
-          mute: false,
-          hideThumbnail: true,
-          enableCaption: true,
-          captionLanguage: 'English',
-          forceHD: true,
-        ),
-      );
-      _youtubeController!.addListener(_onYouTubePlayerEvent);
+      if (existing == null) {
+        _youtubeController = PTYouTubeController(videoId)
+          ..addListener(_onYouTubePlayerEvent)
+          ..setVolume((_volume * 100).round());
+      }
     });
+    existing?.loadVideo(videoId);
     _sync?.updatePlaybackState('youtube', url);
     _armYouTubeReadyFallback();
-    _probeYtDuration(_youtubeController!);
     _updateReadiness();
-  }
-
-  /// The embed only pushes VideoData (duration, title) on the *playing*
-  /// transition, so a cued-but-idle player sits at 00:00 until someone presses
-  /// play. Pull it instead: the iframe's `getDuration()` is valid from cue
-  /// time, so poll it through the underlying webview until it lands. The
-  /// VideoData path still runs on first play and agrees with what we fetched.
-  Future<void> _probeYtDuration(yt.YoutubePlayerController controller) async {
-    final gen = ++_ytDurationProbeGen;
-    for (var attempt = 0; attempt < 15; attempt++) {
-      if (!mounted || gen != _ytDurationProbeGen || _youtubeController != controller) {
-        return;
-      }
-      if (_mode != .youtube || _duration != Duration.zero) return;
-      final web = controller.value.webViewController;
-      if (web != null) {
-        Object? result;
-        try {
-          // `player` doesn't exist until the iframe API has booted; guard in JS
-          // so early probes return 0 instead of throwing.
-          result = await web.evaluateJavascript(
-            source:
-                "typeof player !== 'undefined' && player.getDuration ? player.getDuration() : 0",
-          );
-        } catch (_) {
-          // Silent by design, unlike the reported catches elsewhere: this is a
-          // retrying poll, and a throw here just means the webview isn't up yet.
-        }
-        if (!mounted || gen != _ytDurationProbeGen || _youtubeController != controller) {
-          return;
-        }
-        final seconds = switch (result) {
-          final num n => n.toDouble(),
-          final String s => double.tryParse(s) ?? 0,
-          _ => 0.0,
-        };
-        if (seconds > 0) {
-          setState(() => _duration = Duration(milliseconds: (seconds * 1000).round()));
-          return;
-        }
-      }
-      await Future<void>.delayed(const Duration(seconds: 1));
-    }
   }
 
   Future<void> _switchToLocalMode() async {
@@ -818,6 +767,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
       _ytIntendedPlaying = false;
       _pendingYtSeek = null;
       _pendingYtPlay = null;
+      _ytErrorShownFor = null;
       _youtubeController?.dispose();
       _youtubeController = null;
       _playing = widget.player.state.playing;
@@ -837,16 +787,15 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
     _flushPendingYtCommands(controller);
     _updateYouTubeReadiness(controller);
 
-    final state = controller.value.playerState;
+    final PTYtPlayerState state = controller.playerState;
     final isPlaying = state == .playing;
 
     final wasPlaying = _playing;
     setState(() {
       _playing = isPlaying;
       _buffering = state == .buffering;
-      _position = controller.value.position;
-      final meta = controller.metadata.duration;
-      if (meta != Duration.zero) _duration = meta;
+      _position = controller.position;
+      if (controller.duration != Duration.zero) _duration = controller.duration;
     });
     if (isPlaying != wasPlaying) _onPlayingChangedForControls(isPlaying);
 
@@ -860,7 +809,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
       if (!_ytIntendedPlaying && !suppressed) {
         _ytIntendedPlaying = true;
         _sync?.broadcastPlay();
-        _sync?.broadcastSeek(controller.value.position, reason: SyncActionReason.transport);
+        _sync?.broadcastSeek(controller.position, reason: SyncActionReason.transport);
       }
     } else if (!isPlaying && _youtubeWasPlaying && state == .paused) {
       _youtubeWasPlaying = false;
@@ -870,15 +819,29 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
       }
     }
 
-    if (controller.value.hasError) {
-      _snack('Failed to load that YouTube video.');
+    final errorCode = controller.errorCode;
+    if (errorCode != null && errorCode != _ytErrorShownFor) {
+      _ytErrorShownFor = errorCode;
+      _snack(_ytErrorMessage(errorCode));
+      reportNonFatal(
+        StateError('YouTube IFrame error $errorCode'),
+        StackTrace.current,
+        during: 'loading a YouTube video',
+      );
     }
   }
 
+  String _ytErrorMessage(int code) => switch (code) {
+    101 || 150 =>
+      "The owner of that video won't let it play outside YouTube. Try a different one.",
+    100 => "That video is private or isn't on YouTube any more.",
+    _ => 'Failed to load that YouTube video.',
+  };
+
   /// Late joiners get the room's position/play state before the iframe can
   /// accept commands; apply the queued state on the first ready tick.
-  void _flushPendingYtCommands(yt.YoutubePlayerController controller) {
-    if (!controller.value.isReady) return;
+  void _flushPendingYtCommands(PTYouTubeController controller) {
+    if (!controller.isReady) return;
     final seek = _pendingYtSeek;
     final play = _pendingYtPlay;
     if (seek == null && play == null) return;
@@ -1069,24 +1032,17 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
     }
   }
 
-  /// D6, amended: `cued` counts as ready. `buffered` can never rise for a
-  /// member who hasn't pressed play — the package's VideoTime poll (the only
-  /// thing that updates it) starts on the *playing* transition — so gating on
-  /// "first buffer" sent every idle member to the 10 s fallback. Cued is the
-  /// iframe's own "video fetched, can start on command", lands a beat after
-  /// onReady, and is the YouTube equivalent of a local file being open.
-  /// `buffered > 0` stays as an extra path for embeds that skip the cued state.
-  void _updateYouTubeReadiness(yt.YoutubePlayerController controller) {
+  /// D6, amended: `cued` counts as ready. The IFrame API's buffered fraction
+  /// never rises for a member who hasn't pressed play, so gating on "first
+  /// buffer" sent every idle member to the 10 s fallback. Cued is the iframe's
+  /// own "video fetched, can start on command", lands a beat after onReady, and
+  /// is the YouTube equivalent of a local file being open.
+  void _updateYouTubeReadiness(PTYouTubeController controller) {
     if (_ytBufferReady) return;
-    final value = controller.value;
-    final state = value.playerState;
+    final PTYtPlayerState state = controller.playerState;
     final loaded =
-        state == .cued ||
-        state == .buffering ||
-        state == .playing ||
-        state == .paused ||
-        value.buffered > 0;
-    if (!value.isReady || !loaded) return;
+        state == .cued || state == .buffering || state == .playing || state == .paused;
+    if (!controller.isReady || !loaded) return;
     _ytBufferFallbackTimer?.cancel();
     _ytBufferFallbackTimer = null;
     _ytBufferReady = true;
@@ -1245,7 +1201,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
     if (_mode == .youtube) {
       final controller = _youtubeController;
       if (controller == null || !_ytReady) return;
-      final currentPosition = controller.value.position;
+      final currentPosition = controller.position;
       // Toggle on intent, not iframe state — the iframe lags behind commands.
       if (_ytIntendedPlaying) {
         _ytIntendedPlaying = false;
@@ -1595,6 +1551,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
       // against the 8-member cap and stays eligible for host succession.
       reportNonFatal(e, s, during: 'leaving room ${widget.roomId}');
     }
+    await _sync?.disconnect();
     // Safe here (unlike dispose): this path always lands on the lobby, never
     // straight into another room.
     await widget.player.stop();
@@ -1907,17 +1864,13 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
           // "Watch on YouTube", which navigates the embed away entirely. It
           // also stops the platform view from competing for the mouse cursor.
           IgnorePointer(
-            child: Center(
-              child: yt.YoutubePlayer(
-                // Keyed on the controller, not the URL: the player never rebinds
-                // its controller, so a replaced one must force a fresh element
-                // rather than leave the webview driving the disposed instance.
-                key: ObjectKey(_youtubeController!),
-                controller: _youtubeController!,
-                showVideoProgressIndicator: false,
-                bottomActions: const [],
-                topActions: const [],
-              ),
+            child: PTYouTubeEmbed(
+              // Keyed on the controller so a replaced one gets a fresh webview
+              // rather than leaving the old element pointed at a closed
+              // loopback server. Never key this by URL — switching video reuses
+              // the controller by design.
+              key: ObjectKey(_youtubeController!),
+              controller: _youtubeController!,
             ),
           ),
         // Bottom scrim so glass controls always sit on something dark.

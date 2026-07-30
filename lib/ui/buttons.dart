@@ -184,11 +184,14 @@ class PTIconButton extends StatefulWidget {
 class _PTIconButtonState extends State<PTIconButton> with SingleTickerProviderStateMixin {
   bool _hovered = false;
 
-  late final AnimationController _spin = AnimationController(vsync: this, duration: PTMotion.state);
+  AnimationController? _spinController;
+
+  AnimationController get _spin =>
+      _spinController ??= AnimationController(vsync: this, duration: PTMotion.state);
 
   @override
   void dispose() {
-    _spin.dispose();
+    _spinController?.dispose();
     super.dispose();
   }
 
