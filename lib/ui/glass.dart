@@ -130,11 +130,18 @@ class GlassPill extends StatelessWidget {
 /// Ambient violet glow blobs behind empty screens (Login, Lobby, Profile).
 /// Never used in the room — nothing ambient may move near playing video.
 ///
-/// The blobs drift along phase-offset elliptical paths with coprime-ish periods
+/// The blobs drift along phase-offset elliptical paths with coprime-ish rates
 /// so they never visibly sync up. **Translation only, no scale**: these are
 /// 640–720 px circles under a sigma-45+ blur, and a per-frame scale would
 /// invalidate the raster cache and re-blur them every frame. A pure
 /// `Transform.translate` moves the cached layer instead.
+///
+/// The drift **ping-pongs** (`repeat(reverse: true)`) rather than wrapping: those
+/// coprime rates — and the `cos(t * 0.6)` on the vertical axis — leave the trig
+/// phase mid-cycle when the controller reaches 1, so a plain `repeat()` snapped
+/// all three layers back to frame 0 every period. `easeInOut` is the other half
+/// of the fix; its zero velocity at both ends makes the turnaround a stall
+/// rather than a bounce.
 class AmbientBackground extends StatefulWidget {
   const AmbientBackground({super.key, required this.child});
 
@@ -150,10 +157,17 @@ class _AmbientBackgroundState extends State<AmbientBackground> with SingleTicker
   late final AnimationController _drift = AnimationController(
     vsync: this,
     duration: PTMotion.ambient,
-  )..repeat();
+  )..repeat(reverse: true);
+
+  late final CurvedAnimation _eased = CurvedAnimation(
+    parent: _drift,
+    curve: Curves.easeInOut,
+    reverseCurve: Curves.easeInOut,
+  );
 
   @override
   void dispose() {
+    _eased.dispose();
     _drift.dispose();
     super.dispose();
   }
@@ -212,10 +226,10 @@ class _AmbientBackgroundState extends State<AmbientBackground> with SingleTicker
   Widget _drifting(double phase, double ampX, double ampY, double rate, bool still, Widget blob) {
     if (still) return blob;
     return AnimatedBuilder(
-      animation: _drift,
+      animation: _eased,
       child: RepaintBoundary(child: blob),
       builder: (context, child) {
-        final t = (_drift.value * rate + phase) * 2 * math.pi;
+        final t = (_eased.value * rate + phase) * 2 * math.pi;
         return Transform.translate(
           offset: Offset(math.sin(t) * ampX, math.cos(t * 0.6) * ampY),
           child: child,
