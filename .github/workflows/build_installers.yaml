@@ -37,9 +37,13 @@ jobs:
     uses: ./.github/workflows/build_macos.yaml
     secrets: inherit
 
+  tests:
+    uses: ./.github/workflows/test.yaml
+    secrets: inherit
+
   release:
     runs-on: ubuntu-latest
-    needs: [ windows, macos ]
+    needs: [ windows, macos, tests ]
     permissions:
       contents: write
     steps:
