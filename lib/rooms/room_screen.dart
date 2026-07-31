@@ -312,6 +312,12 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
       return;
     }
 
+    trace(
+      'entered room',
+      category: 'room',
+      data: {'room_id': widget.roomId, 'role': selfMembership.role, 'members': _members.length},
+    );
+
     final sync = SyncService(
       MediaKitSyncPlayer(widget.player),
       room: room,
@@ -657,6 +663,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
         _isModeSelectionDialogOpen = false;
       }
     }
+    trace('remote mode switch', category: 'media', data: {'mode': event.mode});
     final PlaybackMode mode = event.mode == 'youtube' ? .youtube : .local;
     if (mode == .youtube && event.youtubeUrl != null) {
       _switchToYouTubeMode(event.youtubeUrl as String);
@@ -729,6 +736,11 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
     if (_mode == .youtube &&
         _youtubeController != null &&
         _extractVideoId(_youtubeUrl ?? '') == videoId) {
+      trace(
+        'youtube switch to the video already embedded',
+        category: 'media',
+        data: {'video_id': videoId},
+      );
       _youtubeUrl = url;
       _sync?.updatePlaybackState('youtube', url);
       _updateReadiness();
@@ -740,6 +752,11 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
     _ytBufferFallbackTimer = null;
     _ytBufferReady = false;
     final existing = _youtubeController;
+    trace(
+      'switching to youtube mode',
+      category: 'media',
+      data: {'video_id': videoId, 'reusing_controller': existing != null},
+    );
     setState(() {
       _mode = .youtube;
       _youtubeUrl = url;
@@ -767,6 +784,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
   }
 
   Future<void> _switchToLocalMode() async {
+    trace('switching to local mode', category: 'media', data: {'from': _mode.name});
     _ytBufferFallbackTimer?.cancel();
     _ytBufferFallbackTimer = null;
     _ytBufferReady = false;
@@ -855,6 +873,11 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
     final seek = _pendingYtSeek;
     final play = _pendingYtPlay;
     if (seek == null && play == null) return;
+    trace(
+      'flushing queued youtube commands',
+      category: 'youtube',
+      data: {'seek_ms': seek?.inMilliseconds, 'play': play},
+    );
     _pendingYtSeek = null;
     _pendingYtPlay = null;
     if (seek != null) {
@@ -983,8 +1006,12 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
       );
       if (!mounted) return;
       await sync.broadcastMediaSet(RoomMedia.fromRoom(room));
-    } catch (e) {
-      if (mounted) _snack(RoomErrorCode.fromError(e).message);
+    } catch (e, s) {
+      final failure = RoomErrorCode.fromError(e);
+      if (failure == .unknown) {
+        reportNonFatal(e, s, during: 'setting the canonical media for room ${widget.roomId}');
+      }
+      if (mounted) _snack(failure.message);
     }
   }
 
@@ -1083,6 +1110,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
     _ytBufferFallbackTimer?.cancel();
     _ytBufferFallbackTimer = Timer(const Duration(seconds: 10), () {
       if (!mounted || _ytBufferReady) return;
+      trace('youtube readiness fallback fired', category: 'youtube');
       _ytBufferReady = true;
       _updateReadiness();
     });
@@ -1149,8 +1177,10 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
       if (mounted) {
         _snack('Removed ${member.displayName} from the room.', kind: .success);
       }
-    } catch (e) {
-      if (mounted) _snack(RoomErrorCode.fromError(e).message);
+    } catch (e, s) {
+      final failure = RoomErrorCode.fromError(e);
+      if (failure == .unknown) reportNonFatal(e, s, during: 'removing a member from the room');
+      if (mounted) _snack(failure.message);
     }
   }
 
@@ -1451,23 +1481,34 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
       if (_sync?.isHost ?? false) {
         _sync?.broadcastRoomEnded();
       }
-      _onRoomEnded();
+      _onRoomEnded(reason: 'expiry');
     }
   }
 
-  Future<void> _onRoomEnded() => _evictSelf();
+  Future<void> _onRoomEnded({String reason = 'room_ended'}) => _evictSelf(reason: reason);
 
   /// The host removed us. Same teardown as a room ending — only the copy
   /// differs — because from this client's side the room is equally over.
   Future<void> _onKicked() => _evictSelf(
+    reason: 'kicked',
     title: 'Removed from the room',
     body: 'The host removed you from this room. No hard feelings!',
     icon: Symbols.person_remove_rounded,
   );
 
-  Future<void> _evictSelf({String? title, String? body, IconData? icon}) async {
+  Future<void> _evictSelf({
+    required String reason,
+    String? title,
+    String? body,
+    IconData? icon,
+  }) async {
     if (_ended) return;
     _ended = true;
+    trace(
+      'evicted from the room',
+      category: 'room',
+      data: {'room_id': widget.roomId, 'reason': reason},
+    );
     // Null closes the overflow menu if it happens to be open — otherwise it
     // sits over the "That's a wrap!" dialog listing a room that no longer runs.
     _publishMenuData();
@@ -1576,6 +1617,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
   }
 
   Future<void> _leaveRoom() async {
+    trace('leaving the room', category: 'room', data: {'room_id': widget.roomId});
     try {
       await RoomService.instance.leaveRoom(widget.roomId);
     } catch (e, s) {
@@ -1595,9 +1637,11 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
     try {
       await RoomService.instance.endRoom(widget.roomId);
       await _sync?.broadcastRoomEnded();
-      await _onRoomEnded();
-    } catch (e) {
-      _snack(RoomErrorCode.fromError(e).message);
+      await _onRoomEnded(reason: 'ended_by_host');
+    } catch (e, s) {
+      final failure = RoomErrorCode.fromError(e);
+      if (failure == .unknown) reportNonFatal(e, s, during: 'ending room ${widget.roomId}');
+      _snack(failure.message);
     }
   }
 
@@ -1718,8 +1762,10 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
           kind: .info,
         );
       }
-    } catch (e) {
-      if (mounted) _snack(RoomErrorCode.fromError(e).message);
+    } catch (e, s) {
+      final failure = RoomErrorCode.fromError(e);
+      if (failure == .unknown) reportNonFatal(e, s, during: 'changing the transport lock');
+      if (mounted) _snack(failure.message);
     }
   }
 

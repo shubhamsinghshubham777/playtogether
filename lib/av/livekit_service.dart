@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:livekit_client/livekit_client.dart' as lk;
+import 'package:playtogether/diagnostics.dart';
 import 'package:playtogether/env.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -65,8 +66,8 @@ class LiveKitService extends ChangeNotifier {
       await room.connect(url, token);
       _room = room;
       _setState(.connected);
-    } catch (e) {
-      debugPrint('LiveKit connect failed: $e');
+    } catch (e, s) {
+      reportNonFatal(e, s, during: 'connecting to LiveKit for room $roomId');
       _setState(.disconnected);
       rethrow;
     }
@@ -83,6 +84,9 @@ class LiveKitService extends ChangeNotifier {
   }
 
   void _setState(AvConnectionState state) {
+    if (state != _state) {
+      trace('av ${state.name}', category: 'av', data: {'room_id': roomId});
+    }
     _state = state;
     notifyListeners();
   }

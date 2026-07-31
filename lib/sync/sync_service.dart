@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:playtogether/diagnostics.dart';
 import 'package:playtogether/profile/profile_models.dart';
 import 'package:playtogether/rooms/reactions.dart';
@@ -168,13 +167,14 @@ class SyncService {
   /// — one malformed event would silently kill sync for the rest of the
   /// session. Every broadcast handler goes through here.
   void Function(Map<String, dynamic>) _guard(
+    String event,
     void Function(Map<String, dynamic>) handler,
   ) {
     return (payload) {
       try {
         handler(_unwrapPayload(payload));
       } catch (error, stack) {
-        debugPrint('sync: dropped a malformed broadcast — $error\n$stack');
+        reportNonFatal(error, stack, during: 'handling a $event broadcast');
       }
     };
   }
@@ -183,28 +183,38 @@ class SyncService {
     final channel = backend.channel('room:${room.id}');
     _channel = channel;
 
+    void on(String event, void Function(Map<String, dynamic>) handler) {
+      channel.onBroadcast(event: event, callback: _guard(event, handler));
+    }
+
+    on(SyncEventType.play, _handlePlay);
+    on(SyncEventType.pause, _handlePause);
+    on(SyncEventType.seek, _handleSeek);
+    on(SyncEventType.stateRequest, _handleStateRequest);
+    on(SyncEventType.stateResponse, _handleStateResponse);
+    on(SyncEventType.modeSwitch, _handleModeSwitch);
+    on(SyncEventType.chat, _handleChat);
+    on(SyncEventType.typing, _handleTyping);
+    on(SyncEventType.positionSync, _handlePositionSync);
+    on(SyncEventType.fileInfo, _handleFileInfo);
+    on(SyncEventType.mediaSet, _handleMediaSet);
+    on(SyncEventType.memberKicked, _handleMemberKicked);
+    on(SyncEventType.transportLock, _handleTransportLock);
+    on(SyncEventType.reaction, _handleReaction);
+    on(SyncEventType.roomEnded, _handleRoomEnded);
+
     channel
-        .onBroadcast(event: SyncEventType.play, callback: _guard(_handlePlay))
-        .onBroadcast(event: SyncEventType.pause, callback: _guard(_handlePause))
-        .onBroadcast(event: SyncEventType.seek, callback: _guard(_handleSeek))
-        .onBroadcast(event: SyncEventType.stateRequest, callback: _guard(_handleStateRequest))
-        .onBroadcast(event: SyncEventType.stateResponse, callback: _guard(_handleStateResponse))
-        .onBroadcast(event: SyncEventType.modeSwitch, callback: _guard(_handleModeSwitch))
-        .onBroadcast(event: SyncEventType.chat, callback: _guard(_handleChat))
-        .onBroadcast(event: SyncEventType.typing, callback: _guard(_handleTyping))
-        .onBroadcast(event: SyncEventType.positionSync, callback: _guard(_handlePositionSync))
-        .onBroadcast(event: SyncEventType.fileInfo, callback: _guard(_handleFileInfo))
-        .onBroadcast(event: SyncEventType.mediaSet, callback: _guard(_handleMediaSet))
-        .onBroadcast(event: SyncEventType.memberKicked, callback: _guard(_handleMemberKicked))
-        .onBroadcast(event: SyncEventType.transportLock, callback: _guard(_handleTransportLock))
-        .onBroadcast(event: SyncEventType.reaction, callback: _guard(_handleReaction))
-        .onBroadcast(event: SyncEventType.roomEnded, callback: _guard(_handleRoomEnded))
         .onPresenceSync(_handlePresenceSync)
         .subscribe((status, error) {
           // Statuses from a superseded channel (reconnect replaced it) are stale.
           if (_disposed || _tearingDown || !identical(channel, _channel)) return;
           switch (status) {
             case SyncSubscribeStatus.subscribed:
+              trace(
+                'channel subscribed',
+                category: 'sync',
+                data: {'room_id': room.id, 'after_attempts': _reconnectAttempts},
+              );
               _reconnectAttempts = 0;
               _connectionController.add(true);
               _trackPresence();
@@ -213,9 +223,12 @@ class SyncService {
               _requestInitialState();
             case SyncSubscribeStatus.channelError:
             case SyncSubscribeStatus.closed:
-              _connectionController.add(false);
-              _scheduleReconnect();
             case SyncSubscribeStatus.timedOut:
+              trace(
+                'channel dropped',
+                category: 'sync',
+                data: {'status': status.name, 'error': error?.toString()},
+              );
               _connectionController.add(false);
               _scheduleReconnect();
           }
@@ -230,6 +243,11 @@ class SyncService {
     if (_reconnectTimer?.isActive ?? false) return;
     final delay = Duration(seconds: (1 << _reconnectAttempts.clamp(0, 4)));
     _reconnectAttempts++;
+    trace(
+      'scheduling a resubscribe',
+      category: 'sync',
+      data: {'attempt': _reconnectAttempts, 'delay_ms': delay.inMilliseconds},
+    );
     _reconnectTimer = Timer(delay, () async {
       if (_disposed || _tearingDown) return;
       // Detach before unsubscribing so the old channel's `closed` is ignored.
@@ -331,6 +349,7 @@ class SyncService {
   /// Host succession: re-announce presence with the new role.
   void updateRole(String role) {
     if (_role == role) return;
+    trace('role changed', category: 'sync', data: {'from': _role, 'to': role});
     _role = role;
     _trackPresence();
   }
@@ -347,6 +366,11 @@ class SyncService {
   /// pass it on every call where a file is open.
   void retrackReadiness(ReadyStatus status, {String? loadedFileName}) {
     if (_readyStatus == status && _loadedFileName == loadedFileName) return;
+    trace(
+      'readiness ${_readyStatus.wire} -> ${status.wire}',
+      category: 'gate',
+      data: {'file': loadedFileName},
+    );
     _readyStatus = status;
     _loadedFileName = loadedFileName;
     _trackPresence();
@@ -377,11 +401,20 @@ class SyncService {
   /// while everyone else sits where the host paused.
   void _resyncRoomPosition() {
     if (_disposed || _channel == null) return;
-    if (_roomPlaying || _pausedByGate) return;
-    // Alone in the room: nobody to answer, and our own position *is* the room's.
-    if (_hasPresenceSynced && _presentMembers.every((m) => m.userId == userId)) {
+    if (_roomPlaying || _pausedByGate) {
+      trace(
+        'skipped the room-position resync',
+        category: 'media',
+        data: {'guard': _roomPlaying ? 'room_playing' : 'paused_by_gate'},
+      );
       return;
     }
+    // Alone in the room: nobody to answer, and our own position *is* the room's.
+    if (_hasPresenceSynced && _presentMembers.every((m) => m.userId == userId)) {
+      trace('skipped the room-position resync', category: 'media', data: {'guard': 'alone'});
+      return;
+    }
+    trace('re-requesting the room position', category: 'media');
     _hasReceivedInitialState = false;
     _requestInitialState();
   }
@@ -607,7 +640,27 @@ class SyncService {
   // ---------------------------------------------------------------------------
 
   void _adoptCanonicalMedia(RoomMedia media) {
-    if (!media.isNewerThan(_canonicalMedia)) return;
+    if (!media.isNewerThan(_canonicalMedia)) {
+      trace(
+        'rejected stale canonical media',
+        category: 'media',
+        data: {
+          'kind': media.kind.wire,
+          'updated_at': media.updatedAt?.toIso8601String(),
+          'current_updated_at': _canonicalMedia.updatedAt?.toIso8601String(),
+        },
+      );
+      return;
+    }
+    trace(
+      'adopted canonical media',
+      category: 'media',
+      data: {
+        'kind': media.kind.wire,
+        'name': media.name,
+        'updated_at': media.updatedAt?.toIso8601String(),
+      },
+    );
     _canonicalMedia = media;
     _canonicalMediaController.add(media);
     _checkSelfGateSatisfaction();
@@ -636,6 +689,18 @@ class SyncService {
       pausedByGate: _pausedByGate,
     );
 
+    trace(
+      'gate ${previous.name} -> ${state.name}',
+      category: 'gate',
+      data: {
+        'blocker': gateBlocker?.userId,
+        'room_playing': _roomPlaying,
+        'paused_by_gate': _pausedByGate,
+        'authority': _isAuthority,
+        'transition': transition?.name,
+      },
+    );
+
     switch (transition) {
       case null:
         return;
@@ -644,6 +709,14 @@ class SyncService {
           subjectUserId: gateBlocker?.userId,
           userId: userId,
           position: () => currentPosition?.call(),
+        );
+        trace(
+          'gate paused the room',
+          category: 'gate',
+          data: {
+            'held_position_ms': _gateHeldPosition?.inMilliseconds,
+            'held_position_dropped': _gateHeldPosition == null,
+          },
         );
         _pausedByGate = true;
         // Broadcast BEFORE applying: broadcastPause() bails out while
@@ -661,6 +734,11 @@ class SyncService {
         _pausedByGate = false;
         final resumeAt = _gateHeldPosition;
         _gateHeldPosition = null;
+        trace(
+          'gate resumed the room',
+          category: 'gate',
+          data: {'resume_position_ms': resumeAt?.inMilliseconds},
+        );
         if (resumeAt != null) {
           unawaited(broadcastSeek(resumeAt, reason: SyncActionReason.gate));
         }
@@ -772,6 +850,7 @@ class SyncService {
 
   void _requestInitialState() {
     if (_hasReceivedInitialState) return;
+    trace('requesting the room state', category: 'sync', data: {'room_id': room.id});
     _channel?.sendBroadcastMessage(
       event: SyncEventType.stateRequest,
       payload: StateRequestEvent(
@@ -782,6 +861,7 @@ class SyncService {
     _stateRequestRetry?.cancel();
     _stateRequestRetry = Timer(const Duration(seconds: 2), () {
       if (_hasReceivedInitialState || _disposed) return;
+      trace('re-requesting the room state', category: 'sync', data: {'room_id': room.id});
       _channel?.sendBroadcastMessage(
         event: SyncEventType.stateRequest,
         payload: StateRequestEvent(
@@ -791,6 +871,7 @@ class SyncService {
       );
       // After the retry window, assume an idle room.
       _stateRequestRetry = Timer(const Duration(seconds: 2), () {
+        trace('no state response — assuming an idle room', category: 'sync');
         _hasReceivedInitialState = true;
       });
     });
@@ -824,8 +905,25 @@ class SyncService {
     );
     if (responder != userId) return;
     final hasMedia = _player.duration != Duration.zero || _currentYoutubeUrl != null;
-    if (!hasMedia) return;
+    if (!hasMedia) {
+      trace(
+        'elected to answer a state request but have no media',
+        category: 'sync',
+        data: {'requester': requesterId},
+      );
+      return;
+    }
 
+    trace(
+      'answering a state request',
+      category: 'sync',
+      data: {
+        'requester': requesterId,
+        'mode': _currentMode,
+        'playing': isPlaying?.call() ?? _player.playing,
+        'position_ms': (currentPosition?.call() ?? _player.position).inMilliseconds,
+      },
+    );
     _channel?.sendBroadcastMessage(
       event: SyncEventType.stateResponse,
       payload: StateResponseEvent(
@@ -848,6 +946,17 @@ class SyncService {
     _stateRequestRetry?.cancel();
 
     final event = StateResponseEvent.fromPayload(payload);
+    trace(
+      'applying the room state',
+      category: 'sync',
+      data: {
+        'from': event.senderId,
+        'mode': event.mode,
+        'playing': event.playing,
+        'position_ms': event.positionMs,
+        'file': event.fileName,
+      },
+    );
     // Late joiner: this is the first honest read of whether the room is playing.
     _roomPlaying = event.playing;
 
@@ -916,6 +1025,11 @@ class SyncService {
     final local = currentPosition?.call() ?? _player.position;
     final remote = Duration(milliseconds: event.positionMs);
     if ((local - remote).abs() <= _driftThreshold) return;
+    trace(
+      'correcting drift',
+      category: 'sync',
+      data: {'delta_ms': (local - remote).inMilliseconds, 'to_ms': remote.inMilliseconds},
+    );
     _applyRemoteAction(() {
       if (onRemoteDriftCorrect != null) {
         onRemoteDriftCorrect!(remote);
@@ -1007,7 +1121,21 @@ class SyncService {
 
   int _nextTimestamp() => _ordering.nextTimestamp();
 
-  bool _shouldApply(Map<String, dynamic> payload) => _ordering.shouldApply(payload);
+  bool _shouldApply(Map<String, dynamic> payload) {
+    final applied = _ordering.shouldApply(payload);
+    if (!applied && payload['senderId'] != userId) {
+      trace(
+        'dropped a stale event',
+        category: 'sync',
+        data: {
+          'sender': payload['senderId'],
+          'timestamp': payload['timestamp'],
+          'last_applied': _ordering.lastApplied,
+        },
+      );
+    }
+    return applied;
+  }
 
   void _applyRemoteAction(dynamic Function() action) {
     _isApplyingRemoteAction = true;

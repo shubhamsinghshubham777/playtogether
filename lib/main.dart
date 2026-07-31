@@ -103,14 +103,14 @@ class _MainAppState extends State<MainApp> {
     _authFailureSub = AuthService.instance.failures.listen(
       (message) => showPTSnackVia(_scaffoldMessengerKey.currentState, message, kind: .error),
     );
-    _linkSub = _appLinks.uriLinkStream.listen(_onDeepLink);
+    _linkSub = _appLinks.uriLinkStream.listen((uri) => _onDeepLink(uri, source: 'stream'));
     // The native side replays the launch URL only to the FIRST stream
     // subscriber — which is supabase_flutter (it subscribes inside
     // Supabase.initialize, before runApp). Cold-start invite links must
     // therefore be fetched explicitly; getInitialLink keeps returning the
     // launch URL regardless of that replay.
     _appLinks.getInitialLink().then((uri) {
-      if (uri != null) _onDeepLink(uri);
+      if (uri != null) _onDeepLink(uri, source: 'cold_start');
     });
   }
 
@@ -120,7 +120,7 @@ class _MainAppState extends State<MainApp> {
   /// playtogether://join/<code> — invite links. The auth callback URI also
   /// flows through this stream (it's a broadcast shared with supabase_flutter);
   /// the `join` host filter is what keeps it out of this handler.
-  Future<void> _onDeepLink(Uri uri) async {
+  Future<void> _onDeepLink(Uri uri, {required String source}) async {
     if (uri.scheme != 'playtogether' || uri.host != 'join') return;
     final code = uri.pathSegments.isNotEmpty ? uri.pathSegments.first : null;
     if (code == null || code.isEmpty) return;
@@ -133,9 +133,11 @@ class _MainAppState extends State<MainApp> {
     }
     _lastLinkHandled = uri.toString();
     _lastLinkHandledAt = now;
+    trace('invite link received', category: 'deeplink', data: {'source': source});
 
     if (!AuthService.instance.isSignedIn) {
       // Parked; the lobby picks it up right after login/guest entry.
+      trace('invite parked until sign-in', category: 'deeplink');
       RoomService.instance.pendingJoinCode = code;
       router.go('/login');
       return;
@@ -155,13 +157,12 @@ class _MainAppState extends State<MainApp> {
           reportNonFatal(e, s, during: 'leaving room $currentId after an invite');
         }
       }
+      trace('joining from an invite link', category: 'deeplink', data: {'room_id': room.id});
       router.go(roomPath(room.id));
-    } catch (e) {
-      showPTSnackVia(
-        _scaffoldMessengerKey.currentState,
-        RoomErrorCode.fromError(e).message,
-        kind: .error,
-      );
+    } catch (e, s) {
+      final failure = RoomErrorCode.fromError(e);
+      if (failure == .unknown) reportNonFatal(e, s, during: 'joining a room from an invite link');
+      showPTSnackVia(_scaffoldMessengerKey.currentState, failure.message, kind: .error);
     }
   }
 

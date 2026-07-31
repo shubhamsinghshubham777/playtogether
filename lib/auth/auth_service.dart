@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:playtogether/diagnostics.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -134,7 +133,7 @@ class AuthService {
       await _client.auth.signOut();
     } on AuthException catch (e) {
       // A revoked/expired session still means "signed out" locally.
-      debugPrint('signOut: ${e.message}');
+      trace('sign-out fell back to a local sign-out', category: 'auth', data: {'error': e.message});
       await _client.auth.signOut(scope: SignOutScope.local);
     }
   }

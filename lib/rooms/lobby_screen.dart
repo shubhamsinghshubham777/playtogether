@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:playtogether/app_router.dart';
 import 'package:playtogether/auth/auth_service.dart';
+import 'package:playtogether/diagnostics.dart';
 import 'package:playtogether/profile/profile_service.dart';
 import 'package:playtogether/rooms/room_models.dart';
 import 'package:playtogether/rooms/room_service.dart';
@@ -45,7 +46,13 @@ class _LobbyScreenState extends State<LobbyScreen> {
     if (ProfileService.instance.profile == null) {
       // Consume the parked invite even if the profile fetch fails — the join
       // itself doesn't need the profile.
-      ProfileService.instance.load().catchError((_) => null).whenComplete(_consumePendingJoin);
+      ProfileService.instance
+          .load()
+          .catchError((Object e, StackTrace s) {
+            reportNonFatal(e, s, during: 'loading the profile for the lobby');
+            return null;
+          })
+          .whenComplete(_consumePendingJoin);
     } else {
       WidgetsBinding.instance.addPostFrameCallback((_) => _consumePendingJoin());
     }
@@ -62,6 +69,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
     final code = RoomService.instance.pendingJoinCode;
     if (code == null || !mounted) return;
     RoomService.instance.pendingJoinCode = null;
+    trace('consuming a parked invite', category: 'deeplink');
     await _join(code);
   }
 
@@ -81,9 +89,10 @@ class _LobbyScreenState extends State<LobbyScreen> {
         durationMinutes: _durationMinutes,
       );
       if (mounted) context.go(roomPath(room.id));
-    } catch (e) {
-      if (!mounted) return;
+    } catch (e, s) {
       final code = RoomErrorCode.fromError(e);
+      if (code == .unknown) reportNonFatal(e, s, during: 'creating a room');
+      if (!mounted) return;
       if (code == .guestRoomLimit) {
         await _showGuestLimitDialog();
       } else {
@@ -104,9 +113,11 @@ class _LobbyScreenState extends State<LobbyScreen> {
     try {
       final room = await RoomService.instance.joinRoom(code);
       if (mounted) context.go(roomPath(room.id));
-    } catch (e) {
+    } catch (e, s) {
+      final failure = RoomErrorCode.fromError(e);
+      if (failure == .unknown) reportNonFatal(e, s, during: 'joining a room by code');
       if (mounted) {
-        _snack(RoomErrorCode.fromError(e).message);
+        _snack(failure.message);
         _codeKey.currentState?.clear();
         setState(() => _codeShake++);
       }
