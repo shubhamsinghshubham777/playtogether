@@ -6,6 +6,7 @@ import 'package:playtogether/auth/auth_service.dart';
 import 'package:playtogether/profile/profile_service.dart';
 import 'package:playtogether/rooms/room_models.dart';
 import 'package:playtogether/rooms/room_service.dart';
+import 'package:playtogether/updates/update_service.dart';
 import 'package:playtogether/ui/banners.dart';
 import 'package:playtogether/ui/buttons.dart';
 import 'package:playtogether/ui/glass.dart';
@@ -148,7 +149,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
     return Scaffold(
       body: AmbientBackground(
         child: ListenableBuilder(
-          listenable: ProfileService.instance,
+          listenable: Listenable.merge([ProfileService.instance, UpdateService.instance]),
           builder: (context, _) => PTResponsive(
             desktop: (_) => _desktop(),
             portrait: (_) => _portrait(),
@@ -185,6 +186,13 @@ class _LobbyScreenState extends State<LobbyScreen> {
             padding: const EdgeInsets.only(top: 36, bottom: 48),
             child: Column(
               children: [
+                if (UpdateService.instance.hasUpdate) ...[
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 888),
+                    child: _updateBanner(),
+                  ),
+                  const SizedBox(height: 32),
+                ],
                 _intro(child: const _Greeting(style: PTText.display)),
                 const SizedBox(height: 12),
                 _intro(
@@ -231,6 +239,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
           spacing: 18,
           children: [
             Row(children: [const _Wordmark(compact: true), const Spacer(), _avatarButton()]),
+            if (UpdateService.instance.hasUpdate) _updateBanner(),
             Padding(
               padding: const EdgeInsets.only(top: 8),
               child: _intro(
@@ -267,6 +276,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
                 _avatarButton(size: 36),
               ],
             ),
+            if (UpdateService.instance.hasUpdate) _updateBanner(),
             Expanded(
               child: Row(
                 crossAxisAlignment: .stretch,
@@ -293,6 +303,35 @@ class _LobbyScreenState extends State<LobbyScreen> {
         ),
       ),
     );
+  }
+
+  Widget _updateBanner() {
+    final updates = UpdateService.instance;
+    return PTEntrance(
+      offset: -8,
+      duration: PTMotion.state,
+      child: PTBanner(
+        kind: .info,
+        icon: Symbols.rocket_launch_rounded,
+        title: 'v${updates.availableVersion} is ready',
+        subtitle: 'Grab it now — PlayTogether will restart itself.',
+        trailing: PTButton(
+          label: 'Update & restart',
+          height: 38,
+          expand: false,
+          loading: updates.handingOff,
+          onPressed: updates.handingOff ? null : _installUpdate,
+        ),
+        onDismiss: updates.dismiss,
+      ),
+    );
+  }
+
+  Future<void> _installUpdate() async {
+    final started = await UpdateService.instance.installAndRestart();
+    if (!started && mounted) {
+      _snack("Hmm, the updater wouldn't start. You can grab the new version from GitHub instead.");
+    }
   }
 
   Widget _profilePill() {

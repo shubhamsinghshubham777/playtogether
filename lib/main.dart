@@ -14,6 +14,7 @@ import 'package:playtogether/platform.dart';
 import 'package:playtogether/rooms/room_models.dart';
 import 'package:playtogether/rooms/room_service.dart';
 import 'package:playtogether/tls.dart';
+import 'package:playtogether/updates/update_service.dart';
 import 'package:playtogether/ui/banners.dart';
 import 'package:playtogether/ui/pt_theme.dart';
 import 'package:playtogether/ui/responsive.dart';
@@ -58,6 +59,7 @@ Future<void> _bootstrap() async {
   AuthService.instance.start();
   runApp(const MainApp());
   if (isDesktop) unawaited(_enterFullScreen());
+  if (supportsSelfUpdate) unawaited(UpdateService.instance.checkForUpdate());
 }
 
 /// Desktop starts in OS fullscreen — this is a media app, and the room screen's

@@ -43,6 +43,9 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v6
+
       - name: Download Windows artifact
         uses: actions/download-artifact@v4
         with:
@@ -53,6 +56,17 @@ jobs:
         with:
           name: ${{ needs.macos.outputs.artifact_name }}
 
+      - name: Generate the signed update feed
+        env:
+          WINSPARKLE_DSA_PRIVATE_KEY: ${{ secrets.WINSPARKLE_DSA_PRIVATE_KEY }}
+          ED_SIGNATURE: ${{ needs.macos.outputs.ed_signature }}
+          DMG_LENGTH: ${{ needs.macos.outputs.dmg_length }}
+          WINDOWS_VERSION: ${{ needs.windows.outputs.app_version }}
+          MACOS_VERSION: ${{ needs.macos.outputs.app_version }}
+          TAG: "v${{ needs.windows.outputs.app_version }}_${{ github.run_id }}"
+          REPO: ${{ github.repository }}
+        run: ./.github/scripts/generate-appcast.sh
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
@@ -61,6 +75,7 @@ jobs:
           files: |
             ./PlayTogether-${{ needs.windows.outputs.app_version }}-Windows.exe
             ./PlayTogether-${{ needs.macos.outputs.app_version }}-macOS.dmg
+            ./appcast.xml
           name: "v${{ needs.windows.outputs.app_version }}"
           target_commitish: "${{ github.sha }}"
           tag_name: "v${{ needs.windows.outputs.app_version }}_${{ github.run_id }}"

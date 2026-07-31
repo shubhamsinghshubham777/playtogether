@@ -12,6 +12,12 @@ on:
       artifact_name:
         description: Name of the uploaded artifact
         value: macos-dmg
+      ed_signature:
+        description: Sparkle EdDSA signature of the DMG, for the appcast enclosure
+        value: ${{ jobs.macos-dmg.outputs.ed_signature }}
+      dmg_length:
+        description: Byte length of the DMG, for the appcast enclosure
+        value: ${{ jobs.macos-dmg.outputs.dmg_length }}
 permissions:
   contents: read
 
@@ -28,6 +34,8 @@ jobs:
     runs-on: macos-latest
     outputs:
       app_version: ${{ steps.version.outputs.APP_VERSION }}
+      ed_signature: ${{ steps.sign.outputs.ED_SIGNATURE }}
+      dmg_length: ${{ steps.sign.outputs.DMG_LENGTH }}
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v6
@@ -108,6 +116,28 @@ jobs:
             -imagekey zlib-level=9 \
             -ov \
             "PlayTogether-${{ steps.version.outputs.APP_VERSION }}-macOS.dmg"
+
+      - name: Sign the DMG for Sparkle
+        id: sign
+        env:
+          SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          DMG="PlayTogether-${{ steps.version.outputs.APP_VERSION }}-macOS.dmg"
+          if [ -z "${SPARKLE_ED_PRIVATE_KEY:-}" ]; then
+            echo "::error::SPARKLE_ED_PRIVATE_KEY is unset — installed copies could not verify this update."
+            exit 1
+          fi
+          SIGNED=$(printf '%s' "$SPARKLE_ED_PRIVATE_KEY" \
+            | macos/Pods/Sparkle/bin/sign_update --ed-key-file - "$DMG")
+          SIG=$(printf '%s' "$SIGNED" | sed -n 's/.*edSignature="\([^"]*\)".*/\1/p')
+          LEN=$(printf '%s' "$SIGNED" | sed -n 's/.*length="\([0-9][0-9]*\)".*/\1/p')
+          if [ -z "$SIG" ] || [ -z "$LEN" ]; then
+            echo "::error::sign_update returned no signature for $DMG"
+            exit 1
+          fi
+          echo "ED_SIGNATURE=$SIG" >> "$GITHUB_OUTPUT"
+          echo "DMG_LENGTH=$LEN" >> "$GITHUB_OUTPUT"
 
       # Runs after the DMG is built and before the cache is saved at job end.
       # Excluding these via a `!` pattern on the cache path does not work: when

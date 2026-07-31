@@ -151,6 +151,7 @@ class PTBanner extends StatefulWidget {
     this.autoDismissAfter,
     this.spinIcon = false,
     this.pulseOnArrival = false,
+    this.showActivity = false,
   });
 
   final PTBannerKind kind;
@@ -171,6 +172,8 @@ class PTBanner extends StatefulWidget {
 
   /// One attention pulse on mount, for banners that must not be missed.
   final bool pulseOnArrival;
+
+  final bool showActivity;
 
   @override
   State<PTBanner> createState() => _PTBannerState();
@@ -288,7 +291,7 @@ class _PTBannerState extends State<PTBanner> with TickerProviderStateMixin {
               ],
             ),
           ),
-          if (kind == .info) const TypingDots(size: 5),
+          if (widget.showActivity) const TypingDots(size: 5),
           if (trailing != null) trailing,
           if (onDismiss != null) _dismissButton(onDismiss, iconColor),
         ],

@@ -32,6 +32,8 @@ broadcast to every member in real time, with chat and live facecams alongside.
 - **Facecams** — voice + video tiles powered by LiveKit, with mic/cam toggles.
 - **Auth** — Google sign-in or instant guest accounts (Cloudflare Turnstile
   protected); guests can upgrade to Google later without losing their identity.
+- **Self-updating desktop** — macOS and Windows check for new releases on
+  launch and offer a one-click "update & restart" from the lobby.
 - **Design** — dark violet glass aesthetic with desktop, portrait, and
   landscape layouts.
 
@@ -93,6 +95,10 @@ GitHub Actions (manual trigger) builds a Windows installer (Inno Setup via
 Windows/Linux the `playtogether://` URL scheme registration is an installer
 concern; macOS/iOS/Android register it via their app manifests.
 
+The same run also publishes a signed `appcast.xml`, which is how installed
+desktop builds update themselves (Sparkle on macOS, WinSparkle on Windows).
+Pre-releases are excluded from that feed, so they never reach existing installs.
+
 ## Repository layout
 
 | Path | What lives there |
@@ -102,6 +108,7 @@ concern; macOS/iOS/Android register it via their app manifests.
 | `lib/rooms/` | Lobby, room screen and its widgets, room models/service |
 | `lib/sync/` | `SyncService` — the realtime sync engine (see `CLAUDE.md` for invariants) |
 | `lib/av/` | LiveKit connection + track management |
+| `lib/updates/` | Desktop self-update: appcast check + native updater handoff |
 | `supabase/` | Migrations (schema/RLS/RPCs/cron), edge functions, auth config |
 
 `CLAUDE.md` documents the architecture and the sync-engine invariants in depth.

@@ -1,9 +1,9 @@
-# Appends the two Windows-only pieces inno_bundle cannot express to the
+# Appends the three Windows-only pieces inno_bundle cannot express to the
 # generated Inno Setup script, after `dart run inno_bundle --no-installer`.
 #
 # inno_bundle regenerates inno-script.iss from scratch on every build and its
 # pubspec config covers only [Setup]/[Files]/[Icons]/[Run] essentials — there is
-# no [Registry] option and no way to add a [Run] entry. So both of these have to
+# no [Registry] option and no way to add a [Run] entry. So all of these have to
 # be patched in here rather than configured alongside the rest in pubspec.yaml.
 #
 #   1. The playtogether:// protocol handler. Google OAuth redirects to
@@ -22,6 +22,18 @@
 #      EdgeUpdate round-trips, which is pure waste on every upgrade. When it
 #      does run, it detects concurrent installs itself, so racing EdgeUpdate is
 #      still safe.
+#
+#   3. A second launch entry, for the self-update path only. WinSparkle installs
+#      updates by running this installer with /SILENT, and inno_bundle's own
+#      launch entry carries `skipifsilent` — so a silent install would leave the
+#      app updated but never restarted. Rather than rewrite that entry (whether
+#      a `postinstall` checkbox entry runs at all under /SILENT is not something
+#      the Inno docs promise), this adds a `Check: WizardSilent` twin. Exactly
+#      one of the pair ever fires, which is what the `skipifsilent` assertion
+#      below keeps true. `runasoriginaluser` is the load-bearing flag on it:
+#      Setup is elevated for the Program Files install, and an app relaunched
+#      with that token would put WebView2's userDataFolder somewhere a normal
+#      run cannot read.
 #
 # Inno Setup allows a section header to appear more than once and concatenates
 # the entries, so appending whole sections here is equivalent to having them
@@ -46,6 +58,17 @@ if ($issContent -notmatch [regex]::Escape('{app}\' + $exe)) {
 
 if ($issContent -match '(?m)^\[Code\]') {
     throw "$iss already contains a [Code] section — merge the WebView2 check into it instead of appending a duplicate."
+}
+
+$launchEntry = [regex]::new(
+    '(?m)^(Filename: "\{app\}\\' + [regex]::Escape($exe) + '";[^\r\n]*?Flags:)([^\r\n]*)'
+)
+$launchMatch = $launchEntry.Match($issContent)
+if (-not $launchMatch.Success) {
+    throw "$iss has no [Run] launch entry for {app}\$exe — inno_bundle changed its output, so the silent-install relaunch below can no longer be reasoned about."
+}
+if ($launchMatch.Groups[2].Value -notmatch 'skipifsilent') {
+    throw "$iss's launch entry no longer carries skipifsilent — it would fire alongside the silent-install relaunch entry appended below and start the app twice."
 }
 
 # Permanent Microsoft fwlink for the Evergreen bootstrapper (~2 MB). It is
@@ -77,6 +100,7 @@ $lines = @(
     # No postinstall flag, so this runs during installation — before the finish
     # page where inno_bundle's own "launch the app" entry waits.
     'Filename: "{tmp}\MicrosoftEdgeWebview2Setup.exe"; Parameters: "/silent /install"; StatusMsg: "Installing the WebView2 runtime..."; Flags: waituntilterminated; Check: WebView2Needed'
+    ('Filename: "{app}\' + $exe + '"; Flags: nowait runasoriginaluser; Check: RelaunchAfterSilentInstall')
     ''
     '[Code]'
     'function RuntimeRegistered(const RootKey: Integer; const SubKey: String): Boolean;'
@@ -96,7 +120,12 @@ $lines = @(
     '  if Result and IsWin64 then'
     '    Result := not RuntimeRegistered(HKLM64, ''SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}'');'
     'end;'
+    ''
+    'function RelaunchAfterSilentInstall(): Boolean;'
+    'begin'
+    '  Result := WizardSilent();'
+    'end;'
 )
 
 Add-Content -Path $iss -Value $lines
-Write-Host "Patched $iss with the playtogether:// handler and the WebView2 runtime."
+Write-Host "Patched $iss with the playtogether:// handler, the WebView2 runtime and the silent-install relaunch."

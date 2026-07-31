@@ -28,6 +28,10 @@
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>SUPublicEDKey</key>
+	<string>T37BvQsGuWtiH5OVQOiV+4fEh/Axuur9klGbS9sjTbg=</string>
+	<key>SUEnableAutomaticChecks</key>
+	<false/>
 	<key>NSCameraUsageDescription</key>
 	<string>PlayTogether uses your camera for facecams during watch parties.</string>
 	<key>NSMicrophoneUsageDescription</key>

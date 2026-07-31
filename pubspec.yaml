@@ -8,6 +8,7 @@ environment:
 
 dependencies:
   app_links: 7.2.1
+  auto_updater: 1.0.0
   collection: 1.19.1
   fast_file_picker: 0.4.8
   file_selector: 1.1.0
@@ -23,6 +24,7 @@ dependencies:
   media_kit: 1.2.6
   media_kit_video: 2.0.1
   media_kit_libs_video: 1.0.7
+  package_info_plus: 9.0.1
   responsive_framework: 1.5.1
   sentry_flutter: 9.25.0
   supabase_flutter: 2.16.0

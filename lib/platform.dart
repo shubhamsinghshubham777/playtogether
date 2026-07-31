@@ -9,3 +9,8 @@ const _desktopPlatforms = {
 /// True on the three desktop targets. Gates window_manager (OS-window
 /// fullscreen) and any other desktop-only chrome.
 bool get isDesktop => !kIsWeb && _desktopPlatforms.contains(defaultTargetPlatform);
+
+const _selfUpdatePlatforms = {TargetPlatform.macOS, TargetPlatform.windows};
+
+bool get supportsSelfUpdate =>
+    !kIsWeb && _selfUpdatePlatforms.contains(defaultTargetPlatform);

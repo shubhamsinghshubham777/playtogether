@@ -11,6 +11,36 @@ workflow's `release` job tags the commit itself as `v<version>_<run_id>` (see
 `tag_name:` in `.github/workflows/build_installers.yaml`); a locally pushed tag
 would be a duplicate that matches nothing.
 
+## Self-update: what the release flow now carries
+
+Installed desktop apps update themselves from this workflow's output, so a few
+things that used to be cosmetic are now load-bearing. Nothing here needs extra
+release steps — the `release` job generates and attaches `appcast.xml`
+unconditionally — but do not "tidy" any of it:
+
+- **The asset filenames and the tag format are a published contract.**
+  `.github/scripts/generate-appcast.sh` composes the enclosure URLs from
+  `tag_name` (`v<version>_<run_id>`) and the exact names
+  `PlayTogether-<version>-{Windows.exe,macOS.dmg}`. Renaming either publishes a
+  feed pointing at 404s, and every installed copy silently stops updating.
+- **Every release must carry `appcast.xml`.** Apps read it through the
+  `releases/latest/download/appcast.xml` permalink, which resolves to the newest
+  *non-pre-release* — if that release lacks the asset, the permalink 404s and
+  updates stop until the next good release.
+- **Pre-releases are invisible to the updater** (that's the `/latest/`
+  permalink), so `pre` is the safe way to ship something you don't want pushed
+  out to existing installs.
+- **The release job fails loudly on a signing mismatch.** It verifies both
+  signatures against the public keys committed in the repo before publishing. If
+  it fails with "drifted apart", the `SPARKLE_ED_PRIVATE_KEY` /
+  `WINSPARKLE_DSA_PRIVATE_KEY` secret no longer matches
+  `macos/Runner/Info.plist` / `windows/runner/resources/dsa_pub.pem` — do not
+  work around it by regenerating keys, that strands every installed copy.
+- **The first updater-enabled release needs a manual-install note.** Anyone on
+  0.8.x or earlier has no updater, so its release notes must tell them to
+  download and install this one by hand, once. macOS users should also be told
+  they will be signed out once (the app left its sandbox container).
+
 A `pre` argument (alone or alongside a version/bump arg) cuts a **pre-release**:
 the flow is identical except that step 3 defaults the bump to patch, step 6
 passes `-f prerelease=true` to the dispatch, and step 7 reports it as a

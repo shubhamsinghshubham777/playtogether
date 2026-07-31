@@ -7,6 +7,7 @@ import Foundation
 
 import accessing_security_scoped_resource
 import app_links
+import auto_updater_macos
 import connectivity_plus
 import device_info_plus
 import file_selector_macos
@@ -28,6 +29,7 @@ import window_manager
 func RegisterGeneratedPlugins(registry: FlutterPluginRegistry) {
   AccessingSecurityScopedResourcePlugin.register(with: registry.registrar(forPlugin: "AccessingSecurityScopedResourcePlugin"))
   AppLinksMacosPlugin.register(with: registry.registrar(forPlugin: "AppLinksMacosPlugin"))
+  AutoUpdaterMacosPlugin.register(with: registry.registrar(forPlugin: "AutoUpdaterMacosPlugin"))
   ConnectivityPlusPlugin.register(with: registry.registrar(forPlugin: "ConnectivityPlusPlugin"))
   DeviceInfoPlusMacosPlugin.register(with: registry.registrar(forPlugin: "DeviceInfoPlusMacosPlugin"))
   FileSelectorPlugin.register(with: registry.registrar(forPlugin: "FileSelectorPlugin"))

@@ -2192,6 +2192,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
             kind: .info,
             icon: Symbols.sync_rounded,
             spinIcon: true,
+            showActivity: true,
             title: 'Reconnecting…',
             subtitle: 'Hang tight, getting you back in sync.',
           ),
