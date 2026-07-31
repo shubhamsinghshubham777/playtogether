@@ -313,7 +313,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
     }
 
     final sync = SyncService(
-      widget.player,
+      MediaKitSyncPlayer(widget.player),
       room: room,
       profile: profile,
       role: selfMembership.role,
@@ -1667,26 +1667,13 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
     try {
       final history = await _sync?.loadChatHistory();
       if (history == null || !mounted) return;
-      setState(() => _mergeChatHistory(history));
+      setState(() => mergeChatHistory(_messages, history));
     } catch (e, s) {
       // Broadcasts don't replay, so this reload is the only way messages sent
       // while we were disconnected ever arrive — losing it leaves a permanent
       // hole in the transcript.
       reportNonFatal(e, s, during: 'reloading chat history after a reconnect');
     }
-  }
-
-  /// History rows carry DB timestamps while live broadcasts carry sender-clock
-  /// timestamps, so exact keys don't exist — fuzzy-match to dedupe.
-  void _mergeChatHistory(List<ChatMessage> history) {
-    bool same(ChatMessage a, ChatMessage b) =>
-        a.senderId == b.senderId &&
-        a.content == b.content &&
-        a.sentAt.difference(b.sentAt).abs() <= const Duration(seconds: 10);
-    for (final h in history) {
-      if (!_messages.any((m) => same(m, h))) _messages.add(h);
-    }
-    _messages.sort((a, b) => a.sentAt.compareTo(b.sentAt));
   }
 
   void _openOverflowMenu() {

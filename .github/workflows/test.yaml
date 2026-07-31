@@ -1,0 +1,68 @@
+name: Tests
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+
+# The `-tests` suffix matches the convention in the build workflows: inside a
+# called workflow `github.workflow` resolves to the caller's name, so every
+# concurrency group in this repo carries its own suffix.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-tests
+  cancel-in-progress: true
+
+jobs:
+  dart:
+    name: Analyze and test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v6
+
+      - name: Get Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          # Pinned to the same version the installer workflows build with.
+          flutter-version: '3.44.8'
+          cache: true
+
+      - name: Write .env
+        # `.env` is declared as a Flutter asset, so `flutter test` fails at
+        # "Failed to build asset bundle" without it — the file has to exist even
+        # though no test reads a value out of it. On a fork PR the secret is
+        # empty and this still produces a file, which is all the bundle needs.
+        run: echo "${{ secrets.ENV_FILE }}" > .env
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test
+
+  database:
+    name: RPC suite (pgTAP)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v6
+
+      - name: Get the Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Start the local stack
+        run: supabase start
+
+      - name: Run the RPC suite
+        # Runs against a throwaway local Postgres with supabase/migrations
+        # applied; each file is one transaction that rolls back, and no deployed
+        # project is reachable from here.
+        run: supabase test db

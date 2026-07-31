@@ -1,95 +1,18 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
-import 'package:media_kit/media_kit.dart';
 import 'package:playtogether/diagnostics.dart';
 import 'package:playtogether/profile/profile_models.dart';
 import 'package:playtogether/rooms/reactions.dart';
 import 'package:playtogether/rooms/room_models.dart';
-import 'package:playtogether/rooms/room_service.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'sync_backend.dart';
 import 'sync_events.dart';
+import 'sync_logic.dart';
+import 'sync_logic.dart' as logic;
 
-/// How far a member has got towards having the room's canonical media loaded.
-/// Declaration order is the rank — "more ready" compares by [index], which is
-/// what resolves a multi-device user to a single status.
-enum ReadyStatus {
-  none,
-  selecting,
-  loading,
-  ready;
-
-  static ReadyStatus fromWire(String? value) => switch (value) {
-    'selecting' => .selecting,
-    'loading' => .loading,
-    'ready' => .ready,
-    _ => .none,
-  };
-
-  String get wire => name;
-}
-
-class PresentMember {
-  const PresentMember({
-    required this.userId,
-    required this.displayName,
-    required this.role,
-    required this.joinedAt,
-    this.avatarUrl,
-    this.readyStatus = .none,
-    this.loadedFileName,
-  });
-
-  final String userId;
-  final String displayName;
-  final String role;
-  final DateTime joinedAt;
-  final String? avatarUrl;
-
-  /// A client that predates the readiness gate sends no status, which reads as
-  /// [ReadyStatus.none] and holds the gate shut — the accepted trade-off.
-  final ReadyStatus readyStatus;
-
-  /// Basename this member actually has open, for the "they have `weird.mp4`" copy.
-  final String? loadedFileName;
-
-  bool get isHost => role == 'host';
-  bool get isReady => readyStatus == .ready;
-}
-
-/// Tri-state on purpose: before the first presence sync we simply don't know
-/// who is in the room, and rendering that as `closed` flashes the waiting
-/// overlay on every entry.
-enum GateState { indeterminate, open, closed }
-
-class ChatMessage {
-  const ChatMessage({
-    required this.senderId,
-    required this.displayName,
-    required this.content,
-    required this.sentAt,
-  });
-
-  final String senderId;
-  final String displayName;
-  final String content;
-  final DateTime sentAt;
-}
-
-enum RemoteActionKind { play, pause, seek }
-
-/// A user-initiated remote playback action, surfaced for attribution UI. Only
-/// emitted for genuine play/pause/seek broadcasts — never for mechanical
-/// `state_response` application or `position_sync` drift correction, so
-/// late-join and drift never read as someone touching the controls.
-class RemoteAction {
-  const RemoteAction({required this.senderId, required this.kind, this.position});
-
-  final String senderId;
-  final RemoteActionKind kind;
-  final Duration? position;
-}
+export 'sync_backend.dart';
+export 'sync_logic.dart';
 
 /// Room-scoped sync engine over a private Supabase Realtime channel
 /// (`room:<id>`). Created on room entry, disposed on leave.
@@ -99,13 +22,20 @@ class RemoteAction {
 /// 2. [_isApplyingRemoteAction] suppresses re-broadcast while applying;
 /// 3. last-action-wins ordering in [_shouldApply].
 class SyncService {
-  SyncService(this._player, {required this.room, required this.profile, required String role})
-    // ignore: prefer_initializing_formals
-    : _role = role {
+  SyncService(
+    this._player, {
+    required this.room,
+    required this.profile,
+    required String role,
+    this.backend = const SupabaseSyncBackend(),
+  })
+  // ignore: prefer_initializing_formals
+  : _role = role {
     _canonicalMedia = RoomMedia.fromRoom(room);
   }
 
-  final Player _player;
+  final SyncPlayer _player;
+  final SyncBackend backend;
   final Room room;
   final Profile profile;
   String _role;
@@ -113,10 +43,8 @@ class SyncService {
   String get userId => profile.id;
   bool get isHost => _role == 'host';
 
-  SupabaseClient get _client => Supabase.instance.client;
-
-  RealtimeChannel? _channel;
-  int _lastAppliedTimestamp = 0;
+  SyncChannel? _channel;
+  late final _ordering = SyncOrdering(userId: userId);
   bool _hasReceivedInitialState = false;
   bool _isApplyingRemoteAction = false;
   Timer? _stateRequestRetry;
@@ -172,30 +100,16 @@ class SyncService {
   /// pause the room — so the decision can't be made from `isPlaying`.
   bool _roomPlaying = false;
 
-  /// `ready` only means "something is open" — the name comparison is the
-  /// gate's job, which is what lets the UI tell "still loading" apart from
-  /// "loaded the wrong thing".
-  bool memberSatisfiesGate(PresentMember member) {
-    if (!member.isReady) return false;
-    if (_canonicalMedia.kind == .local && member.loadedFileName != _canonicalMedia.name) {
-      return false;
-    }
-    return true;
-  }
+  bool memberSatisfiesGate(PresentMember member) =>
+      logic.memberSatisfiesGate(member, _canonicalMedia);
 
-  /// Nobody may start or scrub until every present member has the room's
-  /// canonical media loaded.
-  GateState get gateState {
-    if (!_hasPresenceSynced) return .indeterminate;
-    if (!_canonicalMedia.isSet) return .closed;
-    if (_presentMembers.isEmpty) return .indeterminate;
-    return _presentMembers.every(memberSatisfiesGate) ? .open : .closed;
-  }
+  GateState get gateState => logic.evaluateGateState(
+    hasPresenceSynced: _hasPresenceSynced,
+    media: _canonicalMedia,
+    members: _presentMembers,
+  );
 
-  /// Everyone the room is still waiting on, for overlay/banner copy.
-  List<PresentMember> get gateBlockers => _canonicalMedia.isSet
-      ? _presentMembers.where((m) => !memberSatisfiesGate(m)).toList()
-      : const [];
+  List<PresentMember> get gateBlockers => logic.gateBlockersOf(_canonicalMedia, _presentMembers);
 
   PresentMember? get gateBlocker => gateBlockers.firstOrNull;
 
@@ -266,10 +180,7 @@ class SyncService {
   }
 
   Future<void> connect() async {
-    final channel = _client.channel(
-      'room:${room.id}',
-      opts: const RealtimeChannelConfig(self: false, private: true),
-    );
+    final channel = backend.channel('room:${room.id}');
     _channel = channel;
 
     channel
@@ -293,18 +204,18 @@ class SyncService {
           // Statuses from a superseded channel (reconnect replaced it) are stale.
           if (_disposed || _tearingDown || !identical(channel, _channel)) return;
           switch (status) {
-            case RealtimeSubscribeStatus.subscribed:
+            case SyncSubscribeStatus.subscribed:
               _reconnectAttempts = 0;
               _connectionController.add(true);
               _trackPresence();
               _reannounceFileInfo();
               unawaited(refreshCanonicalMedia());
               _requestInitialState();
-            case RealtimeSubscribeStatus.channelError:
-            case RealtimeSubscribeStatus.closed:
+            case SyncSubscribeStatus.channelError:
+            case SyncSubscribeStatus.closed:
               _connectionController.add(false);
               _scheduleReconnect();
-            case RealtimeSubscribeStatus.timedOut:
+            case SyncSubscribeStatus.timedOut:
               _connectionController.add(false);
               _scheduleReconnect();
           }
@@ -392,15 +303,10 @@ class SyncService {
 
   /// Membership joined_at feeds authority election; fetched once.
   Future<void> loadMembership() async {
-    final row = await _client
-        .from('room_members')
-        .select('role, joined_at')
-        .eq('room_id', room.id)
-        .eq('user_id', userId)
-        .maybeSingle();
+    final row = await backend.loadMembership(room.id, userId);
     if (row != null) {
-      _role = row['role'] as String;
-      _membershipJoinedAt = DateTime.parse(row['joined_at'] as String);
+      _role = row.role;
+      _membershipJoinedAt = row.joinedAt;
     }
   }
 
@@ -480,37 +386,12 @@ class SyncService {
     _requestInitialState();
   }
 
-  void _handlePresenceSync(RealtimePresenceSyncPayload payload) {
+  void _handlePresenceSync() {
     if (_disposed) return;
     final states = _channel?.presenceState();
     if (states == null) return;
-    // A user with two devices counts once (keyed by user_id).
-    final byUser = <String, PresentMember>{};
-    for (final state in states) {
-      for (final presence in state.presences) {
-        final p = presence.payload;
-        final uid = p['user_id'] as String?;
-        if (uid == null) continue;
-        final member = PresentMember(
-          userId: uid,
-          displayName: p['display_name'] as String? ?? 'Watcher',
-          avatarUrl: p['avatar_url'] as String?,
-          role: p['role'] as String? ?? 'member',
-          joinedAt: DateTime.tryParse(p['joined_at'] as String? ?? '') ?? DateTime.now(),
-          readyStatus: ReadyStatus.fromWire(p['ready_status'] as String?),
-          loadedFileName: p['loaded_file_name'] as String?,
-        );
-        // Of a user's devices the most-ready one wins, so a second idle device
-        // can't drag them back below the gate. Everything else in the payload
-        // is per-user, not per-device, so picking a winner loses nothing.
-        final existing = byUser[uid];
-        if (existing == null || member.readyStatus.index > existing.readyStatus.index) {
-          byUser[uid] = member;
-        }
-      }
-    }
     _hasPresenceSynced = true;
-    _presentMembers = byUser.values.toList()..sort((a, b) => a.joinedAt.compareTo(b.joinedAt));
+    _presentMembers = logic.mergePresence(states);
     _presenceController.add(_presentMembers);
     _evaluateGate();
   }
@@ -520,23 +401,7 @@ class SyncService {
   // the low-latency fan-out. Late joiners read the table.
   // ---------------------------------------------------------------------------
 
-  Future<List<ChatMessage>> loadChatHistory() async {
-    final rows = await _client
-        .from('messages')
-        .select('sender_id, content, created_at, profiles(display_name)')
-        .eq('room_id', room.id)
-        .order('created_at', ascending: true)
-        .limit(300);
-    return rows.map<ChatMessage>((r) {
-      return ChatMessage(
-        senderId: r['sender_id'] as String,
-        displayName:
-            (r['profiles'] as Map<String, dynamic>?)?['display_name'] as String? ?? 'Watcher',
-        content: r['content'] as String,
-        sentAt: DateTime.parse(r['created_at'] as String),
-      );
-    }).toList();
-  }
+  Future<List<ChatMessage>> loadChatHistory() => backend.loadChatHistory(room.id);
 
   Future<ChatMessage> sendChat(String content) async {
     final message = ChatMessage(
@@ -565,11 +430,11 @@ class SyncService {
     }
     unawaited(() async {
       try {
-        await _client.from('messages').insert({
-          'room_id': room.id,
-          'sender_id': userId,
-          'content': content,
-        });
+        await backend.insertChatMessage(
+          roomId: room.id,
+          senderId: userId,
+          content: content,
+        );
       } catch (e, s) {
         // Worse than a failed broadcast: the message showed up live for
         // everyone present and then silently ceases to exist, so it is gone
@@ -630,14 +495,12 @@ class SyncService {
   final _reactionController = StreamController<ReactionEvent>.broadcast();
   Stream<ReactionEvent> get reactionsStream => _reactionController.stream;
 
-  static const _reactionInterval = Duration(milliseconds: 250);
-  int _lastReactionSentMs = 0;
-  Timer? _reactionFlushTimer;
-  String? _queuedReactionEmoji;
+  final _reactionThrottle = ReactionThrottle();
 
   void sendReaction(String emoji) {
     if (_disposed) return;
     if (reactionForEmoji(emoji) == null) return;
+    // Local echo is mandatory (the channel is self:false) and never throttled.
     _reactionController.add(
       ReactionEvent(
         senderId: userId,
@@ -646,23 +509,7 @@ class SyncService {
         displayName: profile.displayName,
       ),
     );
-
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final wait = _reactionInterval.inMilliseconds - (now - _lastReactionSentMs);
-    if (wait <= 0) {
-      _lastReactionSentMs = now;
-      _broadcastReaction(emoji);
-      return;
-    }
-    _queuedReactionEmoji = emoji;
-    if (_reactionFlushTimer?.isActive ?? false) return;
-    _reactionFlushTimer = Timer(Duration(milliseconds: wait), () {
-      final queued = _queuedReactionEmoji;
-      _queuedReactionEmoji = null;
-      if (_disposed || queued == null) return;
-      _lastReactionSentMs = DateTime.now().millisecondsSinceEpoch;
-      _broadcastReaction(queued);
-    });
+    _reactionThrottle.submit(emoji, _broadcastReaction);
   }
 
   void _broadcastReaction(String emoji) {
@@ -781,53 +628,54 @@ class SyncService {
     _lastGateState = state;
     _gateController.add(state);
 
-    // Derived actions come from the authority alone. If every client reacted to
-    // the same observation the room would get one pause per member.
-    if (!_isAuthority) return;
+    final transition = logic.gateTransitionFor(
+      previous: previous,
+      next: state,
+      isAuthority: _isAuthority,
+      roomPlaying: _roomPlaying,
+      pausedByGate: _pausedByGate,
+    );
 
-    if (state == GateState.closed && previous == GateState.open) {
-      if (!_roomPlaying) return;
-      final blocker = gateBlocker;
-      // Our own position is only meaningful if we still have the room's media
-      // loaded. If we're the one holding the gate up we've just opened
-      // something else and sit at 0 — resuming everyone there would throw the
-      // room back to the start. A null held position simply skips the
-      // realignment seek, and everyone resumes where they paused, which is
-      // already the same spot.
-      _gateHeldPosition = blocker?.userId == userId ? null : currentPosition?.call();
-      _pausedByGate = true;
-      // Broadcast BEFORE applying: broadcastPause() bails out while
-      // _isApplyingRemoteAction is set, so the reverse order sends nothing.
-      unawaited(
-        broadcastPause(
-          reason: SyncActionReason.gate,
+    switch (transition) {
+      case null:
+        return;
+      case GateTransition.pause:
+        _gateHeldPosition = logic.gateHeldPosition(
           subjectUserId: gateBlocker?.userId,
-        ),
-      );
-      _applyRemoteAction(() {
-        onRemotePause != null ? onRemotePause!() : _player.pause();
-      });
-    } else if (state == GateState.open &&
-        previous == GateState.closed &&
-        _pausedByGate) {
-      _pausedByGate = false;
-      final resumeAt = _gateHeldPosition;
-      _gateHeldPosition = null;
-      if (resumeAt != null) {
-        unawaited(broadcastSeek(resumeAt, reason: SyncActionReason.gate));
-      }
-      unawaited(broadcastPlay(reason: SyncActionReason.gate));
-      _gateResumedController.add(null);
-      _applyRemoteAction(() {
-        if (resumeAt != null) onRemoteSeek?.call(resumeAt);
-        onRemotePlay != null ? onRemotePlay!() : _player.play();
-      });
+          userId: userId,
+          position: () => currentPosition?.call(),
+        );
+        _pausedByGate = true;
+        // Broadcast BEFORE applying: broadcastPause() bails out while
+        // _isApplyingRemoteAction is set, so the reverse order sends nothing.
+        unawaited(
+          broadcastPause(
+            reason: SyncActionReason.gate,
+            subjectUserId: gateBlocker?.userId,
+          ),
+        );
+        _applyRemoteAction(() {
+          onRemotePause != null ? onRemotePause!() : _player.pause();
+        });
+      case GateTransition.resume:
+        _pausedByGate = false;
+        final resumeAt = _gateHeldPosition;
+        _gateHeldPosition = null;
+        if (resumeAt != null) {
+          unawaited(broadcastSeek(resumeAt, reason: SyncActionReason.gate));
+        }
+        unawaited(broadcastPlay(reason: SyncActionReason.gate));
+        _gateResumedController.add(null);
+        _applyRemoteAction(() {
+          if (resumeAt != null) onRemoteSeek?.call(resumeAt);
+          onRemotePlay != null ? onRemotePlay!() : _player.play();
+        });
     }
   }
 
   Future<void> refreshCanonicalMedia() async {
     try {
-      final fresh = await RoomService.instance.fetchRoom(room.id);
+      final fresh = await backend.fetchRoom(room.id);
       if (_disposed || fresh == null) return;
       _setTransportLock(fresh.transportLock);
       _adoptCanonicalMedia(RoomMedia.fromRoom(fresh));
@@ -964,31 +812,18 @@ class SyncService {
     _selfPresence,
   ];
 
-  /// Host if present, else the earliest joiner; user id breaks ties so every
-  /// client elects the same person.
-  String? _authorityAmong(Iterable<PresentMember> candidates) {
-    if (candidates.isEmpty) return null;
-    final host = candidates.where((m) => m.isHost).firstOrNull;
-    if (host != null) return host.userId;
-    return candidates.reduce((a, b) {
-      final cmp = a.joinedAt.compareTo(b.joinedAt);
-      if (cmp != 0) return cmp < 0 ? a : b;
-      return a.userId.compareTo(b.userId) < 0 ? a : b;
-    }).userId;
-  }
-
-  bool get _isAuthority => _authorityAmong(_authorityCandidates) == userId;
+  bool get _isAuthority => logic.authorityAmong(_authorityCandidates) == userId;
 
   void _handleStateRequest(Map<String, dynamic> payload) {
     // The authority answers — except when the authority is the one asking (a
     // host reopening their own room), where the next in line answers instead.
     // Excluding the requester keeps it to exactly one responder either way.
     final requesterId = payload['senderId'] as String?;
-    final responder = _authorityAmong(
+    final responder = logic.authorityAmong(
       _authorityCandidates.where((m) => m.userId != requesterId),
     );
     if (responder != userId) return;
-    final hasMedia = _player.state.duration != Duration.zero || _currentYoutubeUrl != null;
+    final hasMedia = _player.duration != Duration.zero || _currentYoutubeUrl != null;
     if (!hasMedia) return;
 
     _channel?.sendBroadcastMessage(
@@ -996,8 +831,8 @@ class SyncService {
       payload: StateResponseEvent(
         senderId: userId,
         timestamp: _nextTimestamp(),
-        playing: isPlaying?.call() ?? _player.state.playing,
-        positionMs: (currentPosition?.call() ?? _player.state.position).inMilliseconds,
+        playing: isPlaying?.call() ?? _player.playing,
+        positionMs: (currentPosition?.call() ?? _player.position).inMilliseconds,
         mode: _currentMode,
         youtubeUrl: _currentYoutubeUrl,
         fileName: _currentFileName,
@@ -1042,12 +877,12 @@ class SyncService {
       if (onRemoteSeek != null) {
         onRemoteSeek!(Duration(milliseconds: event.positionMs));
       } else {
-        await _player.seek(Duration(milliseconds: event.positionMs));
+        _player.seek(Duration(milliseconds: event.positionMs));
       }
       if (event.playing) {
-        onRemotePlay != null ? onRemotePlay!() : await _player.play();
+        onRemotePlay != null ? onRemotePlay!() : _player.play();
       } else {
-        onRemotePause != null ? onRemotePause!() : await _player.pause();
+        onRemotePause != null ? onRemotePause!() : _player.pause();
       }
     });
   }
@@ -1060,14 +895,14 @@ class SyncService {
 
   void _broadcastPositionSync() {
     if (!isHost || _isApplyingRemoteAction) return;
-    final playing = isPlaying?.call() ?? _player.state.playing;
+    final playing = isPlaying?.call() ?? _player.playing;
     if (!playing) return;
     _channel?.sendBroadcastMessage(
       event: SyncEventType.positionSync,
       payload: PositionSyncEvent(
         senderId: userId,
         timestamp: _nextTimestamp(),
-        positionMs: (currentPosition?.call() ?? _player.state.position).inMilliseconds,
+        positionMs: (currentPosition?.call() ?? _player.position).inMilliseconds,
         playing: playing,
       ).toPayload(),
     );
@@ -1076,9 +911,9 @@ class SyncService {
   void _handlePositionSync(Map<String, dynamic> payload) {
     final event = PositionSyncEvent.fromPayload(payload);
     _roomPlaying = event.playing; // authority heartbeat keeps this honest
-    final localPlaying = isPlaying?.call() ?? _player.state.playing;
+    final localPlaying = isPlaying?.call() ?? _player.playing;
     if (!event.playing || !localPlaying) return;
-    final local = currentPosition?.call() ?? _player.state.position;
+    final local = currentPosition?.call() ?? _player.position;
     final remote = Duration(milliseconds: event.positionMs);
     if ((local - remote).abs() <= _driftThreshold) return;
     _applyRemoteAction(() {
@@ -1125,10 +960,11 @@ class SyncService {
     if (reason == SyncActionReason.gate) {
       // Read the position before the pause lands, and remember it on every
       // client: whoever is authority when the gate reopens does the resuming.
-      // Same caveat as the emitting side — if we're the member being waited on,
-      // our position is about some other file, so don't record it.
-      final subject = payload['subjectUserId'] as String?;
-      _gateHeldPosition = subject == userId ? null : currentPosition?.call();
+      _gateHeldPosition = logic.gateHeldPosition(
+        subjectUserId: payload['subjectUserId'] as String?,
+        userId: userId,
+        position: () => currentPosition?.call(),
+      );
       _pausedByGate = true;
     } else {
       _pausedByGate = false;
@@ -1169,28 +1005,9 @@ class SyncService {
     _modeSwitchController.add(ModeSwitchEvent.fromPayload(payload));
   }
 
-  int _lastIssuedTimestamp = 0;
+  int _nextTimestamp() => _ordering.nextTimestamp();
 
-  /// Strictly increasing per sender. `_shouldApply` drops anything with
-  /// `timestamp <= _lastAppliedTimestamp`, and a wall-clock millisecond is not
-  /// fine-grained enough: `_playPause` broadcasts play *and* seek in one
-  /// synchronous block, so both stamped `DateTime.now()` and receivers silently
-  /// dropped the second one. Every broadcast must stamp itself from here.
-  int _nextTimestamp() {
-    final now = DateTime.now().millisecondsSinceEpoch;
-    _lastIssuedTimestamp = now > _lastIssuedTimestamp ? now : _lastIssuedTimestamp + 1;
-    return _lastIssuedTimestamp;
-  }
-
-  bool _shouldApply(Map<String, dynamic> payload) {
-    final senderId = payload['senderId'] as String;
-    final timestamp = payload['timestamp'] as int;
-    // self:false should exclude own events; defensive double-check.
-    if (senderId == userId) return false;
-    if (timestamp <= _lastAppliedTimestamp) return false;
-    _lastAppliedTimestamp = timestamp;
-    return true;
-  }
+  bool _shouldApply(Map<String, dynamic> payload) => _ordering.shouldApply(payload);
 
   void _applyRemoteAction(dynamic Function() action) {
     _isApplyingRemoteAction = true;
@@ -1216,7 +1033,7 @@ class SyncService {
     for (final t in _typingTimers.values) {
       t.cancel();
     }
-    _reactionFlushTimer?.cancel();
+    _reactionThrottle.dispose();
     _chatController.close();
     _presenceController.close();
     _typingController.close();
