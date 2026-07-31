@@ -102,6 +102,12 @@ stable later means cutting a new, higher version, not re-tagging.
 
    No co-author trailers. Then `git push origin main`.
 
+   That subject line is matched by a `startsWith` guard in `test.yaml`, which
+   skips the push-triggered test run for a bump commit — the dispatch in step 6
+   re-runs both suites on the same tree and gates the release on them, so the
+   push-triggered run is pure duplication. Rewording the subject only costs the
+   duplicate run back; it cannot let an untested commit reach a release.
+
 6. **Write the release notes and trigger the workflow.** Compose a Markdown
    "What's Changed" section from the commits since the last tag — user-facing
    summaries grouped by theme, not raw commit subjects. Lead with features,

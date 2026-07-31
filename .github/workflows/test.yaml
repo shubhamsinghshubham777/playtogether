@@ -2,8 +2,32 @@ name: Tests
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.claude/**'
+      - '.vscode/**'
+      - 'tool/**'
+      - '.github/scripts/**'
+      - '.github/workflows/build_*.yaml'
+      - '.env.example'
+      - '.ghcontext'
+      - '.gitignore'
+      - '.metadata'
   pull_request:
     branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.claude/**'
+      - '.vscode/**'
+      - 'tool/**'
+      - '.github/scripts/**'
+      - '.github/workflows/build_*.yaml'
+      - '.env.example'
+      - '.ghcontext'
+      - '.gitignore'
+      - '.metadata'
   workflow_dispatch:
   workflow_call:
 permissions:
@@ -20,6 +44,9 @@ jobs:
   dart:
     name: Analyze and test
     runs-on: ubuntu-latest
+    if: >-
+      github.event_name != 'push' ||
+      !startsWith(github.event.head_commit.message, 'Bump app version to ')
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v6
@@ -50,6 +77,9 @@ jobs:
   database:
     name: RPC suite (pgTAP)
     runs-on: ubuntu-latest
+    if: >-
+      github.event_name != 'push' ||
+      !startsWith(github.event.head_commit.message, 'Bump app version to ')
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v6
