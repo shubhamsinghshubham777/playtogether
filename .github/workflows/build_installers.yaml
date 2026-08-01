@@ -71,6 +71,19 @@ jobs:
           REPO: ${{ github.repository }}
         run: ./.github/scripts/generate-appcast.sh
 
+      - name: Tag the built commit
+        env:
+          TAG: "v${{ needs.windows.outputs.app_version }}_${{ github.run_id }}"
+        run: |
+          set -euo pipefail
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists on origin, leaving it alone."
+          else
+            git tag "$TAG" "${{ github.sha }}"
+            git push origin "refs/tags/$TAG"
+            echo "Tagged ${{ github.sha }} as $TAG."
+          fi
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
@@ -81,7 +94,6 @@ jobs:
             ./PlayTogether-${{ needs.macos.outputs.app_version }}-macOS.dmg
             ./appcast.xml
           name: "v${{ needs.windows.outputs.app_version }}"
-          target_commitish: "${{ github.sha }}"
           tag_name: "v${{ needs.windows.outputs.app_version }}_${{ github.run_id }}"
           body: |
             ${{ inputs.release_notes }}

@@ -11,6 +11,15 @@ workflow's `release` job tags the commit itself as `v<version>_<run_id>` (see
 `tag_name:` in `.github/workflows/build_installers.yaml`); a locally pushed tag
 would be a duplicate that matches nothing.
 
+The `release` job pushes that tag itself, from the built commit, before it calls
+`softprops/action-gh-release`. That step is what makes a release survive a push
+to `main` while the 15-30 min build is in flight: `GITHUB_TOKEN` is allowed to
+create a release whose target is a branch *tip*, but gets a 403 "Resource not
+accessible by integration" when the target commit has been overtaken — which is
+how the first 0.9.0 attempt failed. Creating the tag first leaves the release
+API nothing to resolve. The step is a no-op if the tag already exists, so
+re-running a failed `release` job is safe.
+
 ## Self-update: what the release flow now carries
 
 Installed desktop apps update themselves from this workflow's output, so a few
