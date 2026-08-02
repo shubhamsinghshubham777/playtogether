@@ -18,7 +18,6 @@ class RoomChatPanel extends StatefulWidget {
     required this.onClose,
     required this.onSend,
     this.embedded = false,
-    this.autofocus = false,
   });
 
   final SyncService sync;
@@ -30,10 +29,6 @@ class RoomChatPanel extends StatefulWidget {
 
   /// Embedded (mobile portrait) skips its own glass shell + close button.
   final bool embedded;
-
-  /// Focus the input as soon as the panel mounts (desktop only — never on
-  /// touch layouts, where it pops the soft keyboard on room entry).
-  final bool autofocus;
 
   @override
   State<RoomChatPanel> createState() => _RoomChatPanelState();
@@ -238,7 +233,6 @@ class _RoomChatPanelState extends State<RoomChatPanel> {
                   child: TextField(
                     controller: _controller,
                     focusNode: _inputFocus,
-                    autofocus: widget.autofocus,
                     textInputAction: .send,
                     onChanged: _onTextChanged,
                     // The default `onEditingComplete` unfocuses on submit; `_send`

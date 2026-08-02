@@ -5,7 +5,9 @@ import 'package:playtogether/ui/buttons.dart';
 import 'package:playtogether/ui/pt_theme.dart';
 
 class ShortcutsDialog extends StatelessWidget {
-  const ShortcutsDialog({super.key});
+  const ShortcutsDialog({super.key, this.facecams = false});
+
+  final bool facecams;
 
   static const _playback = <_Shortcut>[
     _Shortcut(['Space', 'K'], 'Play or pause'),
@@ -24,6 +26,8 @@ class ShortcutsDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final view = <_Shortcut>[
+      const _Shortcut(['C'], 'Show or hide the chat panel'),
+      if (facecams) const _Shortcut(['V'], 'Show or hide the facecams'),
       if (isDesktop) const _Shortcut(['F'], 'Enter or exit fullscreen'),
       const _Shortcut(['F1'], 'Privacy mode — black out the room, mute mic and cam'),
       const _Shortcut(['Esc'], 'Close the reaction strip, then chat, then fullscreen'),

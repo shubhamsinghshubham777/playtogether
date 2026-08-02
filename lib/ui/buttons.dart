@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import 'glass.dart';
+import 'loader.dart';
 import 'pt_motion.dart';
 import 'pt_theme.dart';
 
@@ -80,11 +81,7 @@ class _PTButtonState extends State<PTButton> {
       switchInCurve: PTMotion.enter,
       switchOutCurve: PTMotion.exit,
       child: widget.loading
-          ? SizedBox.square(
-              key: const ValueKey('loading'),
-              dimension: 20,
-              child: CircularProgressIndicator(strokeWidth: 2.4, color: foreground),
-            )
+          ? PTLoader(key: const ValueKey('loading'), size: 20, color: foreground)
           : Row(
               key: const ValueKey('label'),
               mainAxisSize: .min,
@@ -367,11 +364,7 @@ class _GoogleButtonState extends State<GoogleButton> {
             switchInCurve: PTMotion.enter,
             switchOutCurve: PTMotion.exit,
             child: widget.loading
-                ? const SizedBox.square(
-                    key: ValueKey('loading'),
-                    dimension: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2.4, color: Color(0xFF1A1625)),
-                  )
+                ? const PTLoader(key: ValueKey('loading'), size: 20, color: Color(0xFF1A1625))
                 : Row(
                     key: const ValueKey('label'),
                     mainAxisSize: .min,

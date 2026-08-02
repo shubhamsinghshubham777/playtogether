@@ -14,6 +14,7 @@ import 'package:playtogether/ui/buttons.dart';
 import 'package:playtogether/ui/glass.dart';
 import 'package:playtogether/ui/identity.dart';
 import 'package:playtogether/ui/inputs.dart';
+import 'package:playtogether/ui/loader.dart';
 import 'package:playtogether/ui/pt_motion.dart';
 import 'package:playtogether/ui/pt_theme.dart';
 import 'package:playtogether/ui/responsive.dart';
@@ -168,7 +169,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           builder: (context, _) {
             final profile = ProfileService.instance.profile;
             if (profile == null) {
-              return const Center(child: CircularProgressIndicator(color: PTColors.primary));
+              return const Center(child: PTLoader(size: 32));
             }
             return PTResponsive(
               desktop: (_) => _desktop(profile),
@@ -504,13 +505,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   switchInCurve: PTMotion.enter,
                   switchOutCurve: PTMotion.exit,
                   child: _uploadingAvatar
-                      ? const Padding(
+                      ? const PTLoader(
                           key: ValueKey('uploading'),
-                          padding: EdgeInsets.all(8),
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: PTColors.textAccent,
-                          ),
+                          size: 18,
+                          color: PTColors.textAccent,
                         )
                       : const Icon(
                           Symbols.photo_camera_rounded,

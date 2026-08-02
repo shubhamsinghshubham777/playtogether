@@ -35,6 +35,7 @@ import 'package:playtogether/ui/banners.dart';
 import 'package:playtogether/ui/buttons.dart';
 import 'package:playtogether/ui/glass.dart';
 import 'package:playtogether/ui/identity.dart';
+import 'package:playtogether/ui/loader.dart';
 import 'package:playtogether/ui/logo.dart';
 import 'package:playtogether/ui/pt_motion.dart';
 import 'package:playtogether/ui/pt_theme.dart';
@@ -1357,6 +1358,10 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
         _setVolume((_volume - 0.1).clamp(0, 1));
       case LogicalKeyboardKey.keyM:
         _toggleMute();
+      case LogicalKeyboardKey.keyC:
+        handled = _toggleChatFromShortcut();
+      case LogicalKeyboardKey.keyV:
+        handled = _toggleCamsFromShortcut();
       case LogicalKeyboardKey.keyF:
         _toggleFullscreen();
       case LogicalKeyboardKey.f1:
@@ -1704,7 +1709,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
     await showGlassDialog<void>(
       context: context,
       width: 460,
-      builder: (_) => const ShortcutsDialog(),
+      builder: (_) => ShortcutsDialog(facecams: _av != null),
     );
     if (mounted) _shortcutFocus.requestFocus();
   }
@@ -1725,6 +1730,19 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
 
   void _openChat() {
     if (!_chatOpen) _toggleChat();
+  }
+
+  bool _toggleChatFromShortcut() {
+    if (_privacyHidden || layoutOf(context) == PTLayout.portrait) return false;
+    _toggleChat();
+    return true;
+  }
+
+  bool _toggleCamsFromShortcut() {
+    if (_privacyHidden || _av == null) return false;
+    setState(() => _camsVisible = !_camsVisible);
+    _shortcutFocus.requestFocus();
+    return true;
   }
 
   void _toggleChat() {
@@ -1909,10 +1927,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
           switchInCurve: PTMotion.enter,
           switchOutCurve: PTMotion.exit,
           child: _loading
-              ? const Center(
-                  key: ValueKey('loading'),
-                  child: CircularProgressIndicator(color: PTColors.primary),
-                )
+              ? const Center(key: ValueKey('loading'), child: PTLoader(size: 32))
               : Focus(
                   key: const ValueKey('room'),
                   focusNode: _shortcutFocus,
@@ -2032,10 +2047,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
                   child: Column(
                     mainAxisSize: .min,
                     children: [
-                      const SizedBox.square(
-                        dimension: 44,
-                        child: CircularProgressIndicator(color: PTColors.primary, strokeWidth: 3),
-                      ),
+                      const PTLoader(size: 44),
                       if (_awaitingFirstSource) ...[
                         const SizedBox(height: 18),
                         Text('Setting up the room…', style: PTText.caption),
@@ -2431,8 +2443,8 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
   }
 
   /// The chat panel itself: slides in from off the right edge (the Stack clips
-  /// it on the way past) and unmounts at rest, so the panel and its autofocused
-  /// input only exist while it's on screen. Deliberately *not* faded — the
+  /// it on the way past) and unmounts at rest, so the panel and its input only
+  /// exist while it's on screen. Deliberately *not* faded — the
   /// panel is a GlassPanel, and an Opacity layer around a BackdropFilter leaves
   /// it sampling an empty layer, i.e. the glass goes flat mid-animation.
   Widget _chatRevealed({required double offscreen, required Widget panel}) {
@@ -2576,7 +2588,6 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
                   watchingCount: _present.length,
                   onClose: _toggleChat,
                   onSend: _sendChat,
-                  autofocus: true,
                 ),
               ),
             ),
@@ -2663,7 +2674,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
             aspectRatio: 16 / 9,
             child: _skipZones(child: _video()),
           ),
-          if (_av != null && !_privacyHidden)
+          if (_av != null && !_privacyHidden && _camsVisible)
             Padding(
               padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
               child: FacecamRail(
@@ -2765,7 +2776,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
                   ),
                 ),
               ),
-              if (_av != null && !_privacyHidden)
+              if (_av != null && !_privacyHidden && _camsVisible)
                 Positioned(
                   top: 72,
                   right: 0,
