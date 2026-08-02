@@ -260,13 +260,23 @@ class _FacecamTile extends StatelessWidget {
                                   ),
                                 ),
                                 Icon(
-                                  Symbols.videocam_off_rounded,
+                                  member.privacyMode
+                                      ? Symbols.visibility_off_rounded
+                                      : Symbols.videocam_off_rounded,
                                   size: 12,
                                   fill: 1,
                                   color: PTColors.white(0.4),
                                 ),
                               ],
                             ),
+                            if (member.privacyMode)
+                              Text(
+                                'Screen hidden',
+                                style: PTText.finePrint.copyWith(
+                                  fontSize: 10,
+                                  color: PTColors.white(0.42),
+                                ),
+                              ),
                           ],
                         ),
                 ),
@@ -298,6 +308,13 @@ class _FacecamTile extends StatelessWidget {
                           color: Colors.white,
                         ),
                       ),
+                      if (member.privacyMode)
+                        Icon(
+                          Symbols.visibility_off_rounded,
+                          size: compact ? 10 : 12,
+                          fill: 1,
+                          color: PTColors.white(0.75),
+                        ),
                       // The border glow is now the primary speaking cue; this
                       // stays as a redundant, colour-blind-safe marker.
                       AnimatedSize(

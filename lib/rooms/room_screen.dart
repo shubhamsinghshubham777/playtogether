@@ -98,6 +98,8 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
   bool _camsVisible = true;
   bool _privacyHidden = false;
   bool _chatOpenBeforePrivacy = false;
+  bool _micBeforePrivacy = false;
+  bool _camBeforePrivacy = false;
 
   final _reactionAssets = ReactionAssets();
   bool _reactOpen = false;
@@ -1399,18 +1401,30 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
   }
 
   void _togglePrivacy() {
+    final av = _av;
     if (_privacyHidden) {
       setState(() => _privacyHidden = false);
       if (_chatOpenBeforePrivacy && !_chatOpen) _toggleChat();
+      if (av != null) {
+        if (_micBeforePrivacy) av.setMicEnabled(true);
+        if (_camBeforePrivacy) av.setCamEnabled(true);
+      }
     } else {
       _chatOpenBeforePrivacy = _chatOpen;
       if (_chatOpen) _toggleChat();
+      if (av != null) {
+        _micBeforePrivacy = av.micEnabled;
+        _camBeforePrivacy = av.camEnabled;
+        if (_micBeforePrivacy) av.setMicEnabled(false);
+        if (_camBeforePrivacy) av.setCamEnabled(false);
+      }
       setState(() {
         _privacyHidden = true;
         _cancelOverlayChatTimers();
         _overlayChat.clear();
       });
     }
+    _sync?.retrackPrivacy(_privacyHidden);
     _shortcutFocus.requestFocus();
   }
 
@@ -1911,7 +1925,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
                         portrait: (_) => _portrait(),
                         landscape: (_) => _landscape(),
                       ),
-                      if (_reactionStream != null)
+                      if (_reactionStream != null && !_privacyHidden)
                         Positioned.fill(
                           child: IgnorePointer(
                             child: ReactionOverlay(

@@ -521,6 +521,7 @@ void main() {
       String? file,
       String role = 'member',
       int joinedSeconds = 0,
+      bool? privacy,
     }) => {
       'user_id': userId,
       'display_name': userId,
@@ -528,6 +529,7 @@ void main() {
       'joined_at': _epoch.add(Duration(seconds: joinedSeconds)).toIso8601String(),
       'ready_status': ready,
       'loaded_file_name': file,
+      if (privacy != null) 'privacy_mode': privacy,
     };
 
     test('a user on two devices counts once', () {
@@ -613,7 +615,48 @@ void main() {
       expect(member.readyStatus, ReadyStatus.none);
       expect(member.loadedFileName, isNull);
       expect(member.avatarUrl, isNull);
+      expect(member.privacyMode, isFalse);
       expect(member.joinedAt, _epoch);
+    });
+
+    test('a client that predates privacy mode reads as not private', () {
+      expect(mergePresence([payload('a')]).single.privacyMode, isFalse);
+    });
+
+    test('privacy survives the merge only when every device reports it', () {
+      final all = mergePresence([
+        payload('a', privacy: true),
+        payload('a', privacy: true),
+      ]);
+      expect(all.single.privacyMode, isTrue);
+
+      final some = mergePresence([
+        payload('a', privacy: true),
+        payload('a', privacy: false),
+      ]);
+      expect(some.single.privacyMode, isFalse);
+    });
+
+    test('a device that can still see the room outvotes the readiness winner', () {
+      final merged = mergePresence([
+        payload('a', ready: 'ready', file: 'movie.mkv', privacy: true),
+        payload('a', ready: 'none', privacy: false),
+      ]);
+      expect(merged.single.readyStatus, ReadyStatus.ready);
+      expect(merged.single.privacyMode, isFalse);
+    });
+
+    test('the merged privacy does not depend on device order', () {
+      final ascending = mergePresence([
+        payload('a', privacy: false),
+        payload('a', ready: 'ready', privacy: true),
+      ]);
+      final descending = mergePresence([
+        payload('a', ready: 'ready', privacy: true),
+        payload('a', privacy: false),
+      ]);
+      expect(ascending.single.privacyMode, isFalse);
+      expect(descending.single.privacyMode, isFalse);
     });
 
     test('an unparseable joined_at falls back to now rather than throwing', () {

@@ -25,7 +25,7 @@ class ShortcutsDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     final view = <_Shortcut>[
       if (isDesktop) const _Shortcut(['F'], 'Enter or exit fullscreen'),
-      const _Shortcut(['F1'], 'Privacy mode — hide chat and cams'),
+      const _Shortcut(['F1'], 'Privacy mode — black out the room, mute mic and cam'),
       const _Shortcut(['Esc'], 'Close the reaction strip, then chat, then fullscreen'),
     ];
 

@@ -30,6 +30,7 @@ class PresentMember {
     this.avatarUrl,
     this.readyStatus = .none,
     this.loadedFileName,
+    this.privacyMode = false,
   });
 
   final String userId;
@@ -45,8 +46,21 @@ class PresentMember {
   /// Basename this member actually has open, for the "they have `weird.mp4`" copy.
   final String? loadedFileName;
 
+  final bool privacyMode;
+
   bool get isHost => role == 'host';
   bool get isReady => readyStatus == .ready;
+
+  PresentMember withPrivacyMode(bool value) => PresentMember(
+    userId: userId,
+    displayName: displayName,
+    role: role,
+    joinedAt: joinedAt,
+    avatarUrl: avatarUrl,
+    readyStatus: readyStatus,
+    loadedFileName: loadedFileName,
+    privacyMode: value,
+  );
 }
 
 /// Tri-state on purpose: before the first presence sync we simply don't know
@@ -183,9 +197,12 @@ List<PresentMember> mergePresence(
 }) {
   final clock = now ?? DateTime.now;
   final byUser = <String, PresentMember>{};
+  final privateEverywhere = <String, bool>{};
   for (final p in payloads) {
     final uid = p['user_id'] as String?;
     if (uid == null) continue;
+    final private = p['privacy_mode'] as bool? ?? false;
+    privateEverywhere[uid] = (privateEverywhere[uid] ?? true) && private;
     final member = PresentMember(
       userId: uid,
       displayName: p['display_name'] as String? ?? 'Watcher',
@@ -194,13 +211,17 @@ List<PresentMember> mergePresence(
       joinedAt: DateTime.tryParse(p['joined_at'] as String? ?? '') ?? clock(),
       readyStatus: ReadyStatus.fromWire(p['ready_status'] as String?),
       loadedFileName: p['loaded_file_name'] as String?,
+      privacyMode: private,
     );
     final existing = byUser[uid];
     if (existing == null || member.readyStatus.index > existing.readyStatus.index) {
       byUser[uid] = member;
     }
   }
-  return byUser.values.toList()..sort((a, b) => a.joinedAt.compareTo(b.joinedAt));
+  return [
+    for (final entry in byUser.entries)
+      entry.value.withPrivacyMode(privateEverywhere[entry.key] ?? false),
+  ]..sort((a, b) => a.joinedAt.compareTo(b.joinedAt));
 }
 
 /// Last-action-wins ordering, and the monotonic stamp that makes it work.

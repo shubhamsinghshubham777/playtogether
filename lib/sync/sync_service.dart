@@ -330,9 +330,11 @@ class SyncService {
 
   ReadyStatus _readyStatus = .none;
   String? _loadedFileName;
+  bool _privacyMode = false;
 
   ReadyStatus get readyStatus => _readyStatus;
   String? get loadedFileName => _loadedFileName;
+  bool get privacyMode => _privacyMode;
 
   void _trackPresence() {
     _channel?.track({
@@ -343,6 +345,7 @@ class SyncService {
       'joined_at': (_membershipJoinedAt ?? DateTime.now()).toIso8601String(),
       'ready_status': _readyStatus.wire,
       'loaded_file_name': _loadedFileName,
+      'privacy_mode': _privacyMode,
     });
   }
 
@@ -375,6 +378,13 @@ class SyncService {
     _loadedFileName = loadedFileName;
     _trackPresence();
     _checkSelfGateSatisfaction();
+  }
+
+  void retrackPrivacy(bool enabled) {
+    if (_privacyMode == enabled) return;
+    trace('privacy mode ${enabled ? 'on' : 'off'}', category: 'room');
+    _privacyMode = enabled;
+    _trackPresence();
   }
 
   bool _selfSatisfiesGate = false;
@@ -886,6 +896,7 @@ class SyncService {
     joinedAt: _membershipJoinedAt ?? DateTime.now(),
     readyStatus: _readyStatus,
     loadedFileName: _loadedFileName,
+    privacyMode: _privacyMode,
   );
 
   List<PresentMember> get _authorityCandidates => [

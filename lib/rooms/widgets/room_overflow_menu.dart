@@ -314,6 +314,11 @@ class _MemberRow extends StatelessWidget {
                       TextSpan(
                         text: ' · away',
                         style: TextStyle(fontWeight: .w400, color: PTColors.white(0.45)),
+                      )
+                    else if (presence?.privacyMode ?? false)
+                      TextSpan(
+                        text: ' · screen hidden',
+                        style: TextStyle(fontWeight: .w400, color: PTColors.white(0.45)),
                       ),
                   ],
                 ),

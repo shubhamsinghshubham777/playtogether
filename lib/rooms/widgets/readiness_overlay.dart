@@ -218,6 +218,11 @@ class _MemberStatusRow extends StatelessWidget {
                     TextSpan(
                       text: ' (you)',
                       style: TextStyle(fontWeight: .w400, color: PTColors.white(0.45)),
+                    )
+                  else if (member.privacyMode)
+                    TextSpan(
+                      text: ' · screen hidden',
+                      style: TextStyle(fontWeight: .w400, color: PTColors.white(0.45)),
                     ),
                 ],
               ),
