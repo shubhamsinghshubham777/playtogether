@@ -90,7 +90,9 @@ class MainApp extends StatefulWidget {
 
 class _MainAppState extends State<MainApp> {
   // Created once for the whole app lifetime; the room screen attaches to it.
-  late final player = Player();
+  late final player = Player(
+    configuration: const PlayerConfiguration(logLevel: MPVLogLevel.warn),
+  );
   late final router = buildRouter(player);
   final _appLinks = AppLinks();
   StreamSubscription<Uri>? _linkSub;

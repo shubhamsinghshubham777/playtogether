@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:fast_file_picker/fast_file_picker.dart';
 import 'package:file_selector/file_selector.dart';
@@ -179,6 +180,8 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
   bool _isFilePickerOpen = false;
   bool _ytBufferReady = false;
   Timer? _ytBufferFallbackTimer;
+  Timer? _localLoadWatchdog;
+  bool _localLoadStalled = false;
 
   int? _ytErrorShownFor;
 
@@ -383,11 +386,22 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
       }),
       widget.player.stream.duration.listen((duration) {
         if (_mode != .local) return;
+        final wasResolved = _duration != Duration.zero;
         setState(() => _duration = duration);
+        if (wasResolved != (duration != Duration.zero)) {
+          trace(
+            'local duration ${duration == Duration.zero ? 'cleared' : 'resolved'}',
+            category: 'media',
+            data: {'ms': duration.inMilliseconds, 'file': _localFileName},
+          );
+        }
+        if (duration != Duration.zero) _localLoadWatchdog?.cancel();
         // A non-zero duration is what "the file is actually open" means, so
         // this is the local-mode loading -> ready edge.
         _updateReadiness();
       }),
+      widget.player.stream.log.listen(_onPlayerLog),
+      widget.player.stream.error.listen(_onPlayerError),
       widget.player.stream.buffering.listen((buffering) {
         if (_mode == .local) setState(() => _buffering = buffering);
       }),
@@ -445,6 +459,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
     _actionToastTimer?.cancel();
     _skipFlashTimer?.cancel();
     _ytBufferFallbackTimer?.cancel();
+    _localLoadWatchdog?.cancel();
     for (final t in _overlayChatTimers) {
       t.cancel();
     }
@@ -758,6 +773,8 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
     _ytBufferFallbackTimer?.cancel();
     _ytBufferFallbackTimer = null;
     _ytBufferReady = false;
+    _localLoadWatchdog?.cancel();
+    _localLoadStalled = false;
     final existing = _youtubeController;
     trace(
       'switching to youtube mode',
@@ -946,13 +963,104 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
       _updateReadiness(); // cancelled: back to whatever we had before
       return;
     }
-    await widget.player.open(Media(uri), play: false);
     final name = _basename(response!);
+    final path = response.path;
+    final media = Media(uri);
+    trace(
+      'local file picked',
+      category: 'media',
+      data: {
+        'platform': Platform.operatingSystem,
+        'from': response.uri != null ? 'uri' : 'path',
+        'file': name,
+        'name_has_non_ascii': name.runes.any((r) => r > 127),
+        'path_length': path?.length,
+        'exists': path == null ? null : File(path).existsSync(),
+        'bytes': path == null ? null : _sizeOf(path),
+        'normalized': _redactPaths(media.uri),
+      },
+    );
+    _localLoadWatchdog?.cancel();
+    _localLoadStalled = false;
+    try {
+      await widget.player.open(media, play: false);
+    } catch (e, s) {
+      reportNonFatal(e, s, during: 'opening a local video file');
+      if (!mounted) return;
+      _snack("We couldn't open that file. Try another copy, or a different file.");
+      _updateReadiness();
+      return;
+    }
+    trace('local file open issued', category: 'media', data: {'file': name});
     _localFileName = name;
     _mismatchDismissed = false;
+    _armLocalLoadWatchdog(name);
     unawaited(_announceLocalFile(name));
     setState(() {});
     _updateReadiness();
+  }
+
+  static int? _sizeOf(String path) {
+    try {
+      return File(path).lengthSync();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static final _pathLike = RegExp(r'(?:[A-Za-z]:)?(?:[\\/][^\s\\/]+)+');
+  static String _redactPaths(String text) => text.replaceAllMapped(_pathLike, (match) {
+    final leaf = match[0]!.split(RegExp(r'[\\/]')).last;
+    return leaf.isEmpty ? '…' : '…/$leaf';
+  });
+
+  void _onPlayerLog(PlayerLog log) {
+    if (log.level != 'warn' && log.level != 'error' && log.level != 'fatal') return;
+    trace(
+      'mpv ${log.level}: ${_redactPaths(log.text)}',
+      category: 'media',
+      data: {'prefix': log.prefix, 'mode': _mode.name},
+    );
+  }
+
+  void _onPlayerError(String error) {
+    if (_mode != .local) return;
+    reportNonFatal(
+      StateError('mpv: ${_redactPaths(error)}'),
+      StackTrace.current,
+      during: 'opening a local video file',
+    );
+    if (_localFileName != null && _duration == Duration.zero) _surfaceLocalLoadFailure();
+  }
+
+  void _armLocalLoadWatchdog(String name) {
+    _localLoadWatchdog?.cancel();
+    _localLoadWatchdog = Timer(const Duration(seconds: 15), () {
+      if (!mounted || _mode != .local || _localFileName != name) return;
+      if (_duration != Duration.zero) return;
+      trace(
+        'local load stalled',
+        category: 'media',
+        data: {
+          'file': name,
+          'platform': Platform.operatingSystem,
+          'os_version': Platform.operatingSystemVersion,
+        },
+      );
+      reportNonFatal(
+        StateError('local file never reported a duration within 15s'),
+        StackTrace.current,
+        during: 'opening a local video file',
+      );
+      _surfaceLocalLoadFailure();
+    });
+  }
+
+  void _surfaceLocalLoadFailure() {
+    if (_localLoadStalled) return;
+    _localLoadStalled = true;
+    _localLoadWatchdog?.cancel();
+    _snack("We couldn't open that file. Try another copy, or a different file.");
   }
 
   /// The display name AND the gate's identity for a picked file, so it has to
