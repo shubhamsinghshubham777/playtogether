@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:playtogether/app_router.dart';
+import 'package:playtogether/app_version.dart';
 import 'package:playtogether/auth/auth_service.dart';
 import 'package:playtogether/diagnostics.dart';
 import 'package:playtogether/profile/profile_service.dart';
@@ -734,15 +735,29 @@ class _Wordmark extends StatelessWidget {
           ),
           child: Icon(Icons.play_arrow_rounded, size: logo * 0.55, color: Colors.white),
         ),
-        Text(
-          'PlayTogether',
-          style: TextStyle(
-            fontFamily: PTFonts.display,
-            fontSize: compact ? 17 : 19,
-            fontWeight: .w700,
-            letterSpacing: -0.2,
-            color: Colors.white,
-          ),
+        Column(
+          mainAxisSize: .min,
+          crossAxisAlignment: .start,
+          children: [
+            Text(
+              'PlayTogether',
+              style: TextStyle(
+                fontFamily: PTFonts.display,
+                fontSize: compact ? 17 : 19,
+                fontWeight: .w700,
+                letterSpacing: -0.2,
+                color: Colors.white,
+              ),
+            ),
+            if (AppVersion.label case final version?)
+              Text(
+                version,
+                style: PTText.mono.copyWith(
+                  fontSize: compact ? 10 : 11,
+                  color: PTColors.white(0.4),
+                ),
+              ),
+          ],
         ),
       ],
     );

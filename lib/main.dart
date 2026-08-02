@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:playtogether/app_router.dart';
+import 'package:playtogether/app_version.dart';
 import 'package:playtogether/auth/auth_service.dart';
 import 'package:playtogether/auth/webview_runtime.dart';
 import 'package:playtogether/diagnostics.dart';
@@ -57,6 +58,7 @@ Future<void> _bootstrap() async {
   // Must follow initialize (it reads Supabase.instance) and precede runApp, so
   // the auth stream has an error handler before the first deep link can land.
   AuthService.instance.start();
+  await AppVersion.load();
   runApp(const MainApp());
   if (isDesktop) unawaited(_enterFullScreen());
   if (supportsSelfUpdate) unawaited(UpdateService.instance.checkForUpdate());

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:playtogether/rooms/room_models.dart';
@@ -14,8 +16,15 @@ class _Harness {
     String userId = _me,
     String role = 'member',
     RoomMedia media = RoomMedia.none,
+    int? joinedSeconds,
   }) {
     backend = FakeSyncBackend();
+    if (joinedSeconds != null) {
+      backend.membership = MembershipRow(
+        role: role,
+        joinedAt: presenceJoinedAt(joinedSeconds),
+      );
+    }
     player = FakeSyncPlayer();
     service = SyncService(
       player,
@@ -50,6 +59,7 @@ class _Harness {
     service.remoteActions.listen(actions.add);
     service.reactionsStream.listen(reactions.add);
     service.connectionStream.listen(connectionEvents.add);
+    unawaited(service.loadMembership());
     service.connect();
     if (subscribed) channel.emitStatus(SyncSubscribeStatus.subscribed);
   }
@@ -299,7 +309,7 @@ void main() {
 
     test('when the host asks, the next in line answers instead', () {
       fakeAsync((async) {
-        final h = _Harness()..connect();
+        final h = _Harness(joinedSeconds: 10)..connect();
         h.player.durationValue = const Duration(minutes: 90);
         h.channel.syncPresence([
           presenceEntry('host', role: 'host', joinedSeconds: 0),

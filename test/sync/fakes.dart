@@ -150,6 +150,11 @@ Room testRoom({String id = 'room-1', RoomMedia media = RoomMedia.none}) => Room(
 Profile testProfile(String id) =>
     Profile(id: id, displayName: id, isGuest: false);
 
+final presenceBase = DateTime.utc(2026, 7, 31, 10);
+
+DateTime presenceJoinedAt(int joinedSeconds) =>
+    presenceBase.add(Duration(seconds: joinedSeconds));
+
 Map<String, dynamic> presenceEntry(
   String userId, {
   String role = 'member',
@@ -160,7 +165,7 @@ Map<String, dynamic> presenceEntry(
   'user_id': userId,
   'display_name': userId,
   'role': role,
-  'joined_at': DateTime.utc(2026, 7, 31, 10).add(Duration(seconds: joinedSeconds)).toIso8601String(),
+  'joined_at': presenceJoinedAt(joinedSeconds).toIso8601String(),
   'ready_status': ready,
   'loaded_file_name': file,
 };

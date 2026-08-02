@@ -28,12 +28,14 @@ import 'package:playtogether/rooms/widgets/readiness_overlay.dart';
 import 'package:playtogether/rooms/widgets/room_chat_panel.dart';
 import 'package:playtogether/rooms/widgets/room_control_bar.dart';
 import 'package:playtogether/rooms/widgets/room_overflow_menu.dart';
+import 'package:playtogether/rooms/widgets/shortcuts_dialog.dart';
 import 'package:playtogether/sync/sync_events.dart';
 import 'package:playtogether/sync/sync_service.dart';
 import 'package:playtogether/ui/banners.dart';
 import 'package:playtogether/ui/buttons.dart';
 import 'package:playtogether/ui/glass.dart';
 import 'package:playtogether/ui/identity.dart';
+import 'package:playtogether/ui/logo.dart';
 import 'package:playtogether/ui/pt_motion.dart';
 import 'package:playtogether/ui/pt_theme.dart';
 import 'package:playtogether/ui/responsive.dart';
@@ -94,6 +96,8 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
   bool _chatOpen = false;
   int _unread = 0;
   bool _camsVisible = true;
+  bool _privacyHidden = false;
+  bool _chatOpenBeforePrivacy = false;
 
   final _reactionAssets = ReactionAssets();
   bool _reactOpen = false;
@@ -339,7 +343,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
           _messages.add(message);
           if (!_chatOpen) _unread++;
         });
-        if (!_chatOpen) _pushOverlayChat(message);
+        if (!_chatOpen && !_privacyHidden) _pushOverlayChat(message);
       }),
       sync.typingStream.listen((names) => setState(() => _typingNames = names)),
       sync.presenceStream.listen(_onPresenceChanged),
@@ -860,8 +864,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
   }
 
   String _ytErrorMessage(int code) => switch (code) {
-    101 || 150 =>
-      "The owner of that video won't let it play outside YouTube. Try a different one.",
+    101 || 150 => "The owner of that video won't let it play outside YouTube. Try a different one.",
     100 => "That video is private or isn't on YouTube any more.",
     _ => 'Failed to load that YouTube video.',
   };
@@ -1077,8 +1080,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
   void _updateYouTubeReadiness(PTYouTubeController controller) {
     if (_ytBufferReady) return;
     final PTYtPlayerState state = controller.playerState;
-    final loaded =
-        state == .cued || state == .buffering || state == .playing || state == .paused;
+    final loaded = state == .cued || state == .buffering || state == .playing || state == .paused;
     if (!controller.isReady || !loaded) return;
     _ytBufferFallbackTimer?.cancel();
     _ytBufferFallbackTimer = null;
@@ -1355,6 +1357,8 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
         _toggleMute();
       case LogicalKeyboardKey.keyF:
         _toggleFullscreen();
+      case LogicalKeyboardKey.f1:
+        _togglePrivacy();
       case LogicalKeyboardKey.escape:
         // Ordered: text-field unfocus (handled above) → reaction strip close →
         // chat close → fullscreen exit → let Esc bubble.
@@ -1392,6 +1396,22 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
       }
       setState(() => _controlsVisible = false);
     });
+  }
+
+  void _togglePrivacy() {
+    if (_privacyHidden) {
+      setState(() => _privacyHidden = false);
+      if (_chatOpenBeforePrivacy && !_chatOpen) _toggleChat();
+    } else {
+      _chatOpenBeforePrivacy = _chatOpen;
+      if (_chatOpen) _toggleChat();
+      setState(() {
+        _privacyHidden = true;
+        _cancelOverlayChatTimers();
+        _overlayChat.clear();
+      });
+    }
+    _shortcutFocus.requestFocus();
   }
 
   void _toggleReact() {
@@ -1664,6 +1684,15 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
         .portrait => 70,
       },
     );
+  }
+
+  Future<void> _showShortcuts() async {
+    await showGlassDialog<void>(
+      context: context,
+      width: 460,
+      builder: (_) => const ShortcutsDialog(),
+    );
+    if (mounted) _shortcutFocus.requestFocus();
   }
 
   void _copyCode() {
@@ -2100,6 +2129,16 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
             ),
           ),
         ),
+        IgnorePointer(
+          child: AnimatedOpacity(
+            opacity: _privacyHidden ? 1 : 0,
+            duration: PTMotion.functional(context, PTMotion.panel),
+            child: const ColoredBox(
+              color: Colors.black,
+              child: Center(child: PTLogoMark(size: 88)),
+            ),
+          ),
+        ),
       ],
     );
   }
@@ -2155,6 +2194,14 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
             ),
           ),
           RoomCodeChip(code: room.code, onCopy: _copyCode, fontSize: compact ? 11 : 13),
+          PTIconButton(
+            icon: Symbols.keyboard_rounded,
+            size: compact ? 26 : 30,
+            iconSize: compact ? 15 : 17,
+            glass: false,
+            tooltip: 'Keyboard shortcuts',
+            onPressed: _showShortcuts,
+          ),
           // Urgency without layout movement — this sits right next to the
           // video, so nothing here may reflow or jitter.
           Row(
@@ -2477,7 +2524,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
             right: _chatOpen ? 378 : 240,
             child: _bannerStack(spacing: 12),
           ),
-          if (_av != null && _camsVisible)
+          if (_av != null && !_privacyHidden && _camsVisible)
             Positioned(
               top: 84,
               left: 24,
@@ -2489,7 +2536,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
                 onHide: () => setState(() => _camsVisible = false),
               ),
             ),
-          if (_av != null && !_camsVisible)
+          if (_av != null && !_privacyHidden && !_camsVisible)
             Positioned(
               top: 84,
               left: 24,
@@ -2602,7 +2649,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
             aspectRatio: 16 / 9,
             child: _skipZones(child: _video()),
           ),
-          if (_av != null)
+          if (_av != null && !_privacyHidden)
             Padding(
               padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
               child: FacecamRail(
@@ -2704,7 +2751,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
                   ),
                 ),
               ),
-              if (_av != null)
+              if (_av != null && !_privacyHidden)
                 Positioned(
                   top: 72,
                   right: 0,
