@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import 'package:playtogether/player/youtube/youtube_links.dart';
 import 'package:playtogether/ui/buttons.dart';
 import 'package:playtogether/ui/inputs.dart';
 import 'package:playtogether/ui/pt_theme.dart';
@@ -28,21 +29,12 @@ class _YouTubeUrlDialogState extends State<YouTubeUrlDialog> {
       setState(() => _errorMessage = 'Paste a link first.');
       return;
     }
-    if (!_isValidYoutubeUrl(url)) {
+    final videoId = youtubeVideoId(url);
+    if (videoId == null) {
       setState(() => _errorMessage = "Hmm, that doesn't look like a YouTube link.");
       return;
     }
-    Navigator.of(context).pop(url);
-  }
-
-  bool _isValidYoutubeUrl(String url) {
-    final patterns = [
-      RegExp(r'youtube\.com/watch\?v=([a-zA-Z0-9_-]{11})'),
-      RegExp(r'youtu\.be/([a-zA-Z0-9_-]{11})'),
-      RegExp(r'youtube\.com/embed/([a-zA-Z0-9_-]{11})'),
-      RegExp(r'm\.youtube\.com/watch\?v=([a-zA-Z0-9_-]{11})'),
-    ];
-    return patterns.any((pattern) => pattern.hasMatch(url));
+    Navigator.of(context).pop(canonicalYouTubeUrl(videoId));
   }
 
   @override

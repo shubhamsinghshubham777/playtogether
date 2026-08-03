@@ -16,6 +16,7 @@ import 'package:playtogether/player/chooser_dialog.dart';
 import 'package:playtogether/player/mode_selection_dialog.dart';
 import 'package:playtogether/player/youtube/pt_youtube_controller.dart';
 import 'package:playtogether/player/youtube/pt_youtube_embed.dart';
+import 'package:playtogether/player/youtube/youtube_links.dart';
 import 'package:playtogether/player/youtube_url_dialog.dart';
 import 'package:playtogether/profile/profile_service.dart';
 import 'package:playtogether/rooms/reactions.dart';
@@ -23,6 +24,7 @@ import 'package:playtogether/rooms/room_models.dart';
 import 'package:playtogether/rooms/room_service.dart';
 import 'package:playtogether/rooms/widgets/facecam_rail.dart';
 import 'package:playtogether/rooms/widgets/kick_member_dialog.dart';
+import 'package:playtogether/rooms/widgets/play_shared_video_dialog.dart';
 import 'package:playtogether/rooms/widgets/reaction_overlay.dart';
 import 'package:playtogether/rooms/widgets/reaction_strip.dart';
 import 'package:playtogether/rooms/widgets/readiness_overlay.dart';
@@ -731,22 +733,25 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
     }
   }
 
-  String? _extractVideoId(String url) {
-    final patterns = [
-      RegExp(r'youtube\.com/watch\?v=([a-zA-Z0-9_-]{11})'),
-      RegExp(r'youtu\.be/([a-zA-Z0-9_-]{11})'),
-      RegExp(r'youtube\.com/embed/([a-zA-Z0-9_-]{11})'),
-      RegExp(r'm\.youtube\.com/watch\?v=([a-zA-Z0-9_-]{11})'),
-    ];
-    for (final pattern in patterns) {
-      final match = pattern.firstMatch(url);
-      if (match != null) return match.group(1);
+  Future<void> _playSharedVideo(String videoId, String sharedBy) async {
+    if (!(_sync?.isHost ?? false)) return;
+    if (_mode == .youtube && youtubeVideoId(_youtubeUrl ?? '') == videoId) {
+      _snack("That's what we're already watching.", kind: .info);
+      return;
     }
-    return null;
+    trace('shared youtube link tapped in chat', category: 'youtube', data: {'video_id': videoId});
+    final confirmed = await showGlassDialog<bool>(
+      context: context,
+      width: 400,
+      builder: (_) => PlaySharedVideoDialog(videoId: videoId, sharedBy: sharedBy),
+    );
+    if (confirmed != true || !mounted) return;
+    trace('playing youtube link shared in chat', category: 'youtube', data: {'video_id': videoId});
+    await _handleModeSwitch(.youtube, canonicalYouTubeUrl(videoId));
   }
 
   void _switchToYouTubeMode(String url) {
-    final videoId = _extractVideoId(url);
+    final videoId = youtubeVideoId(url);
     if (videoId == null) {
       _snack("Hmm, that doesn't look like a YouTube link.");
       return;
@@ -757,7 +762,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
     // the gate on a room that never changed what it was watching.
     if (_mode == .youtube &&
         _youtubeController != null &&
-        _extractVideoId(_youtubeUrl ?? '') == videoId) {
+        youtubeVideoId(_youtubeUrl ?? '') == videoId) {
       trace(
         'youtube switch to the video already embedded',
         category: 'media',
@@ -1209,8 +1214,8 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
     if (media.kind != .youtube) return false;
     final current = _youtubeUrl;
     if (current == null) return false;
-    final canonicalId = _extractVideoId(media.url ?? '');
-    return canonicalId != null && canonicalId == _extractVideoId(current);
+    final canonicalId = youtubeVideoId(media.url ?? '');
+    return canonicalId != null && canonicalId == youtubeVideoId(current);
   }
 
   /// The D6 fallback, armed when the embed is created rather than from the
@@ -2706,6 +2711,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
                   onClose: _toggleChat,
                   onSend: _sendChat,
                   onCopied: _onChatCopied,
+                  onPlaySharedVideo: (_sync?.isHost ?? false) ? _playSharedVideo : null,
                 ),
               ),
             ),
@@ -2849,6 +2855,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
                           onClose: () {},
                           onSend: _sendChat,
                           onCopied: _onChatCopied,
+                          onPlaySharedVideo: (_sync?.isHost ?? false) ? _playSharedVideo : null,
                           embedded: true,
                         )
                       : const SizedBox.shrink(),
@@ -2928,6 +2935,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
                       onClose: _toggleChat,
                       onSend: _sendChat,
                       onCopied: _onChatCopied,
+                      onPlaySharedVideo: (_sync?.isHost ?? false) ? _playSharedVideo : null,
                     ),
                   ),
                 ),

@@ -1,9 +1,11 @@
 import 'dart:async';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:playtogether/platform.dart';
+import 'package:playtogether/player/youtube/youtube_links.dart';
 import 'package:playtogether/sync/sync_service.dart';
 import 'package:playtogether/ui/buttons.dart';
 import 'package:playtogether/ui/glass.dart';
@@ -21,6 +23,7 @@ class RoomChatPanel extends StatefulWidget {
     required this.onClose,
     required this.onSend,
     required this.onCopied,
+    this.onPlaySharedVideo,
     this.embedded = false,
   });
 
@@ -31,6 +34,7 @@ class RoomChatPanel extends StatefulWidget {
   final VoidCallback onClose;
   final ValueChanged<String> onSend;
   final VoidCallback onCopied;
+  final void Function(String videoId, String sharedBy)? onPlaySharedVideo;
 
   /// Embedded (mobile portrait) skips its own glass shell + close button.
   final bool embedded;
@@ -217,6 +221,7 @@ class _RoomChatPanelState extends State<RoomChatPanel> {
                   message: message,
                   own: message.senderId == widget.sync.userId,
                   onCopied: widget.onCopied,
+                  onPlaySharedVideo: widget.onPlaySharedVideo,
                 );
                 final key = _keyOf(message);
                 if (!_animated.add(key)) return bubble;
@@ -334,15 +339,20 @@ class _RoomChatPanelState extends State<RoomChatPanel> {
             ),
     );
   }
-
 }
 
 class _MessageRow extends StatefulWidget {
-  const _MessageRow({required this.message, required this.own, required this.onCopied});
+  const _MessageRow({
+    required this.message,
+    required this.own,
+    required this.onCopied,
+    required this.onPlaySharedVideo,
+  });
 
   final ChatMessage message;
   final bool own;
   final VoidCallback onCopied;
+  final void Function(String videoId, String sharedBy)? onPlaySharedVideo;
 
   @override
   State<_MessageRow> createState() => _MessageRowState();
@@ -350,10 +360,101 @@ class _MessageRow extends StatefulWidget {
 
 class _MessageRowState extends State<_MessageRow> {
   bool _hovered = false;
+  late List<MessageSegment> _segments;
+  final _linkTaps = <int, TapGestureRecognizer>{};
+
+  @override
+  void initState() {
+    super.initState();
+    _parseContent();
+  }
+
+  @override
+  void didUpdateWidget(covariant _MessageRow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.message.content != widget.message.content) _parseContent();
+  }
+
+  @override
+  void dispose() {
+    _disposeLinkTaps();
+    super.dispose();
+  }
+
+  void _disposeLinkTaps() {
+    for (final recognizer in _linkTaps.values) {
+      recognizer.dispose();
+    }
+    _linkTaps.clear();
+  }
+
+  void _parseContent() {
+    _disposeLinkTaps();
+    _segments = splitYouTubeLinks(widget.message.content);
+    for (var i = 0; i < _segments.length; i++) {
+      final videoId = _segments[i].videoId;
+      if (videoId == null) continue;
+      _linkTaps[i] = TapGestureRecognizer()..onTap = () => _play(videoId);
+    }
+  }
+
+  void _play(String videoId) {
+    widget.onPlaySharedVideo?.call(videoId, widget.message.displayName);
+  }
+
+  bool get _actionable => widget.onPlaySharedVideo != null && _linkTaps.isNotEmpty;
+
+  String? get _soleVideoId {
+    final ids = _segments.map((segment) => segment.videoId).nonNulls.toSet();
+    return ids.length == 1 ? ids.single : null;
+  }
 
   void _copy() {
     Clipboard.setData(ClipboardData(text: widget.message.content));
     widget.onCopied();
+  }
+
+  Widget _text() {
+    final base = PTText.body.copyWith(fontSize: 13.5);
+    if (_linkTaps.isEmpty) return Text(widget.message.content, style: base);
+    final linkColor = widget.own ? Colors.white : PTColors.textAccent;
+    final linkStyle = base.copyWith(
+      color: linkColor,
+      fontWeight: .w500,
+      decoration: _actionable ? TextDecoration.underline : null,
+      decorationColor: linkColor.withValues(alpha: 0.45),
+    );
+    return Text.rich(
+      TextSpan(
+        children: [
+          for (var i = 0; i < _segments.length; i++)
+            if (_segments[i].videoId == null)
+              TextSpan(text: _segments[i].text)
+            else
+              TextSpan(
+                text: _segments[i].text,
+                style: linkStyle,
+                recognizer: _actionable ? _linkTaps[i] : null,
+                mouseCursor: _actionable ? SystemMouseCursors.click : null,
+              ),
+        ],
+      ),
+      style: base,
+    );
+  }
+
+  Widget _bubbleBody() {
+    final videoId = _actionable ? _soleVideoId : null;
+    if (videoId == null) return _text();
+    return Column(
+      mainAxisSize: .min,
+      crossAxisAlignment: .stretch,
+      spacing: 8,
+      children: [
+        _text(),
+        _PlaySharedVideoButton(own: widget.own, onTap: () => _play(videoId)),
+      ],
+    );
   }
 
   @override
@@ -416,7 +517,7 @@ class _MessageRowState extends State<_MessageRow> {
                     bottomLeft: Radius.circular(4),
                   ),
                 ),
-                child: Text(message.content, style: PTText.body.copyWith(fontSize: 13.5)),
+                child: _bubbleBody(),
               ),
             ],
           ),
@@ -447,10 +548,68 @@ class _MessageRowState extends State<_MessageRow> {
                 bottomRight: Radius.circular(4),
               ),
             ),
-            child: Text(widget.message.content, style: PTText.body.copyWith(fontSize: 13.5)),
+            child: _bubbleBody(),
           ),
         ),
       ],
+    );
+  }
+}
+
+class _PlaySharedVideoButton extends StatefulWidget {
+  const _PlaySharedVideoButton({required this.own, required this.onTap});
+
+  final bool own;
+  final VoidCallback onTap;
+
+  @override
+  State<_PlaySharedVideoButton> createState() => _PlaySharedVideoButtonState();
+}
+
+class _PlaySharedVideoButtonState extends State<_PlaySharedVideoButton> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final tint = widget.own ? Colors.white : PTColors.textAccent;
+    final fill = widget.own
+        ? PTColors.white(_hovered ? 0.22 : 0.14)
+        : PTColors.primary.withValues(alpha: _hovered ? 0.38 : 0.24);
+    return SelectionContainer.disabled(
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        onEnter: (_) => setState(() => _hovered = true),
+        onExit: (_) => setState(() => _hovered = false),
+        child: PTPressable(
+          onTap: widget.onTap,
+          pressedScale: 0.97,
+          child: AnimatedContainer(
+            duration: PTMotion.functional(context, PTMotion.hover),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+            decoration: BoxDecoration(
+              color: fill,
+              border: Border.all(color: tint.withValues(alpha: 0.34)),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              mainAxisSize: .min,
+              mainAxisAlignment: .center,
+              spacing: 6,
+              children: [
+                Icon(Symbols.play_circle_rounded, size: 16, fill: 1, color: tint),
+                Flexible(
+                  child: Text(
+                    'Play for everyone',
+                    maxLines: 1,
+                    overflow: .ellipsis,
+                    style: PTText.caption.copyWith(fontSize: 12, color: tint),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
