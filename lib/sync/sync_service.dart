@@ -28,8 +28,8 @@ class SyncService {
     required String role,
     this.backend = const SupabaseSyncBackend(),
   })
-  // ignore: prefer_initializing_formals
-  : _role = role {
+    // ignore: prefer_initializing_formals
+    : _role = role {
     _canonicalMedia = RoomMedia.fromRoom(room);
   }
 
@@ -58,12 +58,14 @@ class SyncService {
   List<PresentMember> get presentMembers => List.unmodifiable(_presentMembers);
 
   bool _hasPresenceSynced = false;
+
   /// False until the first presence sync lands. Readiness is unknowable until
   /// then, so the gate must read as indeterminate rather than closed — else
   /// every room entry flashes the waiting overlay.
   bool get hasPresenceSynced => _hasPresenceSynced;
 
   final _typingController = StreamController<List<String>>.broadcast();
+
   /// Display names currently typing (excluding self).
   Stream<List<String>> get typingStream => _typingController.stream;
   final _typingNames = <String, String>{};
@@ -77,6 +79,7 @@ class SyncService {
 
   RoomMedia _canonicalMedia = RoomMedia.none;
   final _canonicalMediaController = StreamController<RoomMedia>.broadcast();
+
   /// Emits only when genuinely newer media is adopted, so listeners never see a
   /// stale refetch undo a broadcast they already applied.
   Stream<RoomMedia> get canonicalMediaStream => _canonicalMediaController.stream;
@@ -116,19 +119,23 @@ class SyncService {
   Stream<void> get roomEndedStream => _roomEndedController.stream;
 
   final _gateResumedController = StreamController<void>.broadcast();
+
   /// Fires on every client when the gate reopens and playback auto-resumes,
   /// so the resume reads as deliberate rather than as a glitch (D11).
   Stream<void> get gateResumedStream => _gateResumedController.stream;
 
   final _kickedController = StreamController<void>.broadcast();
+
   /// Fires only on the client that was removed.
   Stream<void> get kickedStream => _kickedController.stream;
 
   final _remoteActionController = StreamController<RemoteAction>.broadcast();
+
   /// User-initiated remote play/pause/seek, for attribution toasts.
   Stream<RemoteAction> get remoteActions => _remoteActionController.stream;
 
   final _connectionController = StreamController<bool>.broadcast();
+
   /// false while resubscribing after a drop ("Reconnecting…" banner).
   Stream<bool> get connectionStream => _connectionController.stream;
 
@@ -136,6 +143,7 @@ class SyncService {
   void Function()? onRemotePlay;
   void Function()? onRemotePause;
   void Function(Duration)? onRemoteSeek;
+
   /// Silent correction for position_sync drift (must not pause YouTube).
   void Function(Duration)? onRemoteDriftCorrect;
   Duration Function()? currentPosition;
@@ -203,36 +211,34 @@ class SyncService {
     on(SyncEventType.reaction, _handleReaction);
     on(SyncEventType.roomEnded, _handleRoomEnded);
 
-    channel
-        .onPresenceSync(_handlePresenceSync)
-        .subscribe((status, error) {
-          // Statuses from a superseded channel (reconnect replaced it) are stale.
-          if (_disposed || _tearingDown || !identical(channel, _channel)) return;
-          switch (status) {
-            case SyncSubscribeStatus.subscribed:
-              trace(
-                'channel subscribed',
-                category: 'sync',
-                data: {'room_id': room.id, 'after_attempts': _reconnectAttempts},
-              );
-              _reconnectAttempts = 0;
-              _connectionController.add(true);
-              _trackPresence();
-              _reannounceFileInfo();
-              unawaited(refreshCanonicalMedia());
-              _requestInitialState();
-            case SyncSubscribeStatus.channelError:
-            case SyncSubscribeStatus.closed:
-            case SyncSubscribeStatus.timedOut:
-              trace(
-                'channel dropped',
-                category: 'sync',
-                data: {'status': status.name, 'error': error?.toString()},
-              );
-              _connectionController.add(false);
-              _scheduleReconnect();
-          }
-        });
+    channel.onPresenceSync(_handlePresenceSync).subscribe((status, error) {
+      // Statuses from a superseded channel (reconnect replaced it) are stale.
+      if (_disposed || _tearingDown || !identical(channel, _channel)) return;
+      switch (status) {
+        case SyncSubscribeStatus.subscribed:
+          trace(
+            'channel subscribed',
+            category: 'sync',
+            data: {'room_id': room.id, 'after_attempts': _reconnectAttempts},
+          );
+          _reconnectAttempts = 0;
+          _connectionController.add(true);
+          _trackPresence();
+          _reannounceFileInfo();
+          unawaited(refreshCanonicalMedia());
+          _requestInitialState();
+        case SyncSubscribeStatus.channelError:
+        case SyncSubscribeStatus.closed:
+        case SyncSubscribeStatus.timedOut:
+          trace(
+            'channel dropped',
+            category: 'sync',
+            data: {'status': status.name, 'error': error?.toString()},
+          );
+          _connectionController.add(false);
+          _scheduleReconnect();
+      }
+    });
 
     _driftTimer?.cancel();
     _driftTimer = Timer.periodic(const Duration(seconds: 10), (_) => _broadcastPositionSync());
@@ -277,11 +283,7 @@ class SyncService {
     _setTransportLock(locked);
     await _channel?.sendBroadcastMessage(
       event: SyncEventType.transportLock,
-      payload: {
-        'senderId': userId,
-        'timestamp': _nextTimestamp(),
-        'locked': locked,
-      },
+      payload: {'senderId': userId, 'timestamp': _nextTimestamp(), 'locked': locked},
     );
   }
 
@@ -303,11 +305,7 @@ class SyncService {
   Future<void> broadcastMemberKicked(String targetUserId) async {
     await _channel?.sendBroadcastMessage(
       event: SyncEventType.memberKicked,
-      payload: {
-        'senderId': userId,
-        'timestamp': _nextTimestamp(),
-        'targetUserId': targetUserId,
-      },
+      payload: {'senderId': userId, 'timestamp': _nextTimestamp(), 'targetUserId': targetUserId},
     );
   }
 
@@ -473,11 +471,7 @@ class SyncService {
     }
     unawaited(() async {
       try {
-        await backend.insertChatMessage(
-          roomId: room.id,
-          senderId: userId,
-          content: content,
-        );
+        await backend.insertChatMessage(roomId: room.id, senderId: userId, content: content);
       } catch (e, s) {
         // Worse than a failed broadcast: the message showed up live for
         // everyone present and then silently ceases to exist, so it is gone
@@ -732,10 +726,7 @@ class SyncService {
         // Broadcast BEFORE applying: broadcastPause() bails out while
         // _isApplyingRemoteAction is set, so the reverse order sends nothing.
         unawaited(
-          broadcastPause(
-            reason: SyncActionReason.gate,
-            subjectUserId: gateBlocker?.userId,
-          ),
+          broadcastPause(reason: SyncActionReason.gate, subjectUserId: gateBlocker?.userId),
         );
         _applyRemoteAction(() {
           onRemotePause != null ? onRemotePause!() : _player.pause();
@@ -800,9 +791,7 @@ class SyncService {
       RoomMedia(
         kind: RoomMediaKind.fromWire(event.kind),
         name: event.name,
-        duration: event.durationMs != null
-            ? Duration(milliseconds: event.durationMs!)
-            : null,
+        duration: event.durationMs != null ? Duration(milliseconds: event.durationMs!) : null,
         url: event.url,
         updatedAt: event.updatedAtMs != null
             ? DateTime.fromMillisecondsSinceEpoch(event.updatedAtMs!)
@@ -863,10 +852,7 @@ class SyncService {
     trace('requesting the room state', category: 'sync', data: {'room_id': room.id});
     _channel?.sendBroadcastMessage(
       event: SyncEventType.stateRequest,
-      payload: StateRequestEvent(
-        senderId: userId,
-        timestamp: _nextTimestamp(),
-      ).toPayload(),
+      payload: StateRequestEvent(senderId: userId, timestamp: _nextTimestamp()).toPayload(),
     );
     _stateRequestRetry?.cancel();
     _stateRequestRetry = Timer(const Duration(seconds: 2), () {
@@ -874,10 +860,7 @@ class SyncService {
       trace('re-requesting the room state', category: 'sync', data: {'room_id': room.id});
       _channel?.sendBroadcastMessage(
         event: SyncEventType.stateRequest,
-        payload: StateRequestEvent(
-          senderId: userId,
-          timestamp: _nextTimestamp(),
-        ).toPayload(),
+        payload: StateRequestEvent(senderId: userId, timestamp: _nextTimestamp()).toPayload(),
       );
       // After the retry window, assume an idle room.
       _stateRequestRetry = Timer(const Duration(seconds: 2), () {
@@ -1118,7 +1101,11 @@ class SyncService {
     });
   }
 
-  void _emitRemoteAction(Map<String, dynamic> payload, RemoteActionKind kind, [Duration? position]) {
+  void _emitRemoteAction(
+    Map<String, dynamic> payload,
+    RemoteActionKind kind, [
+    Duration? position,
+  ]) {
     if (_disposed) return;
     _remoteActionController.add(
       RemoteAction(senderId: payload['senderId'] as String, kind: kind, position: position),

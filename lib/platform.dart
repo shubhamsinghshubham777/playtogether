@@ -1,10 +1,6 @@
 import 'package:flutter/foundation.dart';
 
-const _desktopPlatforms = {
-  TargetPlatform.macOS,
-  TargetPlatform.windows,
-  TargetPlatform.linux,
-};
+const _desktopPlatforms = {TargetPlatform.macOS, TargetPlatform.windows, TargetPlatform.linux};
 
 /// True on the three desktop targets. Gates window_manager (OS-window
 /// fullscreen) and any other desktop-only chrome.
@@ -12,5 +8,4 @@ bool get isDesktop => !kIsWeb && _desktopPlatforms.contains(defaultTargetPlatfor
 
 const _selfUpdatePlatforms = {TargetPlatform.macOS, TargetPlatform.windows};
 
-bool get supportsSelfUpdate =>
-    !kIsWeb && _selfUpdatePlatforms.contains(defaultTargetPlatform);
+bool get supportsSelfUpdate => !kIsWeb && _selfUpdatePlatforms.contains(defaultTargetPlatform);

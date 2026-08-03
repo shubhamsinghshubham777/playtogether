@@ -81,11 +81,8 @@ class _PTYouTubeEmbedState extends State<PTYouTubeEmbed> {
             category: 'youtube.webview',
             data: {'url': '${request.url}'},
           ),
-          onLoadStop: (_, url) => trace(
-            'load finished',
-            category: 'youtube.webview',
-            data: {'url': '$url'},
-          ),
+          onLoadStop: (_, url) =>
+              trace('load finished', category: 'youtube.webview', data: {'url': '$url'}),
         ),
       ),
     );

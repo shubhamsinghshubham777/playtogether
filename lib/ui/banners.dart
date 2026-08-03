@@ -126,10 +126,7 @@ void showPTSnackVia(
                 child: Icon(icon, size: 20, fill: 1, color: accent),
               ),
               Expanded(
-                child: Text(
-                  message,
-                  style: PTText.body.copyWith(fontSize: 14, height: 1.35),
-                ),
+                child: Text(message, style: PTText.body.copyWith(fontSize: 14, height: 1.35)),
               ),
             ],
           ),

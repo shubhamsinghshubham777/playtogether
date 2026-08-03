@@ -17,10 +17,7 @@ abstract interface class SyncChannel {
   });
   SyncChannel onPresenceSync(void Function() callback);
   void subscribe(void Function(SyncSubscribeStatus status, Object? error) callback);
-  Future<void> sendBroadcastMessage({
-    required String event,
-    required Map<String, dynamic> payload,
-  });
+  Future<void> sendBroadcastMessage({required String event, required Map<String, dynamic> payload});
   Future<void> track(Map<String, dynamic> payload);
 
   /// Flattened across devices — one entry per connection, not per user. The
@@ -109,15 +106,12 @@ class SupabaseSyncChannel implements SyncChannel {
   @override
   void subscribe(void Function(SyncSubscribeStatus, Object?) callback) {
     _channel.subscribe((status, error) {
-      callback(
-        switch (status) {
-          RealtimeSubscribeStatus.subscribed => SyncSubscribeStatus.subscribed,
-          RealtimeSubscribeStatus.channelError => SyncSubscribeStatus.channelError,
-          RealtimeSubscribeStatus.closed => SyncSubscribeStatus.closed,
-          RealtimeSubscribeStatus.timedOut => SyncSubscribeStatus.timedOut,
-        },
-        error,
-      );
+      callback(switch (status) {
+        RealtimeSubscribeStatus.subscribed => SyncSubscribeStatus.subscribed,
+        RealtimeSubscribeStatus.channelError => SyncSubscribeStatus.channelError,
+        RealtimeSubscribeStatus.closed => SyncSubscribeStatus.closed,
+        RealtimeSubscribeStatus.timedOut => SyncSubscribeStatus.timedOut,
+      }, error);
     });
   }
 

@@ -20,10 +20,7 @@ class _Harness {
   }) {
     backend = FakeSyncBackend();
     if (joinedSeconds != null) {
-      backend.membership = MembershipRow(
-        role: role,
-        joinedAt: presenceJoinedAt(joinedSeconds),
-      );
+      backend.membership = MembershipRow(role: role, joinedAt: presenceJoinedAt(joinedSeconds));
     }
     player = FakeSyncPlayer();
     service = SyncService(
@@ -273,10 +270,7 @@ void main() {
         async.flushMicrotasks();
         h.channel.sent.clear();
 
-        h.channel.deliver(SyncEventType.stateRequest, {
-          'senderId': _other,
-          'timestamp': 100,
-        });
+        h.channel.deliver(SyncEventType.stateRequest, {'senderId': _other, 'timestamp': 100});
         async.flushMicrotasks();
 
         expect(h.channel.hasSent(SyncEventType.stateResponse), isTrue);
@@ -296,10 +290,7 @@ void main() {
         async.flushMicrotasks();
         h.channel.sent.clear();
 
-        h.channel.deliver(SyncEventType.stateRequest, {
-          'senderId': 'joiner',
-          'timestamp': 100,
-        });
+        h.channel.deliver(SyncEventType.stateRequest, {'senderId': 'joiner', 'timestamp': 100});
         async.flushMicrotasks();
 
         expect(h.channel.hasSent(SyncEventType.stateResponse), isFalse);
@@ -319,10 +310,7 @@ void main() {
         async.flushMicrotasks();
         h.channel.sent.clear();
 
-        h.channel.deliver(SyncEventType.stateRequest, {
-          'senderId': 'host',
-          'timestamp': 100,
-        });
+        h.channel.deliver(SyncEventType.stateRequest, {'senderId': 'host', 'timestamp': 100});
         async.flushMicrotasks();
 
         expect(h.channel.hasSent(SyncEventType.stateResponse), isTrue);
@@ -337,10 +325,7 @@ void main() {
         async.flushMicrotasks();
         h.channel.sent.clear();
 
-        h.channel.deliver(SyncEventType.stateRequest, {
-          'senderId': _other,
-          'timestamp': 100,
-        });
+        h.channel.deliver(SyncEventType.stateRequest, {'senderId': _other, 'timestamp': 100});
         async.flushMicrotasks();
 
         expect(h.channel.hasSent(SyncEventType.stateResponse), isFalse);

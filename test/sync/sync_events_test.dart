@@ -14,11 +14,11 @@ class _Case {
 const _base = {'senderId', 'timestamp'};
 
 final _cases = <String, _Case>{
-  'play (human)': _Case(
-    const PlayEvent(senderId: 'u1', timestamp: 10),
-    PlayEvent.fromPayload,
-    {..._base, 'reason', 'subjectUserId'},
-  ),
+  'play (human)': _Case(const PlayEvent(senderId: 'u1', timestamp: 10), PlayEvent.fromPayload, {
+    ..._base,
+    'reason',
+    'subjectUserId',
+  }),
   'play (gate)': _Case(
     const PlayEvent(
       senderId: 'u1',
@@ -29,11 +29,11 @@ final _cases = <String, _Case>{
     PlayEvent.fromPayload,
     {..._base, 'reason', 'subjectUserId'},
   ),
-  'pause (human)': _Case(
-    const PauseEvent(senderId: 'u1', timestamp: 11),
-    PauseEvent.fromPayload,
-    {..._base, 'reason', 'subjectUserId'},
-  ),
+  'pause (human)': _Case(const PauseEvent(senderId: 'u1', timestamp: 11), PauseEvent.fromPayload, {
+    ..._base,
+    'reason',
+    'subjectUserId',
+  }),
   'pause (gate)': _Case(
     const PauseEvent(
       senderId: 'u1',
@@ -60,12 +60,7 @@ final _cases = <String, _Case>{
     {..._base, 'positionMs', 'reason'},
   ),
   'seek (gate)': _Case(
-    const SeekEvent(
-      senderId: 'u1',
-      timestamp: 12,
-      positionMs: 0,
-      reason: SyncActionReason.gate,
-    ),
+    const SeekEvent(senderId: 'u1', timestamp: 12, positionMs: 0, reason: SyncActionReason.gate),
     SeekEvent.fromPayload,
     {..._base, 'positionMs', 'reason'},
   ),
@@ -115,12 +110,7 @@ final _cases = <String, _Case>{
     {..._base, 'mode', 'youtubeUrl'},
   ),
   'chat': _Case(
-    const ChatEvent(
-      senderId: 'u1',
-      timestamp: 16,
-      displayName: 'Ada',
-      message: 'hello there',
-    ),
+    const ChatEvent(senderId: 'u1', timestamp: 16, displayName: 'Ada', message: 'hello there'),
     ChatEvent.fromPayload,
     {..._base, 'displayName', 'message'},
   ),
@@ -173,12 +163,7 @@ final _cases = <String, _Case>{
     {..._base, 'emoji', 'displayName'},
   ),
   'file_info': _Case(
-    const FileInfoEvent(
-      senderId: 'u1',
-      timestamp: 21,
-      fileName: 'movie.mkv',
-      durationMs: 7200000,
-    ),
+    const FileInfoEvent(senderId: 'u1', timestamp: 21, fileName: 'movie.mkv', durationMs: 7200000),
     FileInfoEvent.fromPayload,
     {..._base, 'fileName', 'durationMs'},
   ),
@@ -358,11 +343,7 @@ void main() {
         throwsA(isA<TypeError>()),
       );
       expect(
-        () => PositionSyncEvent.fromPayload({
-          'senderId': 'u1',
-          'timestamp': 5,
-          'positionMs': 0,
-        }),
+        () => PositionSyncEvent.fromPayload({'senderId': 'u1', 'timestamp': 5, 'positionMs': 0}),
         throwsA(isA<TypeError>()),
       );
     });

@@ -1,9 +1,5 @@
 class PTReaction {
-  const PTReaction({
-    required this.emoji,
-    required this.codepoint,
-    required this.label,
-  });
+  const PTReaction({required this.emoji, required this.codepoint, required this.label});
 
   final String emoji;
   final String codepoint;

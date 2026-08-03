@@ -88,8 +88,9 @@ void main() {
 
     setUpAll(() {
       final source = _repoFile('tool/fetch_reaction_emoji.py').readAsStringSync();
-      final entries = RegExp(r'\(\s*"([0-9a-f]+)"\s*,\s*"(\S+?)"\s*,\s*"([0-9a-f]{64})"\s*\)')
-          .allMatches(source);
+      final entries = RegExp(
+        r'\(\s*"([0-9a-f]+)"\s*,\s*"(\S+?)"\s*,\s*"([0-9a-f]{64})"\s*\)',
+      ).allMatches(source);
       manifest = {for (final m in entries) m.group(1)!: m.group(2)!};
     });
 

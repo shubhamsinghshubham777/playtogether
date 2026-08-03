@@ -110,11 +110,7 @@ class _TurnstileBodyState extends State<_TurnstileBody> {
         // and Turnstile then failed" — the two have completely different causes
         // and look identical from the outside.
         _pageRequested = true;
-        trace(
-          'challenge page requested',
-          category: 'turnstile',
-          data: {'path': request.uri.path},
-        );
+        trace('challenge page requested', category: 'turnstile', data: {'path': request.uri.path});
         request.response
           ..headers.contentType = ContentType.html
           ..write(_html);
@@ -189,9 +185,7 @@ function onloadTurnstile() {
       children: [
         Text('Quick check', style: PTText.cardHeading),
         Text(
-          _failed
-              ? _failureMessage
-              : "Just making sure you're human — takes a second.",
+          _failed ? _failureMessage : "Just making sure you're human — takes a second.",
           style: PTText.body.copyWith(fontSize: 13.5, color: PTColors.white(0.6)),
         ),
         // Shown only on failure, and deliberately not dressed up as friendly

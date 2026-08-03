@@ -413,16 +413,12 @@ void main() {
       );
 
       test('open -> closed while the room plays pauses it', () {
-        expect(
-          transition(previous: .open, next: .closed),
-          GateTransition.pause,
-        );
+        expect(transition(previous: .open, next: .closed), GateTransition.pause);
       });
 
       test('the pause decision reads the room, not our own player', () {
         expect(transition(previous: .open, next: .closed, roomPlaying: false), isNull);
-        expect(transition(previous: .open, next: .closed, roomPlaying: true),
-            GateTransition.pause);
+        expect(transition(previous: .open, next: .closed, roomPlaying: true), GateTransition.pause);
       });
 
       test('closed -> open resumes only when the gate is what paused us', () {
@@ -436,12 +432,7 @@ void main() {
       test('a non-authority derives nothing, so the room gets one pause not eight', () {
         expect(transition(previous: .open, next: .closed, isAuthority: false), isNull);
         expect(
-          transition(
-            previous: .closed,
-            next: .open,
-            isAuthority: false,
-            pausedByGate: true,
-          ),
+          transition(previous: .closed, next: .open, isAuthority: false, pausedByGate: true),
           isNull,
         );
       });
@@ -506,10 +497,7 @@ void main() {
       });
 
       test('is null when we have no position to offer', () {
-        expect(
-          gateHeldPosition(subjectUserId: 'them', userId: 'me', position: () => null),
-          isNull,
-        );
+        expect(gateHeldPosition(subjectUserId: 'them', userId: 'me', position: () => null), isNull);
       });
     });
   });
@@ -624,16 +612,10 @@ void main() {
     });
 
     test('privacy survives the merge only when every device reports it', () {
-      final all = mergePresence([
-        payload('a', privacy: true),
-        payload('a', privacy: true),
-      ]);
+      final all = mergePresence([payload('a', privacy: true), payload('a', privacy: true)]);
       expect(all.single.privacyMode, isTrue);
 
-      final some = mergePresence([
-        payload('a', privacy: true),
-        payload('a', privacy: false),
-      ]);
+      final some = mergePresence([payload('a', privacy: true), payload('a', privacy: false)]);
       expect(some.single.privacyMode, isFalse);
     });
 
@@ -753,10 +735,7 @@ void main() {
 
     test('the transcript comes back in send order', () {
       final live = [message('third', seconds: 30)];
-      mergeChatHistory(live, [
-        message('first', seconds: 0),
-        message('second', seconds: 15),
-      ]);
+      mergeChatHistory(live, [message('first', seconds: 0), message('second', seconds: 15)]);
       expect(live.map((m) => m.content), ['first', 'second', 'third']);
     });
 
@@ -776,14 +755,8 @@ void main() {
 
     test('the merge window is the documented ten seconds', () {
       expect(kChatMergeWindow, const Duration(seconds: 10));
-      expect(
-        chatMessagesMatch(message('hi', seconds: 0), message('hi', seconds: 10)),
-        isTrue,
-      );
-      expect(
-        chatMessagesMatch(message('hi', seconds: 0), message('hi', seconds: 11)),
-        isFalse,
-      );
+      expect(chatMessagesMatch(message('hi', seconds: 0), message('hi', seconds: 10)), isTrue);
+      expect(chatMessagesMatch(message('hi', seconds: 0), message('hi', seconds: 11)), isFalse);
     });
   });
 

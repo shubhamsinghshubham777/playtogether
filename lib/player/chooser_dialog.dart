@@ -109,7 +109,12 @@ class _TrackRowState extends State<_TrackRow> {
                 ),
               ),
               if (widget.isSelected)
-                const Icon(Symbols.check_circle_rounded, size: 18, fill: 1, color: PTColors.textAccent),
+                const Icon(
+                  Symbols.check_circle_rounded,
+                  size: 18,
+                  fill: 1,
+                  color: PTColors.textAccent,
+                ),
             ],
           ),
         ),

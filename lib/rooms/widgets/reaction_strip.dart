@@ -73,9 +73,7 @@ class _ReactionStripState extends State<ReactionStrip> with SingleTickerProvider
         final t = _anim.value;
         if (t == 0) return const SizedBox.shrink();
         final closing = _anim.status == AnimationStatus.reverse;
-        final eased = closing
-            ? PTMotion.emphasized.transform(t)
-            : PTMotion.arrive.transform(t);
+        final eased = closing ? PTMotion.emphasized.transform(t) : PTMotion.arrive.transform(t);
         final slot = Align(
           alignment: .bottomCenter,
           heightFactor: (closing ? eased : t).clamp(0.0, 1.0),

@@ -40,12 +40,9 @@ class AuthService {
   /// screen. The login page just sits there. That is how a TLS failure on one
   /// Windows box looked exactly like Google sign-in quietly doing nothing.
   void start() {
-    _stateSub ??= _client.auth.onAuthStateChange.listen(
-      (state) {
-        if (state.session != null) _endOAuthWindow();
-      },
-      onError: _onAuthStreamError,
-    );
+    _stateSub ??= _client.auth.onAuthStateChange.listen((state) {
+      if (state.session != null) _endOAuthWindow();
+    }, onError: _onAuthStreamError);
   }
 
   void _onAuthStreamError(Object error, StackTrace stack) {
@@ -55,11 +52,7 @@ class AuthService {
     // standing in front of a half-finished sign-in is the whole story, so only
     // that window gets promoted past a breadcrumb.
     if (!_awaitingOAuthCallback) {
-      trace(
-        'auth stream error outside a sign-in',
-        category: 'auth',
-        data: {'error': '$error'},
-      );
+      trace('auth stream error outside a sign-in', category: 'auth', data: {'error': '$error'});
       return;
     }
     _endOAuthWindow();
@@ -94,20 +87,22 @@ class AuthService {
 
   /// Browser OAuth + deep-link callback — the one flow that works on every
   /// platform (plan Phase 1). supabase_flutter handles the callback URI.
-  Future<void> signInWithGoogle() =>
-      _startOAuth(() => _client.auth.signInWithOAuth(
-            OAuthProvider.google,
-            redirectTo: 'playtogether://auth-callback',
-            authScreenLaunchMode: LaunchMode.externalApplication,
-          ));
+  Future<void> signInWithGoogle() => _startOAuth(
+    () => _client.auth.signInWithOAuth(
+      OAuthProvider.google,
+      redirectTo: 'playtogether://auth-callback',
+      authScreenLaunchMode: LaunchMode.externalApplication,
+    ),
+  );
 
   /// Upgrades a guest to a Google account in place (same user id).
-  Future<void> linkGoogleIdentity() =>
-      _startOAuth(() => _client.auth.linkIdentity(
-            OAuthProvider.google,
-            redirectTo: 'playtogether://auth-callback',
-            authScreenLaunchMode: LaunchMode.externalApplication,
-          ));
+  Future<void> linkGoogleIdentity() => _startOAuth(
+    () => _client.auth.linkIdentity(
+      OAuthProvider.google,
+      redirectTo: 'playtogether://auth-callback',
+      authScreenLaunchMode: LaunchMode.externalApplication,
+    ),
+  );
 
   Future<void> _startOAuth(Future<bool> Function() launch) async {
     _beginOAuthWindow();

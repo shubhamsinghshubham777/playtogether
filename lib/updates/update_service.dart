@@ -180,4 +180,3 @@ class UpdateService extends ChangeNotifier with UpdaterListener {
     if (Platform.isWindows) exit(0);
   }
 }
-

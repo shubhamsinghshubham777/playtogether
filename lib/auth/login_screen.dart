@@ -38,11 +38,7 @@ class _LoginScreenState extends State<LoginScreen> {
       // never leaves the device.
       reportNonFatal(e, s, during: during);
       if (mounted) {
-        showPTSnack(
-          context,
-          "Couldn't sign you in — give it another try.",
-          kind: .error,
-        );
+        showPTSnack(context, "Couldn't sign you in — give it another try.", kind: .error);
       }
     } finally {
       if (mounted) setLoading(false);

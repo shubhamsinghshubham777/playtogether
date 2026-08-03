@@ -40,7 +40,5 @@ void reportNonFatal(Object error, StackTrace? stack, {required String during}) {
 /// free until something goes wrong. No-ops when reporting is not configured.
 void trace(String message, {String? category, Map<String, dynamic>? data}) {
   if (kDebugMode) debugPrint('[$category] $message ${data ?? ''}');
-  Sentry.addBreadcrumb(
-    Breadcrumb(message: message, category: category, data: data),
-  );
+  Sentry.addBreadcrumb(Breadcrumb(message: message, category: category, data: data));
 }

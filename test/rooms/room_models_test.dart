@@ -214,11 +214,8 @@ void main() {
     });
 
     test('falls back to unknown for an unrecognised error', () {
-      expect(
-        RoomErrorCode.fromError(Exception('connection reset by peer')),
-        RoomErrorCode.unknown,
-      );
-      expect(RoomErrorCode.fromError('') , RoomErrorCode.unknown);
+      expect(RoomErrorCode.fromError(Exception('connection reset by peer')), RoomErrorCode.unknown);
+      expect(RoomErrorCode.fromError(''), RoomErrorCode.unknown);
     });
 
     test('every code carries friendly copy with no raw code leaking through', () {

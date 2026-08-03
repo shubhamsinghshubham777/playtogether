@@ -163,10 +163,7 @@ class _ReactionOverlayState extends State<ReactionOverlay> with SingleTickerProv
       child: LayoutBuilder(
         builder: (context, constraints) {
           final rise = constraints.maxHeight * 0.5;
-          final laneWidth = math.max(
-            0.0,
-            math.min(constraints.maxWidth * 0.42, 280.0) - tileWidth,
-          );
+          final laneWidth = math.max(0.0, math.min(constraints.maxWidth * 0.42, 280.0) - tileWidth);
           return ValueListenableBuilder<Duration>(
             valueListenable: _clock,
             builder: (context, now, _) {
@@ -195,9 +192,7 @@ class _ReactionOverlayState extends State<ReactionOverlay> with SingleTickerProv
     final since = now - particle.spawnedAt;
     final t = (since.inMicroseconds / _life.inMicroseconds).clamp(0.0, 1.0);
 
-    final travel = _still
-        ? 0.0
-        : rise * (0.35 * t + 0.65 * PTMotion.enter.transform(t));
+    final travel = _still ? 0.0 : rise * (0.35 * t + 0.65 * PTMotion.enter.transform(t));
     final wobble = _still
         ? 0.0
         : particle.wobbleAmplitude *
@@ -220,10 +215,7 @@ class _ReactionOverlayState extends State<ReactionOverlay> with SingleTickerProv
           child: Column(
             mainAxisSize: .min,
             children: [
-              SizedBox.square(
-                dimension: emojiSize,
-                child: _art(particle, since, emojiSize),
-              ),
+              SizedBox.square(dimension: emojiSize, child: _art(particle, since, emojiSize)),
               const SizedBox(height: 2),
               Text(
                 particle.name,
@@ -249,16 +241,11 @@ class _ReactionOverlayState extends State<ReactionOverlay> with SingleTickerProv
     final composition = widget.assets.of(particle.reaction);
     if (composition == null) {
       return Center(
-        child: Text(
-          particle.reaction.emoji,
-          style: TextStyle(fontSize: emojiSize * 0.8),
-        ),
+        child: Text(particle.reaction.emoji, style: TextStyle(fontSize: emojiSize * 0.8)),
       );
     }
     final frames = composition.duration.inMicroseconds;
-    final progress = _still || frames == 0
-        ? 0.0
-        : (since.inMicroseconds % frames) / frames;
+    final progress = _still || frames == 0 ? 0.0 : (since.inMicroseconds % frames) / frames;
     return RawLottie(composition: composition, progress: progress, fit: .contain);
   }
 }

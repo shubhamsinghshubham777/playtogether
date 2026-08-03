@@ -155,10 +155,7 @@ ThemeData buildPTTheme() {
   );
 
   return base.copyWith(
-    textTheme: base.textTheme.apply(
-      bodyColor: PTColors.white(0.92),
-      displayColor: Colors.white,
-    ),
+    textTheme: base.textTheme.apply(bodyColor: PTColors.white(0.92), displayColor: Colors.white),
     sliderTheme: SliderThemeData(
       trackHeight: 5,
       activeTrackColor: PTColors.primary,

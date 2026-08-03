@@ -36,10 +36,7 @@ class _KickMemberDialogState extends State<KickMemberDialog> {
           style: PTText.body.copyWith(fontSize: 13.5, color: PTColors.white(0.55)),
         ),
         const SizedBox(height: 18),
-        _RejoinToggle(
-          value: _allowRejoin,
-          onChanged: (v) => setState(() => _allowRejoin = v),
-        ),
+        _RejoinToggle(value: _allowRejoin, onChanged: (v) => setState(() => _allowRejoin = v)),
         const SizedBox(height: 18),
         Row(
           spacing: 12,
@@ -96,9 +93,7 @@ class _RejoinToggle extends StatelessWidget {
                 decoration: BoxDecoration(
                   gradient: value ? PTColors.buttonGradient : null,
                   color: value ? null : PTColors.white(0.06),
-                  border: Border.all(
-                    color: value ? Colors.transparent : PTColors.white(0.22),
-                  ),
+                  border: Border.all(color: value ? Colors.transparent : PTColors.white(0.22)),
                   borderRadius: BorderRadius.circular(7),
                 ),
                 child: value

@@ -147,13 +147,11 @@ Room testRoom({String id = 'room-1', RoomMedia media = RoomMedia.none}) => Room(
   mediaUpdatedAt: media.updatedAt,
 );
 
-Profile testProfile(String id) =>
-    Profile(id: id, displayName: id, isGuest: false);
+Profile testProfile(String id) => Profile(id: id, displayName: id, isGuest: false);
 
 final presenceBase = DateTime.utc(2026, 7, 31, 10);
 
-DateTime presenceJoinedAt(int joinedSeconds) =>
-    presenceBase.add(Duration(seconds: joinedSeconds));
+DateTime presenceJoinedAt(int joinedSeconds) => presenceBase.add(Duration(seconds: joinedSeconds));
 
 Map<String, dynamic> presenceEntry(
   String userId, {
