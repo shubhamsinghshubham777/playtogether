@@ -27,6 +27,7 @@ class FacecamRail extends StatefulWidget {
     required this.layout,
     this.onHide,
     this.maxTiles = 4,
+    this.showNames = true,
   });
 
   final LiveKitService av;
@@ -35,6 +36,7 @@ class FacecamRail extends StatefulWidget {
   final FacecamLayout layout;
   final VoidCallback? onHide;
   final int maxTiles;
+  final bool showNames;
 
   @override
   State<FacecamRail> createState() => _FacecamRailState();
@@ -103,6 +105,7 @@ class _FacecamRailState extends State<FacecamRail> {
                 isSelf: member.userId == widget.selfId,
                 av: widget.av,
                 compact: widget.layout != .railLeft,
+                showNames: widget.showNames,
               ),
             ),
           if (overflow > 0 && widget.layout == .miniStackRight)
@@ -162,12 +165,14 @@ class _FacecamTile extends StatelessWidget {
     required this.isSelf,
     required this.av,
     required this.compact,
+    required this.showNames,
   });
 
   final PresentMember member;
   final bool isSelf;
   final LiveKitService av;
   final bool compact;
+  final bool showNames;
 
   lk.Participant? get _participant {
     if (isSelf) return av.localParticipant;
@@ -226,7 +231,7 @@ class _FacecamTile extends StatelessWidget {
           fit: .expand,
           children: [
             if (videoTrack != null)
-              lk.VideoTrackRenderer(videoTrack)
+              lk.VideoTrackRenderer(videoTrack, fit: .cover)
             else
               Container(
                 decoration: const BoxDecoration(
@@ -252,12 +257,18 @@ class _FacecamTile extends StatelessWidget {
                               mainAxisSize: .min,
                               spacing: 5,
                               children: [
-                                Text(
-                                  member.displayName,
-                                  style: PTText.finePrint.copyWith(
-                                    fontSize: 11,
-                                    color: PTColors.white(0.6),
-                                  ),
+                                AnimatedSize(
+                                  duration: PTMotion.functional(context, PTMotion.state),
+                                  curve: showNames ? PTMotion.enter : PTMotion.exit,
+                                  child: showNames
+                                      ? Text(
+                                          member.displayName,
+                                          style: PTText.finePrint.copyWith(
+                                            fontSize: 11,
+                                            color: PTColors.white(0.6),
+                                          ),
+                                        )
+                                      : const SizedBox.shrink(),
                                 ),
                                 Icon(
                                   member.privacyMode
@@ -285,50 +296,59 @@ class _FacecamTile extends StatelessWidget {
               Positioned(
                 left: compact ? 5 : 8,
                 bottom: compact ? 5 : 8,
-                child: Container(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: compact ? 7 : 9,
-                    vertical: compact ? 2 : 3,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0x9908070C),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Row(
-                    mainAxisSize: .min,
-                    spacing: 3,
-                    children: [
-                      Text(
-                        isSelf ? 'You' : member.displayName,
-                        overflow: .ellipsis,
-                        style: TextStyle(
-                          fontFamily: PTFonts.body,
-                          fontSize: compact ? 9.5 : 11,
-                          fontWeight: isSelf ? .w600 : .w500,
-                          color: Colors.white,
-                        ),
+                child: AnimatedSlide(
+                  offset: showNames ? Offset.zero : const Offset(0, 0.5),
+                  duration: PTMotion.functional(context, PTMotion.state),
+                  curve: showNames ? PTMotion.enter : PTMotion.exit,
+                  child: AnimatedOpacity(
+                    opacity: showNames ? 1 : 0,
+                    duration: PTMotion.functional(context, PTMotion.state),
+                    child: Container(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: compact ? 7 : 9,
+                        vertical: compact ? 2 : 3,
                       ),
-                      if (member.privacyMode)
-                        Icon(
-                          Symbols.visibility_off_rounded,
-                          size: compact ? 10 : 12,
-                          fill: 1,
-                          color: PTColors.white(0.75),
-                        ),
-                      // The border glow is now the primary speaking cue; this
-                      // stays as a redundant, colour-blind-safe marker.
-                      AnimatedSize(
-                        duration: PTMotion.functional(context, PTMotion.state),
-                        curve: PTMotion.enter,
-                        child: speaking
-                            ? Icon(
-                                Symbols.graphic_eq_rounded,
-                                size: compact ? 10 : 12,
-                                color: PTColors.textAccent,
-                              )
-                            : const SizedBox.shrink(),
+                      decoration: BoxDecoration(
+                        color: const Color(0x9908070C),
+                        borderRadius: BorderRadius.circular(999),
                       ),
-                    ],
+                      child: Row(
+                        mainAxisSize: .min,
+                        spacing: 3,
+                        children: [
+                          Text(
+                            isSelf ? 'You' : member.displayName,
+                            overflow: .ellipsis,
+                            style: TextStyle(
+                              fontFamily: PTFonts.body,
+                              fontSize: compact ? 9.5 : 11,
+                              fontWeight: isSelf ? .w600 : .w500,
+                              color: Colors.white,
+                            ),
+                          ),
+                          if (member.privacyMode)
+                            Icon(
+                              Symbols.visibility_off_rounded,
+                              size: compact ? 10 : 12,
+                              fill: 1,
+                              color: PTColors.white(0.75),
+                            ),
+                          // The border glow is now the primary speaking cue; this
+                          // stays as a redundant, colour-blind-safe marker.
+                          AnimatedSize(
+                            duration: PTMotion.functional(context, PTMotion.state),
+                            curve: PTMotion.enter,
+                            child: speaking
+                                ? Icon(
+                                    Symbols.graphic_eq_rounded,
+                                    size: compact ? 10 : 12,
+                                    color: PTColors.textAccent,
+                                  )
+                                : const SizedBox.shrink(),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ),
