@@ -9,6 +9,7 @@ import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
+import 'package:playtogether/analytics.dart';
 import 'package:playtogether/av/livekit_service.dart';
 import 'package:playtogether/diagnostics.dart';
 import 'package:playtogether/platform.dart';
@@ -237,6 +238,48 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
 
   final _subscriptions = <StreamSubscription>[];
 
+  DateTime? _sessionStart;
+  int _peakMembers = 0;
+  int _messagesSent = 0;
+  int _reactionsSent = 0;
+  bool _facecamUsed = false;
+  final _modesUsed = <String>{};
+  bool _sessionReported = false;
+  bool _playbackTracked = false;
+
+  void _toggleFacecam(String kind, bool on) {
+    final av = _av;
+    if (av == null) return;
+    if (on) _facecamUsed = true;
+    Analytics.instance.track('facecam_toggled', {'kind': kind, 'on': on});
+    unawaited(kind == 'mic' ? av.setMicEnabled(on) : av.setCamEnabled(on));
+  }
+
+  void _trackPlaybackStarted() {
+    if (_playbackTracked) return;
+    _playbackTracked = true;
+    Analytics.instance.track('playback_started', {
+      'mode': _mode.name,
+      'members_present': _present.length,
+      'room_id': widget.roomId,
+    });
+  }
+
+  void _trackWatchSessionEnded() {
+    final start = _sessionStart;
+    if (_sessionReported || start == null) return;
+    _sessionReported = true;
+    Analytics.instance.track('watch_session_ended', {
+      'minutes': DateTime.now().difference(start).inSeconds / 60,
+      'peak_members': _peakMembers,
+      'modes': _modesUsed.toList()..sort(),
+      'messages_sent': _messagesSent,
+      'reactions_sent': _reactionsSent,
+      'facecam_used': _facecamUsed,
+      'room_id': widget.roomId,
+    });
+  }
+
   @override
   void initState() {
     super.initState();
@@ -417,6 +460,8 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
       _canonicalMedia = sync.canonicalMedia;
       _loading = false;
     });
+    _sessionStart = DateTime.now();
+    _peakMembers = _members.length;
 
     unawaited(_reactionAssets.preload());
 
@@ -483,6 +528,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
 
   Future<void> _onPresenceChanged(List<PresentMember> present) async {
     setState(() => _present = present);
+    if (present.length > _peakMembers) _peakMembers = present.length;
     // Don't wait on the member fetch: readiness/online changes should land in
     // an open menu immediately, even if the round-trip is slow or fails.
     _publishMenuData();
@@ -774,6 +820,8 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
       return;
     }
 
+    _modesUsed.add('youtube');
+    _playbackTracked = false;
     // A new video re-runs the D6 buffer race from scratch.
     _ytBufferFallbackTimer?.cancel();
     _ytBufferFallbackTimer = null;
@@ -814,6 +862,8 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
 
   Future<void> _switchToLocalMode() async {
     trace('switching to local mode', category: 'media', data: {'from': _mode.name});
+    _modesUsed.add('local');
+    _playbackTracked = false;
     _ytBufferFallbackTimer?.cancel();
     _ytBufferFallbackTimer = null;
     _ytBufferReady = false;
@@ -919,6 +969,8 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
   }
 
   Future<void> _handleModeSwitch(PlaybackMode targetMode, String? url) async {
+    if (targetMode == .youtube && url == null) return;
+    Analytics.instance.track('media_selected', {'kind': targetMode.name, 'room_id': widget.roomId});
     if (targetMode == .youtube) {
       if (url != null) {
         _switchToYouTubeMode(url);
@@ -1369,12 +1421,14 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
         _ytIntendedPlaying = true;
         controller.play();
         _sync?.broadcastPlay();
+        _trackPlaybackStarted();
       }
       _sync?.broadcastSeek(currentPosition, reason: SyncActionReason.transport);
     } else {
       final currentPosition = widget.player.state.position;
       widget.player.playOrPause();
       _playing ? _sync?.broadcastPause() : _sync?.broadcastPlay();
+      if (!_playing) _trackPlaybackStarted();
       _sync?.broadcastSeek(currentPosition, reason: SyncActionReason.transport);
     }
   }
@@ -1568,6 +1622,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
 
   void _sendReaction(PTReaction reaction) {
     _sync?.sendReaction(reaction.emoji);
+    _reactionsSent++;
   }
 
   void _toggleControlsVisible() {
@@ -1663,6 +1718,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
   }) async {
     if (_ended) return;
     _ended = true;
+    _trackWatchSessionEnded();
     trace(
       'evicted from the room',
       category: 'room',
@@ -1777,6 +1833,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
 
   Future<void> _leaveRoom() async {
     trace('leaving the room', category: 'room', data: {'room_id': widget.roomId});
+    _trackWatchSessionEnded();
     try {
       await RoomService.instance.leaveRoom(widget.roomId);
     } catch (e, s) {
@@ -1845,6 +1902,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
     final room = _room;
     if (room == null) return;
     Clipboard.setData(ClipboardData(text: room.inviteLink));
+    Analytics.instance.track('invite_copied', {'room_id': widget.roomId});
     _snack('Invite link copied — send it to your people.', kind: .success);
   }
 
@@ -1887,7 +1945,9 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
 
   Future<void> _sendChat(String text) async {
     final message = await _sync?.sendChat(text);
-    if (message != null && mounted) setState(() => _messages.add(message));
+    if (message == null) return;
+    _messagesSent++;
+    if (mounted) setState(() => _messages.add(message));
   }
 
   Future<void> _reloadChatHistory() async {
@@ -2012,8 +2072,8 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
     onPlayPause: _playPause,
     onSeek: _seek,
     onSkip: _skip,
-    onMicToggle: (v) => _av?.setMicEnabled(v),
-    onCamToggle: (v) => _av?.setCamEnabled(v),
+    onMicToggle: (v) => _toggleFacecam('mic', v),
+    onCamToggle: (v) => _toggleFacecam('cam', v),
     onAudioTracks: _mode == .local ? () => _showTrackChooser(subtitles: false) : null,
     onSubtitles: _mode == .local ? () => _showTrackChooser(subtitles: true) : null,
     // D1: only the host chooses what the room watches. Members keep a picker

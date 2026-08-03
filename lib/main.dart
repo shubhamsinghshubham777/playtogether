@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:media_kit/media_kit.dart';
+import 'package:playtogether/analytics.dart';
 import 'package:playtogether/app_router.dart';
 import 'package:playtogether/app_version.dart';
 import 'package:playtogether/auth/auth_service.dart';
@@ -55,10 +56,17 @@ Future<void> _bootstrap() async {
   // guest captcha can render; everywhere else this returns immediately.
   await PTWebView.init();
   await Supabase.initialize(url: Env.supabaseUrl, publishableKey: Env.supabasePublishableKey);
+  await AppVersion.load();
+  Analytics.instance.init(
+    apiKey: Env.posthogApiKey,
+    host: Env.posthogHost,
+    distinctId: Supabase.instance.client.auth.currentUser?.id,
+    context: {'platform': defaultTargetPlatform.name, 'app_version': AppVersion.current},
+  );
+  Analytics.instance.track('app_opened');
   // Must follow initialize (it reads Supabase.instance) and precede runApp, so
   // the auth stream has an error handler before the first deep link can land.
   AuthService.instance.start();
-  await AppVersion.load();
   runApp(const MainApp());
   if (isDesktop) unawaited(_enterFullScreen());
   if (supportsSelfUpdate) unawaited(UpdateService.instance.checkForUpdate());
@@ -88,7 +96,7 @@ class MainApp extends StatefulWidget {
   State<MainApp> createState() => _MainAppState();
 }
 
-class _MainAppState extends State<MainApp> {
+class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
   // Created once for the whole app lifetime; the room screen attaches to it.
   late final player = Player(configuration: const PlayerConfiguration(logLevel: MPVLogLevel.warn));
   late final router = buildRouter(player);
@@ -99,6 +107,7 @@ class _MainAppState extends State<MainApp> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // The OAuth callback resolves inside supabase_flutter, long after the login
     // button's own error handling has finished — so a failure there has no
     // screen to report itself on. This is that screen.
@@ -145,7 +154,7 @@ class _MainAppState extends State<MainApp> {
       return;
     }
     try {
-      final room = await RoomService.instance.joinRoom(code);
+      final room = await RoomService.instance.joinRoom(code, via: .deeplink);
       // Invited into a different room while already in one: leave the old
       // room's membership, or it counts against caps and authority election.
       final currentId = roomIdOfPath(router.routerDelegate.currentConfiguration.uri.path);
@@ -171,7 +180,17 @@ class _MainAppState extends State<MainApp> {
   final _scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.detached) {
+      unawaited(Analytics.instance.flush());
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _linkSub?.cancel();
     _authFailureSub?.cancel();
     player.dispose();

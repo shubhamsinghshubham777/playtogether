@@ -1,9 +1,12 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:playtogether/analytics.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'room_models.dart';
+
+enum RoomJoinSource { code, deeplink }
 
 class RoomService extends ChangeNotifier {
   RoomService._();
@@ -34,22 +37,47 @@ class RoomService extends ChangeNotifier {
   }
 
   Future<Room> createRoom({required String name, required int durationMinutes}) async {
-    final row = await _client.rpc(
-      'create_room',
-      params: {'p_name': name, 'p_duration_minutes': durationMinutes},
-    );
-    final room = Room.fromJson(_singleRow(row));
-    _currentRoom = room;
-    notifyListeners();
-    return room;
+    try {
+      final row = await _client.rpc(
+        'create_room',
+        params: {'p_name': name, 'p_duration_minutes': durationMinutes},
+      );
+      final room = Room.fromJson(_singleRow(row));
+      _currentRoom = room;
+      notifyListeners();
+      Analytics.instance.track('room_created', {
+        'duration_min': durationMinutes,
+        'room_id': room.id,
+      });
+      if (durationMinutes >= kRoomDurationCapMinutes) {
+        Analytics.instance.track('limit_hit', {'which': 'duration_cap'});
+      }
+      return room;
+    } catch (e) {
+      final failure = RoomErrorCode.fromError(e);
+      if (failure == .guestRoomLimit) {
+        Analytics.instance.track('limit_hit', {'which': 'guest_room_limit'});
+      }
+      rethrow;
+    }
   }
 
-  Future<Room> joinRoom(String code) async {
-    final row = await _client.rpc('join_room', params: {'p_code': code});
-    final room = Room.fromJson(_singleRow(row));
-    _currentRoom = room;
-    notifyListeners();
-    return room;
+  Future<Room> joinRoom(String code, {RoomJoinSource via = RoomJoinSource.code}) async {
+    try {
+      final row = await _client.rpc('join_room', params: {'p_code': code});
+      final room = Room.fromJson(_singleRow(row));
+      _currentRoom = room;
+      notifyListeners();
+      Analytics.instance.track('room_joined', {'via': via.name, 'room_id': room.id});
+      return room;
+    } catch (e) {
+      final failure = RoomErrorCode.fromError(e);
+      Analytics.instance.track('room_join_failed', {'reason': failure.code});
+      if (failure == .roomFull) {
+        Analytics.instance.track('limit_hit', {'which': 'member_cap'});
+      }
+      rethrow;
+    }
   }
 
   Future<Room?> fetchRoom(String roomId) async {

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:playtogether/analytics.dart';
 import 'package:playtogether/diagnostics.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -42,7 +43,35 @@ class AuthService {
   void start() {
     _stateSub ??= _client.auth.onAuthStateChange.listen((state) {
       if (state.session != null) _endOAuthWindow();
+      _trackAuthChange(state);
     }, onError: _onAuthStreamError);
+  }
+
+  String? _identifiedUserId;
+  bool _wasAnonymous = false;
+
+  void _trackAuthChange(AuthState state) {
+    if (state.event == AuthChangeEvent.signedOut) {
+      _identifiedUserId = null;
+      _wasAnonymous = false;
+      return;
+    }
+    final user = state.session?.user;
+    if (user == null) return;
+    final wasAnonymous = _wasAnonymous;
+    final knownUser = _identifiedUserId;
+    _wasAnonymous = user.isAnonymous;
+    _identifiedUserId = user.id;
+    Analytics.instance.identify(user.id, personProperties: {'is_guest': user.isAnonymous});
+    switch (state.event) {
+      case AuthChangeEvent.signedIn:
+        if (knownUser == user.id) return;
+        Analytics.instance.track('signed_in', {'method': user.isAnonymous ? 'guest' : 'google'});
+      case AuthChangeEvent.userUpdated:
+        if (wasAnonymous && !user.isAnonymous) Analytics.instance.track('guest_upgraded');
+      default:
+        return;
+    }
   }
 
   void _onAuthStreamError(Object error, StackTrace stack) {

@@ -71,7 +71,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
     if (code == null || !mounted) return;
     RoomService.instance.pendingJoinCode = null;
     trace('consuming a parked invite', category: 'deeplink');
-    await _join(code);
+    await _join(code, via: .deeplink);
   }
 
   String get _durationLabel {
@@ -104,7 +104,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
     }
   }
 
-  Future<void> _join(String code) async {
+  Future<void> _join(String code, {RoomJoinSource via = RoomJoinSource.code}) async {
     if (code.length != PTCodeInput.length) {
       _snack('Enter the 6-character room code.');
       setState(() => _codeShake++);
@@ -112,7 +112,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
     }
     setState(() => _joining = true);
     try {
-      final room = await RoomService.instance.joinRoom(code);
+      final room = await RoomService.instance.joinRoom(code, via: via);
       if (mounted) context.go(roomPath(room.id));
     } catch (e, s) {
       final failure = RoomErrorCode.fromError(e);

@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:auto_updater/auto_updater.dart';
 import 'package:flutter/foundation.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:playtogether/analytics.dart';
 import 'package:playtogether/diagnostics.dart';
 import 'package:playtogether/platform.dart';
 import 'package:playtogether/updates/appcast.dart';
@@ -177,6 +178,10 @@ class UpdateService extends ChangeNotifier with UpdaterListener {
   @override
   void onUpdaterBeforeQuitForUpdate(AppcastItem? appcastItem) {
     trace('quitting for the update installer', category: 'updates');
-    if (Platform.isWindows) exit(0);
+    final flushed = Analytics.instance.flush().timeout(
+      const Duration(seconds: 2),
+      onTimeout: () {},
+    );
+    if (Platform.isWindows) flushed.whenComplete(() => exit(0));
   }
 }

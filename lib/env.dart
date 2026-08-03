@@ -17,4 +17,8 @@ class Env {
   /// normal state for local development. A Sentry DSN is a public write-only
   /// key, so shipping it in the bundle is fine — unlike a server secret.
   static final sentryDsn = dotenv.maybeGet("SENTRY_DSN");
+
+  static final posthogApiKey = dotenv.maybeGet("POSTHOG_API_KEY");
+
+  static final posthogHost = dotenv.maybeGet("POSTHOG_HOST");
 }

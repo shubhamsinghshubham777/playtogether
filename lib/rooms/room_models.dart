@@ -1,5 +1,7 @@
 import 'package:playtogether/profile/profile_models.dart';
 
+const kRoomDurationCapMinutes = 240;
+
 /// What the room is watching. Room-level rather than per-member so it survives
 /// host succession and reaches late joiners without replaying broadcasts.
 enum RoomMediaKind {

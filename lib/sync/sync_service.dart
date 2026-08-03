@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:playtogether/analytics.dart';
 import 'package:playtogether/diagnostics.dart';
 import 'package:playtogether/profile/profile_models.dart';
 import 'package:playtogether/rooms/reactions.dart';
@@ -445,6 +446,7 @@ class SyncService {
   Future<List<ChatMessage>> loadChatHistory() => backend.loadChatHistory(room.id);
 
   Future<ChatMessage> sendChat(String content) async {
+    Analytics.instance.track('chat_message_sent', {'room_id': room.id});
     final message = ChatMessage(
       senderId: userId,
       displayName: profile.displayName,
@@ -537,6 +539,7 @@ class SyncService {
   void sendReaction(String emoji) {
     if (_disposed) return;
     if (reactionForEmoji(emoji) == null) return;
+    Analytics.instance.track('reaction_sent', {'emoji': emoji, 'room_id': room.id});
     // Local echo is mandatory (the channel is self:false) and never throttled.
     _reactionController.add(
       ReactionEvent(
