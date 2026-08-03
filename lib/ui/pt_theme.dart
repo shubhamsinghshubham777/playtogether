@@ -26,6 +26,9 @@ abstract final class PTColors {
   static const danger = Color(0xFFFCA5A5);
   static const dangerBorder = Color(0xFFF87171);
 
+  static const selectionHandle = Color(0xFF22D3EE);
+  static const selectionHighlight = Color(0x7322D3EE);
+
   static const buttonGradient = LinearGradient(
     begin: .topLeft,
     end: .bottomRight,
@@ -185,8 +188,8 @@ ThemeData buildPTTheme() {
     ),
     textSelectionTheme: const TextSelectionThemeData(
       cursorColor: PTColors.textAccent,
-      selectionColor: Color(0x338B5CF6),
-      selectionHandleColor: PTColors.textAccent,
+      selectionColor: PTColors.selectionHighlight,
+      selectionHandleColor: PTColors.selectionHandle,
     ),
   );
 }

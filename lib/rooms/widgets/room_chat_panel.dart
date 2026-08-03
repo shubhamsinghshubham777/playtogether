@@ -1,8 +1,11 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import 'package:playtogether/platform.dart';
 import 'package:playtogether/sync/sync_service.dart';
+import 'package:playtogether/ui/buttons.dart';
 import 'package:playtogether/ui/glass.dart';
 import 'package:playtogether/ui/identity.dart';
 import 'package:playtogether/ui/pt_motion.dart';
@@ -17,6 +20,7 @@ class RoomChatPanel extends StatefulWidget {
     required this.watchingCount,
     required this.onClose,
     required this.onSend,
+    required this.onCopied,
     this.embedded = false,
   });
 
@@ -26,6 +30,7 @@ class RoomChatPanel extends StatefulWidget {
   final int watchingCount;
   final VoidCallback onClose;
   final ValueChanged<String> onSend;
+  final VoidCallback onCopied;
 
   /// Embedded (mobile portrait) skips its own glass shell + close button.
   final bool embedded;
@@ -192,27 +197,32 @@ class _RoomChatPanelState extends State<RoomChatPanel> {
           ),
         ),
         Expanded(
-          child: ListView.separated(
-            controller: _scrollController,
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-            // The typing slot is always present so it can collapse rather than
-            // pop; its own gap lives inside it, which is why the separator
-            // before it is suppressed.
-            itemCount: widget.messages.length + 1,
-            separatorBuilder: (_, index) => index == widget.messages.length - 1
-                ? const SizedBox.shrink()
-                : const SizedBox(height: 14),
-            itemBuilder: (context, index) {
-              if (index == widget.messages.length) {
-                return _typingRow();
-              }
-              final message = widget.messages[index];
-              final own = message.senderId == widget.sync.userId;
-              final bubble = own ? _ownBubble(message) : _otherBubble(message);
-              final key = _keyOf(message);
-              if (!_animated.add(key)) return bubble;
-              return PTEntrance(duration: PTMotion.state, offset: 6, child: bubble);
-            },
+          child: SelectionArea(
+            child: ListView.separated(
+              controller: _scrollController,
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+              // The typing slot is always present so it can collapse rather than
+              // pop; its own gap lives inside it, which is why the separator
+              // before it is suppressed.
+              itemCount: widget.messages.length + 1,
+              separatorBuilder: (_, index) => index == widget.messages.length - 1
+                  ? const SizedBox.shrink()
+                  : const SizedBox(height: 14),
+              itemBuilder: (context, index) {
+                if (index == widget.messages.length) {
+                  return _typingRow();
+                }
+                final message = widget.messages[index];
+                final bubble = _MessageRow(
+                  message: message,
+                  own: message.senderId == widget.sync.userId,
+                  onCopied: widget.onCopied,
+                );
+                final key = _keyOf(message);
+                if (!_animated.add(key)) return bubble;
+                return PTEntrance(duration: PTMotion.state, offset: 6, child: bubble);
+              },
+            ),
           ),
         ),
         Container(
@@ -325,10 +335,55 @@ class _RoomChatPanelState extends State<RoomChatPanel> {
     );
   }
 
-  Widget _otherBubble(ChatMessage message) {
+}
+
+class _MessageRow extends StatefulWidget {
+  const _MessageRow({required this.message, required this.own, required this.onCopied});
+
+  final ChatMessage message;
+  final bool own;
+  final VoidCallback onCopied;
+
+  @override
+  State<_MessageRow> createState() => _MessageRowState();
+}
+
+class _MessageRowState extends State<_MessageRow> {
+  bool _hovered = false;
+
+  void _copy() {
+    Clipboard.setData(ClipboardData(text: widget.message.content));
+    widget.onCopied();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final copyButton = AnimatedOpacity(
+      duration: PTMotion.functional(context, PTMotion.hover),
+      opacity: !isDesktop || _hovered ? 1 : 0,
+      child: PTIconButton(
+        icon: Symbols.content_copy_rounded,
+        onPressed: _copy,
+        size: 26,
+        iconSize: 15,
+        glass: false,
+        color: PTColors.white(0.55),
+        tooltip: 'Copy message',
+      ),
+    );
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: widget.own ? _own(copyButton) : _other(copyButton),
+    );
+  }
+
+  Widget _other(Widget copyButton) {
+    final message = widget.message;
     return Row(
       crossAxisAlignment: .end,
-      spacing: 10,
+      spacing: 8,
       children: [
         PTAvatar(userId: message.senderId, displayName: message.displayName, size: 28),
         Flexible(
@@ -366,28 +421,36 @@ class _RoomChatPanelState extends State<RoomChatPanel> {
             ],
           ),
         ),
+        copyButton,
       ],
     );
   }
 
-  Widget _ownBubble(ChatMessage message) {
-    return Align(
-      alignment: .centerRight,
-      child: Container(
-        constraints: const BoxConstraints(maxWidth: 220),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: PTColors.primary.withValues(alpha: 0.4),
-          border: Border.all(color: const Color(0xFFA78BFA).withValues(alpha: 0.35)),
-          borderRadius: const BorderRadius.only(
-            topLeft: Radius.circular(14),
-            topRight: Radius.circular(14),
-            bottomLeft: Radius.circular(14),
-            bottomRight: Radius.circular(4),
+  Widget _own(Widget copyButton) {
+    return Row(
+      mainAxisAlignment: .end,
+      crossAxisAlignment: .end,
+      spacing: 8,
+      children: [
+        copyButton,
+        Flexible(
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 220),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: PTColors.primary.withValues(alpha: 0.4),
+              border: Border.all(color: const Color(0xFFA78BFA).withValues(alpha: 0.35)),
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(14),
+                topRight: Radius.circular(14),
+                bottomLeft: Radius.circular(14),
+                bottomRight: Radius.circular(4),
+              ),
+            ),
+            child: Text(widget.message.content, style: PTText.body.copyWith(fontSize: 13.5)),
           ),
         ),
-        child: Text(message.content, style: PTText.body.copyWith(fontSize: 13.5)),
-      ),
+      ],
     );
   }
 }

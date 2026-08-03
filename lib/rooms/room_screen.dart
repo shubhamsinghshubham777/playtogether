@@ -1431,10 +1431,17 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
     }
   }
 
+  bool get _modifierChordHeld {
+    final keys = HardwareKeyboard.instance;
+    return keys.isControlPressed || keys.isMetaPressed || keys.isAltPressed;
+  }
+
   KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
       return KeyEventResult.ignored;
     }
+
+    if (_modifierChordHeld) return KeyEventResult.ignored;
 
     // A focused text field (chat input) owns the keyboard — space must type a
     // space, not toggle playback. Esc hands focus back to player shortcuts.
@@ -1835,6 +1842,8 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
     Clipboard.setData(ClipboardData(text: room.inviteLink));
     _snack('Invite link copied — send it to your people.', kind: .success);
   }
+
+  void _onChatCopied() => _snack('Message copied.', kind: .success);
 
   void _openChat() {
     if (!_chatOpen) _toggleChat();
@@ -2696,6 +2705,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
                   watchingCount: _present.length,
                   onClose: _toggleChat,
                   onSend: _sendChat,
+                  onCopied: _onChatCopied,
                 ),
               ),
             ),
@@ -2838,6 +2848,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
                           watchingCount: _present.length,
                           onClose: () {},
                           onSend: _sendChat,
+                          onCopied: _onChatCopied,
                           embedded: true,
                         )
                       : const SizedBox.shrink(),
@@ -2916,6 +2927,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
                       watchingCount: _present.length,
                       onClose: _toggleChat,
                       onSend: _sendChat,
+                      onCopied: _onChatCopied,
                     ),
                   ),
                 ),
