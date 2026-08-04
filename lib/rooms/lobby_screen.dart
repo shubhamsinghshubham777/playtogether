@@ -25,6 +25,7 @@ import 'package:playtogether/ui/inputs.dart';
 import 'package:playtogether/ui/pt_motion.dart';
 import 'package:playtogether/ui/pt_theme.dart';
 import 'package:playtogether/ui/responsive.dart';
+import 'package:playtogether/ui/scroll_fade.dart';
 
 class LobbyScreen extends StatefulWidget {
   const LobbyScreen({super.key});
@@ -354,58 +355,60 @@ class _LobbyScreenState extends State<LobbyScreen> {
           ),
         ),
         Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.only(top: 36, bottom: 48),
-            child: Column(
-              children: [
-                if (UpdateService.instance.hasUpdate) ...[
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 888),
-                    child: _updateBanner(),
-                  ),
-                  const SizedBox(height: 32),
-                ],
-                _intro(child: const _Greeting(style: PTText.display)),
-                const SizedBox(height: 12),
-                _intro(
-                  delay: const Duration(milliseconds: 60),
-                  child: Text(
-                    'Start a room or hop into one your friends made.',
-                    style: PTText.body.copyWith(fontSize: 16, color: PTColors.white(0.55)),
-                  ),
-                ),
-                const SizedBox(height: 52),
-                // IntrinsicHeight: equal-height cards; a bare .stretch Row here
-                // would receive unbounded height from the scroll view and crash.
-                IntrinsicHeight(
-                  child: Row(
-                    mainAxisAlignment: .center,
-                    crossAxisAlignment: .stretch,
-                    spacing: 28,
-                    children: [
-                      SizedBox(
-                        width: 430,
-                        child: _createCard(delay: const Duration(milliseconds: 120)),
-                      ),
-                      SizedBox(
-                        width: 430,
-                        child: _joinCard(delay: const Duration(milliseconds: 180)),
-                      ),
-                    ],
-                  ),
-                ),
-                if (RoomService.instance.myRooms.isNotEmpty) ...[
-                  const SizedBox(height: 28),
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 888),
-                    child: _intro(
-                      delay: const Duration(milliseconds: 240),
-                      fade: false,
-                      child: _myRoomsSection(),
+          child: ScrollFadeEdge(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.only(top: 36, bottom: 48),
+              child: Column(
+                children: [
+                  if (UpdateService.instance.hasUpdate) ...[
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 888),
+                      child: _updateBanner(),
+                    ),
+                    const SizedBox(height: 32),
+                  ],
+                  _intro(child: const _Greeting(style: PTText.display)),
+                  const SizedBox(height: 12),
+                  _intro(
+                    delay: const Duration(milliseconds: 60),
+                    child: Text(
+                      'Start a room or hop into one your friends made.',
+                      style: PTText.body.copyWith(fontSize: 16, color: PTColors.white(0.55)),
                     ),
                   ),
+                  const SizedBox(height: 52),
+                  // IntrinsicHeight: equal-height cards; a bare .stretch Row here
+                  // would receive unbounded height from the scroll view and crash.
+                  IntrinsicHeight(
+                    child: Row(
+                      mainAxisAlignment: .center,
+                      crossAxisAlignment: .stretch,
+                      spacing: 28,
+                      children: [
+                        SizedBox(
+                          width: 430,
+                          child: _createCard(delay: const Duration(milliseconds: 120)),
+                        ),
+                        SizedBox(
+                          width: 430,
+                          child: _joinCard(delay: const Duration(milliseconds: 180)),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (RoomService.instance.myRooms.isNotEmpty) ...[
+                    const SizedBox(height: 28),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 888),
+                      child: _intro(
+                        delay: const Duration(milliseconds: 240),
+                        fade: false,
+                        child: _myRoomsSection(),
+                      ),
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ),
@@ -415,33 +418,36 @@ class _LobbyScreenState extends State<LobbyScreen> {
 
   Widget _portrait() {
     return SafeArea(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 10, 20, 40),
-        child: Column(
-          crossAxisAlignment: .start,
-          spacing: 18,
-          children: [
-            Row(children: [const _Wordmark(compact: true), const Spacer(), _avatarButton()]),
-            if (UpdateService.instance.hasUpdate) _updateBanner(),
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: _intro(
-                child: _Greeting(
-                  style: PTText.display.copyWith(fontSize: 26),
-                  twoLine: true,
-                  align: .centerLeft,
+      child: ScrollFadeEdge(
+        height: 48,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 10, 20, 40),
+          child: Column(
+            crossAxisAlignment: .start,
+            spacing: 18,
+            children: [
+              Row(children: [const _Wordmark(compact: true), const Spacer(), _avatarButton()]),
+              if (UpdateService.instance.hasUpdate) _updateBanner(),
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: _intro(
+                  child: _Greeting(
+                    style: PTText.display.copyWith(fontSize: 26),
+                    twoLine: true,
+                    align: .centerLeft,
+                  ),
                 ),
               ),
-            ),
-            _createCard(compact: true, delay: const Duration(milliseconds: 60)),
-            _joinCard(compact: true, delay: const Duration(milliseconds: 120)),
-            if (RoomService.instance.myRooms.isNotEmpty)
-              _intro(
-                delay: const Duration(milliseconds: 180),
-                fade: false,
-                child: _myRoomsSection(compact: true),
-              ),
-          ],
+              _createCard(compact: true, delay: const Duration(milliseconds: 60)),
+              _joinCard(compact: true, delay: const Duration(milliseconds: 120)),
+              if (RoomService.instance.myRooms.isNotEmpty)
+                _intro(
+                  delay: const Duration(milliseconds: 180),
+                  fade: false,
+                  child: _myRoomsSection(compact: true),
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -479,19 +485,22 @@ class _LobbyScreenState extends State<LobbyScreen> {
                     ),
                   ),
                   Expanded(
-                    child: SingleChildScrollView(
-                      child: Column(
-                        mainAxisSize: .min,
-                        spacing: 14,
-                        children: [
-                          _joinCard(compact: true, delay: const Duration(milliseconds: 120)),
-                          if (RoomService.instance.myRooms.isNotEmpty)
-                            _intro(
-                              delay: const Duration(milliseconds: 180),
-                              fade: false,
-                              child: _myRoomsSection(compact: true),
-                            ),
-                        ],
+                    child: ScrollFadeEdge(
+                      height: 48,
+                      child: SingleChildScrollView(
+                        child: Column(
+                          mainAxisSize: .min,
+                          spacing: 14,
+                          children: [
+                            _joinCard(compact: true, delay: const Duration(milliseconds: 120)),
+                            if (RoomService.instance.myRooms.isNotEmpty)
+                              _intro(
+                                delay: const Duration(milliseconds: 180),
+                                fade: false,
+                                child: _myRoomsSection(compact: true),
+                              ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
