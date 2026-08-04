@@ -913,6 +913,129 @@ void main() {
     });
   });
 
+  group('gate waiver', () {
+    test('the host can start without a straggler, and everyone agrees', () {
+      fakeAsync((async) {
+        final media = RoomMedia(
+          kind: RoomMediaKind.local,
+          name: 'movie.mkv',
+          updatedAt: DateTime.utc(2026, 8, 4),
+        );
+        final h = _Harness(role: 'host', media: media, joinedSeconds: 0)..connect();
+        async.flushMicrotasks();
+
+        h.service.retrackReadiness(ReadyStatus.ready, loadedFileName: 'movie.mkv');
+        h.channel.syncPresence([
+          presenceEntry(_me, role: 'host', joinedSeconds: 0, ready: 'ready', file: 'movie.mkv'),
+          presenceEntry(_other, joinedSeconds: 10),
+        ]);
+        async.flushMicrotasks();
+        expect(h.service.gateState, GateState.closed);
+        expect(h.service.gateBlockers.map((m) => m.userId), [_other]);
+
+        unawaited(h.service.waiveGateBlockers());
+        async.flushMicrotasks();
+
+        expect(h.service.gateState, GateState.open);
+        expect(h.service.waivedMembers, {_other});
+        expect(h.channel.sentOf(SyncEventType.gateWaiver), hasLength(1));
+        expect(h.channel.sentOf(SyncEventType.gateWaiver).single.payload['userIds'], [_other]);
+
+        h.dispose();
+      });
+    });
+
+    test('a member adopts the waiver it receives, so the room agrees', () {
+      fakeAsync((async) {
+        final media = RoomMedia(
+          kind: RoomMediaKind.local,
+          name: 'movie.mkv',
+          updatedAt: DateTime.utc(2026, 8, 4),
+        );
+        final h = _Harness(media: media, joinedSeconds: 10)..connect();
+        async.flushMicrotasks();
+
+        h.service.retrackReadiness(ReadyStatus.ready, loadedFileName: 'movie.mkv');
+        h.channel.syncPresence([
+          presenceEntry('host', role: 'host', joinedSeconds: 0, ready: 'ready', file: 'movie.mkv'),
+          presenceEntry(_me, joinedSeconds: 10, ready: 'ready', file: 'movie.mkv'),
+          presenceEntry('slow', joinedSeconds: 20),
+        ]);
+        async.flushMicrotasks();
+        expect(h.service.gateState, GateState.closed);
+
+        h.channel.deliver(SyncEventType.gateWaiver, {
+          'senderId': 'host',
+          'timestamp': 500,
+          'userIds': ['slow'],
+        });
+        async.flushMicrotasks();
+
+        expect(h.service.gateState, GateState.open);
+        h.dispose();
+      });
+    });
+
+    test('a waiver never survives a change of media', () {
+      fakeAsync((async) {
+        final media = RoomMedia(
+          kind: RoomMediaKind.local,
+          name: 'movie.mkv',
+          updatedAt: DateTime.utc(2026, 8, 4),
+        );
+        final h = _Harness(role: 'host', media: media, joinedSeconds: 0)..connect();
+        async.flushMicrotasks();
+
+        h.service.retrackReadiness(ReadyStatus.ready, loadedFileName: 'movie.mkv');
+        h.channel.syncPresence([
+          presenceEntry(_me, role: 'host', joinedSeconds: 0, ready: 'ready', file: 'movie.mkv'),
+          presenceEntry(_other, joinedSeconds: 10),
+        ]);
+        async.flushMicrotasks();
+        unawaited(h.service.waiveGateBlockers());
+        async.flushMicrotasks();
+        expect(h.service.waivedMembers, {_other});
+
+        h.channel.deliver(SyncEventType.mediaSet, {
+          'senderId': 'host',
+          'timestamp': 900,
+          'kind': 'local',
+          'name': 'sequel.mkv',
+          'updatedAtMs': DateTime.utc(2026, 8, 5).millisecondsSinceEpoch,
+        });
+        async.flushMicrotasks();
+
+        expect(h.service.waivedMembers, isEmpty);
+        h.dispose();
+      });
+    });
+
+    test('a member cannot waive anyone, whatever they call', () {
+      fakeAsync((async) {
+        final media = RoomMedia(
+          kind: RoomMediaKind.local,
+          name: 'movie.mkv',
+          updatedAt: DateTime.utc(2026, 8, 4),
+        );
+        final h = _Harness(media: media, joinedSeconds: 10)..connect();
+        async.flushMicrotasks();
+
+        h.channel.syncPresence([
+          presenceEntry('host', role: 'host', joinedSeconds: 0, ready: 'ready', file: 'movie.mkv'),
+          presenceEntry(_me, joinedSeconds: 10),
+        ]);
+        async.flushMicrotasks();
+
+        unawaited(h.service.waiveGateBlockers());
+        async.flushMicrotasks();
+
+        expect(h.service.waivedMembers, isEmpty);
+        expect(h.channel.sentOf(SyncEventType.gateWaiver), isEmpty);
+        h.dispose();
+      });
+    });
+  });
+
   group('chat', () {
     test('a sent message broadcasts and persists', () {
       fakeAsync((async) {

@@ -123,22 +123,29 @@ bool memberSatisfiesGate(PresentMember member, RoomMedia media) {
   return true;
 }
 
+bool memberClearsGate(PresentMember member, RoomMedia media, Set<String> waived) =>
+    memberSatisfiesGate(member, media) || waived.contains(member.userId);
+
 /// Nobody may start or scrub until every present member has the room's
 /// canonical media loaded.
 GateState evaluateGateState({
   required bool hasPresenceSynced,
   required RoomMedia media,
   required List<PresentMember> members,
+  Set<String> waived = const {},
 }) {
   if (!hasPresenceSynced) return .indeterminate;
   if (!media.isSet) return .closed;
   if (members.isEmpty) return .indeterminate;
-  return members.every((m) => memberSatisfiesGate(m, media)) ? .open : .closed;
+  return members.every((m) => memberClearsGate(m, media, waived)) ? .open : .closed;
 }
 
 /// Everyone the room is still waiting on, for overlay/banner copy.
-List<PresentMember> gateBlockersOf(RoomMedia media, List<PresentMember> members) =>
-    media.isSet ? members.where((m) => !memberSatisfiesGate(m, media)).toList() : const [];
+List<PresentMember> gateBlockersOf(
+  RoomMedia media,
+  List<PresentMember> members, {
+  Set<String> waived = const {},
+}) => media.isSet ? members.where((m) => !memberClearsGate(m, media, waived)).toList() : const [];
 
 /// What the gate derives from a state change. Only the authority acts on it,
 /// else the room gets one pause per member.

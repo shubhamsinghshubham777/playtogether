@@ -10,6 +10,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:playtogether/analytics.dart';
+import 'package:playtogether/app_router.dart';
 import 'package:playtogether/av/livekit_service.dart';
 import 'package:playtogether/diagnostics.dart';
 import 'package:playtogether/platform.dart';
@@ -183,6 +184,8 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
 
   bool _resumeAttempted = false;
   bool _extending = false;
+  final _resuming = ValueNotifier<bool>(false);
+  String? _evictionReason;
   Timer? _positionWriteTimer;
   Duration? _lastWrittenPosition;
   bool _positionWriteFailing = false;
@@ -222,7 +225,10 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
   }
 
   void _syncGateReveal() {
-    final shouldShow = _gateState == GateState.closed && !_awaitingFirstSource;
+    // `_selfBlocksGate` keeps the panel up for someone the host started
+    // without: the room is playing, the gate is open, and they still have
+    // nothing loaded — which is exactly when they need the locate button.
+    final shouldShow = (_gateState == GateState.closed || _selfBlocksGate) && !_awaitingFirstSource;
     if (shouldShow) {
       _gateAnim.forward();
     } else {
@@ -539,6 +545,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
       t.cancel();
     }
     _shortcutFocus.dispose();
+    _resuming.dispose();
     _menuData.dispose();
     _chatCurve.dispose();
     _chatAnim.dispose();
@@ -556,6 +563,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
 
   Future<void> _onPresenceChanged(List<PresentMember> present) async {
     setState(() => _present = present);
+    _syncGateReveal();
     if (present.length > _peakMembers) _peakMembers = present.length;
     // Don't wait on the member fetch: readiness/online changes should land in
     // an open menu immediately, even if the round-trip is slow or fails.
@@ -1480,6 +1488,38 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
     }
   }
 
+  bool get _canStartWithout {
+    final sync = _sync;
+    if (sync == null || !sync.isHost || !_canonicalMedia.isSet) return false;
+    return sync.gateBlockers.any((m) => m.userId != sync.userId);
+  }
+
+  String get _startWithoutLabel {
+    final sync = _sync;
+    final others =
+        sync?.gateBlockers.where((m) => m.userId != sync.userId).toList() ??
+        const <PresentMember>[];
+    if (others.length == 1) return 'Start without ${others.first.displayName}';
+    return 'Start without them';
+  }
+
+  Future<void> _startWithoutStragglers() async {
+    final sync = _sync;
+    if (sync == null) return;
+    final skipped = sync.gateBlockers.where((m) => m.userId != sync.userId).length;
+    if (skipped == 0) return;
+    Analytics.instance.track('gate_override_used', {
+      'room_id': widget.roomId,
+      'skipped': skipped,
+      'members_present': _present.length,
+    });
+    await sync.waiveGateBlockers();
+    if (!mounted) return;
+    _showActionToast(
+      skipped == 1 ? 'Starting without one watcher' : 'Starting without $skipped watchers',
+    );
+  }
+
   bool get _selfBlocksGate {
     final sync = _sync;
     if (sync == null) return false;
@@ -1748,6 +1788,19 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
     _showControls();
   }
 
+  Future<void> _showReactionPicker() async {
+    final available = reactionsForTier(EntitlementService.instance.tier);
+    if (available.length <= kBaseReactionCount) return;
+    final picked = await showGlassDialog<PTReaction>(
+      context: context,
+      width: 420,
+      builder: (_) => ReactionPickerDialog(reactions: available, assets: _reactionAssets),
+    );
+    if (!mounted) return;
+    _shortcutFocus.requestFocus();
+    if (picked != null) _sendReaction(picked);
+  }
+
   void _sendReaction(PTReaction reaction) {
     _sync?.sendReaction(reaction.emoji);
     _reactionsSent++;
@@ -1863,6 +1916,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
   }) async {
     if (_ended) return;
     _ended = true;
+    _evictionReason = reason;
     _trackWatchSessionEnded();
     RoomService.instance.noteRoomExited();
     trace(
@@ -1924,80 +1978,135 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
       // screen with no way to re-show this dialog.
       builder: (dialogContext) => PopScope(
         canPop: false,
-        child: Column(
-          mainAxisSize: .min,
-          children: [
-            // A slow glow behind the mark, so the room ending reads as
-            // deliberate rather than as something that just stopped.
-            Stack(
-              alignment: .center,
-              children: [
-                PTPulse(
-                  period: const Duration(seconds: 2),
-                  low: 0.18,
-                  high: 0.28,
-                  child: Container(
-                    width: 92,
-                    height: 92,
-                    decoration: const BoxDecoration(color: PTColors.primary, shape: .circle),
+        child: ValueListenableBuilder<bool>(
+          valueListenable: _resuming,
+          builder: (dialogContext, resuming, _) => Column(
+            mainAxisSize: .min,
+            children: [
+              // A slow glow behind the mark, so the room ending reads as
+              // deliberate rather than as something that just stopped.
+              Stack(
+                alignment: .center,
+                children: [
+                  PTPulse(
+                    period: const Duration(seconds: 2),
+                    low: 0.18,
+                    high: 0.28,
+                    child: Container(
+                      width: 92,
+                      height: 92,
+                      decoration: const BoxDecoration(color: PTColors.primary, shape: .circle),
+                    ),
+                  ),
+                  Container(
+                    width: 64,
+                    height: 64,
+                    decoration: BoxDecoration(
+                      color: PTColors.primary.withValues(alpha: 0.18),
+                      shape: .circle,
+                      border: Border.all(color: const Color(0xFFA78BFA).withValues(alpha: 0.4)),
+                    ),
+                    child: Icon(
+                      icon ?? Symbols.bedtime_rounded,
+                      size: 32,
+                      fill: 1,
+                      color: PTColors.textAccent,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              PTEntrance(
+                delay: const Duration(milliseconds: 60),
+                duration: PTMotion.state,
+                offset: 8,
+                child: Text(
+                  title ?? "That's a wrap!",
+                  style: PTText.screenTitle.copyWith(fontSize: 21),
+                ),
+              ),
+              const SizedBox(height: 10),
+              PTEntrance(
+                delay: const Duration(milliseconds: 100),
+                duration: PTMotion.state,
+                offset: 8,
+                child: Text(
+                  body ?? 'This room has ended. Head back to the lobby to start another one.',
+                  textAlign: .center,
+                  style: PTText.body.copyWith(
+                    fontSize: 14,
+                    color: PTColors.white(0.6),
+                    height: 1.5,
                   ),
                 ),
-                Container(
-                  width: 64,
-                  height: 64,
-                  decoration: BoxDecoration(
-                    color: PTColors.primary.withValues(alpha: 0.18),
-                    shape: .circle,
-                    border: Border.all(color: const Color(0xFFA78BFA).withValues(alpha: 0.4)),
-                  ),
-                  child: Icon(
-                    icon ?? Symbols.bedtime_rounded,
-                    size: 32,
-                    fill: 1,
-                    color: PTColors.textAccent,
-                  ),
+              ),
+              const SizedBox(height: 24),
+              PTEntrance(
+                delay: const Duration(milliseconds: 140),
+                duration: PTMotion.state,
+                offset: 8,
+                child: Column(
+                  mainAxisSize: .min,
+                  spacing: 10,
+                  children: [
+                    if (_canPickBackUp)
+                      PTButton(
+                        label: 'Pick it back up',
+                        icon: Symbols.play_circle_rounded,
+                        loading: resuming,
+                        onPressed: resuming ? null : () => _pickBackUp(dialogContext),
+                      ),
+                    PTButton(
+                      label: 'Back to lobby',
+                      icon: Symbols.home_rounded,
+                      variant: _canPickBackUp ? .secondary : .primary,
+                      onPressed: () {
+                        Navigator.of(dialogContext).pop();
+                        context.go('/lobby');
+                      },
+                    ),
+                  ],
                 ),
-              ],
-            ),
-            const SizedBox(height: 18),
-            PTEntrance(
-              delay: const Duration(milliseconds: 60),
-              duration: PTMotion.state,
-              offset: 8,
-              child: Text(
-                title ?? "That's a wrap!",
-                style: PTText.screenTitle.copyWith(fontSize: 21),
               ),
-            ),
-            const SizedBox(height: 10),
-            PTEntrance(
-              delay: const Duration(milliseconds: 100),
-              duration: PTMotion.state,
-              offset: 8,
-              child: Text(
-                body ?? 'This room has ended. Head back to the lobby to start another one.',
-                textAlign: .center,
-                style: PTText.body.copyWith(fontSize: 14, color: PTColors.white(0.6), height: 1.5),
-              ),
-            ),
-            const SizedBox(height: 24),
-            PTEntrance(
-              delay: const Duration(milliseconds: 140),
-              duration: PTMotion.state,
-              offset: 8,
-              child: PTButton(
-                label: 'Back to lobby',
-                icon: Symbols.home_rounded,
-                onPressed: () {
-                  Navigator.of(dialogContext).pop();
-                  context.go('/lobby');
-                },
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
+  }
+
+  bool get _canPickBackUp {
+    final room = _room;
+    if (room == null || !room.goesDormant) return false;
+    if (!(_sync?.isHost ?? ProfileService.instance.profile?.id == room.createdBy)) return false;
+    return _evictionReason != 'kicked' && _evictionReason != 'deleted';
+  }
+
+  Future<void> _pickBackUp(BuildContext dialogContext) async {
+    final room = _room;
+    if (room == null || _resuming.value) return;
+    _resuming.value = true;
+    try {
+      final limits = EntitlementService.instance.limitsOrFallback;
+      final minutes = room.durationMinutes.clamp(5, limits.maxSessionMinutes);
+      final resumed = await RoomService.instance.resumeRoom(
+        roomId: widget.roomId,
+        minutes: minutes,
+      );
+      if (!mounted) return;
+      if (dialogContext.mounted) Navigator.of(dialogContext).pop();
+      // Re-entered rather than revived in place: the sync service, player and
+      // gate were all torn down by the eviction, and go_router keys the room
+      // page by id, so this rebuilds the screen from scratch.
+      context.go('/lobby');
+      context.go(roomPath(resumed.id));
+    } catch (e, s) {
+      final failure = RoomErrorCode.fromError(e);
+      if (failure == .unknown) reportNonFatal(e, s, during: 'resuming a room from its wrap-up');
+      if (mounted) _snack(failure.message);
+    } finally {
+      _resuming.value = false;
+    }
   }
 
   Future<void> _leaveRoom() async {
@@ -2553,6 +2662,8 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
                   onLocateFile: _selfBlocksGate && _canonicalMedia.kind == .local
                       ? _pickVideo
                       : null,
+                  onStartWithout: _canStartWithout ? _startWithoutStragglers : null,
+                  startWithoutLabel: _startWithoutLabel,
                   onKick: _confirmKick,
                 ),
               );
@@ -2960,11 +3071,14 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
   }
 
   Widget _reactionStrip({bool compact = false}) {
+    final available = reactionsForTier(EntitlementService.instance.tier);
     return ReactionStrip(
       open: _reactOpen,
       assets: _reactionAssets,
       compact: compact,
-      reactions: reactionsForTier(EntitlementService.instance.tier),
+      reactions: available.take(kBaseReactionCount).toList(growable: false),
+      hasMore: available.length > kBaseReactionCount,
+      onMore: _showReactionPicker,
       onPick: _sendReaction,
     );
   }

@@ -15,6 +15,7 @@ abstract class SyncEventType {
   static const String transportLock = 'transport_lock';
   static const String reaction = 'reaction';
   static const String roomEnded = 'room_ended';
+  static const String gateWaiver = 'gate_waiver';
 }
 
 /// Why a play/pause happened. Absent means a human pressed something — the

@@ -460,3 +460,108 @@ class _PTSliderPainter extends CustomPainter {
       oldDelegate.trackHeight != trackHeight ||
       oldDelegate.thumbRadius != thumbRadius;
 }
+
+class PTToggleRow extends StatelessWidget {
+  const PTToggleRow({
+    super.key,
+    required this.title,
+    required this.subtitle,
+    required this.value,
+    required this.onChanged,
+    this.icon,
+  });
+
+  final String title;
+  final String subtitle;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+  final IconData? icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        behavior: .opaque,
+        onTap: () => onChanged(!value),
+        child: Row(
+          spacing: 14,
+          children: [
+            if (icon != null)
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: PTColors.white(0.06),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, size: 19, color: PTColors.white(0.6)),
+              ),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: .start,
+                spacing: 3,
+                children: [
+                  Text(title, style: PTText.body.copyWith(fontSize: 14, fontWeight: .w600)),
+                  Text(
+                    subtitle,
+                    style: PTText.body.copyWith(
+                      fontSize: 12.5,
+                      color: PTColors.white(0.5),
+                      height: 1.45,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            _PTSwitch(value: value, onChanged: onChanged),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PTSwitch extends StatelessWidget {
+  const _PTSwitch({required this.value, required this.onChanged});
+
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  static const _width = 46.0;
+  static const _height = 27.0;
+  static const _knob = 21.0;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => onChanged(!value),
+      child: AnimatedContainer(
+        duration: PTMotion.functional(context, PTMotion.state),
+        curve: PTMotion.enter,
+        width: _width,
+        height: _height,
+        padding: const EdgeInsets.all(3),
+        decoration: BoxDecoration(
+          gradient: value ? PTColors.buttonGradient : null,
+          color: value ? null : PTColors.white(0.1),
+          border: Border.all(color: PTColors.white(value ? 0.0 : 0.14)),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: AnimatedAlign(
+          duration: PTMotion.functional(context, PTMotion.state),
+          curve: PTMotion.enter,
+          alignment: value ? .centerRight : .centerLeft,
+          child: Container(
+            width: _knob,
+            height: _knob,
+            decoration: BoxDecoration(
+              color: value ? Colors.white : PTColors.white(0.55),
+              shape: .circle,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

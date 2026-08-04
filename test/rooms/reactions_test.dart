@@ -84,34 +84,48 @@ void main() {
   });
 
   group('agreement with tool/fetch_reaction_emoji.py', () {
-    late Map<String, String> manifest;
+    late Map<String, String> glyphs;
+    late Map<String, String> digests;
 
     setUpAll(() {
       final source = _repoFile('tool/fetch_reaction_emoji.py').readAsStringSync();
       final entries = RegExp(
-        r'\(\s*"([0-9a-f]+)"\s*,\s*"(\S+?)"\s*,\s*"([0-9a-f]{64})"\s*\)',
+        r'\(\s*"([0-9a-f_]+)"\s*,\s*"(\S+?)"\s*,\s*"([0-9a-f]{64})"\s*\)',
       ).allMatches(source);
-      manifest = {for (final m in entries) m.group(1)!: m.group(2)!};
+      glyphs = {for (final m in entries) m.group(1)!: m.group(2)!};
+      digests = {for (final m in entries) m.group(1)!: m.group(3)!};
     });
 
     test('the manifest was parsed at all, so this check cannot silently pass', () {
       expect(
-        manifest,
+        glyphs,
         isNotEmpty,
-        reason: 'the EMOJI table was restructured — this check needs restructuring with it',
+        reason: 'the EMOJI tables were restructured — this check needs restructuring with it',
       );
     });
 
     test('the codepoint sets agree in both directions', () {
-      expect(manifest.keys.toSet(), kReactions.map((r) => r.codepoint).toSet());
+      expect(glyphs.keys.toSet(), kAllReactions.map((r) => r.codepoint).toSet());
     });
 
     test('each codepoint is paired with the same glyph in both places', () {
-      for (final reaction in kReactions) {
+      for (final reaction in kAllReactions) {
         expect(
-          manifest[reaction.codepoint],
+          glyphs[reaction.codepoint],
           reaction.emoji,
           reason: 'the script fetches ${reaction.codepoint} for a different glyph',
+        );
+      }
+    });
+
+    test('the extended digests match the ones the runtime fetch checks against', () {
+      for (final reaction in kExtendedReactions) {
+        expect(
+          reaction.digest,
+          digests[reaction.codepoint],
+          reason:
+              'the app would verify ${reaction.codepoint} against a digest the script '
+              'never confirmed the CDN serves',
         );
       }
     });
@@ -119,7 +133,7 @@ void main() {
 
   group('reactionForEmoji', () {
     test('resolves every listed emoji to its own entry', () {
-      for (final reaction in kReactions) {
+      for (final reaction in kAllReactions) {
         final found = reactionForEmoji(reaction.emoji);
         expect(found, isNotNull, reason: reaction.emoji);
         expect(found!.codepoint, reaction.codepoint);
@@ -127,10 +141,16 @@ void main() {
       }
     });
 
-    test('rejects an emoji we did not bundle, since it has no animation to render', () {
+    test('rejects an emoji outside the manifest, which we have no way to render', () {
       expect(reactionForEmoji('🦆'), isNull);
-      expect(reactionForEmoji('🔥'), isNull);
       expect(reactionForEmoji('💩'), isNull);
+      expect(reactionForEmoji('🧀'), isNull);
+    });
+
+    test('accepts the extended set too, so a free viewer sees a premium sender', () {
+      for (final reaction in kExtendedReactions) {
+        expect(reactionForEmoji(reaction.emoji), isNotNull, reason: reaction.emoji);
+      }
     });
 
     test('rejects null and empty, which is what an untrusted payload decodes to', () {
@@ -156,11 +176,15 @@ void main() {
   });
 
   group('tier gating on the send path', () {
-    test('every tier gets the bundled set today', () {
+    test('everyone below premium sends the bundled set', () {
       expect(reactionsForTier('guest'), kReactions);
       expect(reactionsForTier('free'), kReactions);
-      expect(reactionsForTier('premium'), kReactions);
       expect(reactionsForTier(null), kReactions);
+    });
+
+    test('premium sends the whole manifest', () {
+      expect(reactionsForTier('premium'), kAllReactions);
+      expect(reactionsForTier('premium').length, greaterThan(kBaseReactionCount));
     });
 
     test('a bundled emoji is allowed for any tier', () {
@@ -170,7 +194,15 @@ void main() {
       }
     });
 
-    test('an emoji we never bundled is refused whatever the tier', () {
+    test('the extended set is premium to send, even though anyone can see it', () {
+      for (final reaction in kExtendedReactions) {
+        expect(reactionAllowedForTier(reaction.emoji, 'free'), isFalse, reason: reaction.emoji);
+        expect(reactionAllowedForTier(reaction.emoji, 'premium'), isTrue, reason: reaction.emoji);
+        expect(reactionForEmoji(reaction.emoji), isNotNull, reason: reaction.emoji);
+      }
+    });
+
+    test('an emoji outside the manifest is refused whatever the tier', () {
       expect(reactionAllowedForTier('🦄', 'premium'), isFalse);
       expect(reactionAllowedForTier(null, 'premium'), isFalse);
       expect(reactionAllowedForTier('', 'premium'), isFalse);
@@ -178,6 +210,21 @@ void main() {
 
     test('the base set is never larger than what ships', () {
       expect(kBaseReactionCount, lessThanOrEqualTo(kReactions.length));
+    });
+
+    test('the manifest has no duplicate emoji or codepoints', () {
+      expect(kAllReactions.map((r) => r.emoji).toSet().length, kAllReactions.length);
+      expect(kAllReactions.map((r) => r.codepoint).toSet().length, kAllReactions.length);
+    });
+
+    test('the bundled set carries no digest, the extended set always does', () {
+      for (final reaction in kReactions) {
+        expect(reaction.isBundled, isTrue, reason: reaction.emoji);
+      }
+      for (final reaction in kExtendedReactions) {
+        expect(reaction.isBundled, isFalse, reason: reaction.emoji);
+        expect(reaction.digest, hasLength(64), reason: reaction.emoji);
+      }
     });
   });
 }

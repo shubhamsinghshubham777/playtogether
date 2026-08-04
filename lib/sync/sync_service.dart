@@ -106,15 +106,54 @@ class SyncService {
   bool memberSatisfiesGate(PresentMember member) =>
       logic.memberSatisfiesGate(member, _canonicalMedia);
 
+  /// Members the host chose to start without. Cleared whenever the room changes
+  /// media, so a waiver can never carry across to something else.
+  final _waived = <String>{};
+
+  Set<String> get waivedMembers => Set.unmodifiable(_waived);
+
   GateState get gateState => logic.evaluateGateState(
     hasPresenceSynced: _hasPresenceSynced,
     media: _canonicalMedia,
     members: _presentMembers,
+    waived: _waived,
   );
 
-  List<PresentMember> get gateBlockers => logic.gateBlockersOf(_canonicalMedia, _presentMembers);
+  List<PresentMember> get gateBlockers =>
+      logic.gateBlockersOf(_canonicalMedia, _presentMembers, waived: _waived);
+
+  /// Everyone not yet ready, waiver or not — what the host is deciding about.
+  List<PresentMember> get gateStragglers => logic.gateBlockersOf(_canonicalMedia, _presentMembers);
 
   PresentMember? get gateBlocker => gateBlockers.firstOrNull;
+
+  /// Host only. Agrees to start without whoever is holding the gate right now.
+  /// Scoped to those exact members: anyone who arrives afterwards shuts the
+  /// gate again, which is the lockstep contract still doing its job.
+  Future<void> waiveGateBlockers() async {
+    if (_disposed || !isHost) return;
+    final ids = gateBlockers.map((m) => m.userId).where((id) => id != userId).toList();
+    if (ids.isEmpty) return;
+    trace('host started without stragglers', category: 'gate', data: {'count': ids.length});
+    _applyWaiver(ids);
+    await _channel?.sendBroadcastMessage(
+      event: SyncEventType.gateWaiver,
+      payload: {'senderId': userId, 'timestamp': _nextTimestamp(), 'userIds': ids},
+    );
+  }
+
+  void _handleGateWaiver(Map<String, dynamic> payload) {
+    if (_disposed) return;
+    final raw = payload['userIds'];
+    if (raw is! List) return;
+    _applyWaiver(raw.whereType<String>().toList());
+  }
+
+  void _applyWaiver(List<String> userIds) {
+    if (userIds.isEmpty) return;
+    _waived.addAll(userIds);
+    _evaluateGate();
+  }
 
   final _roomEndedController = StreamController<String?>.broadcast();
 
@@ -214,6 +253,7 @@ class SyncService {
     on(SyncEventType.transportLock, _handleTransportLock);
     on(SyncEventType.reaction, _handleReaction);
     on(SyncEventType.roomEnded, _handleRoomEnded);
+    on(SyncEventType.gateWaiver, _handleGateWaiver);
 
     channel.onPresenceSync(_handlePresenceSync).subscribe((status, error) {
       // Statuses from a superseded channel (reconnect replaced it) are stale.
@@ -674,6 +714,7 @@ class SyncService {
       },
     );
     _canonicalMedia = media;
+    _waived.clear();
     _canonicalMediaController.add(media);
     _checkSelfGateSatisfaction();
     _evaluateGate();

@@ -5,6 +5,7 @@ import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import 'package:playtogether/analytics_consent.dart';
 import 'package:playtogether/auth/auth_service.dart';
 import 'package:playtogether/diagnostics.dart';
 import 'package:playtogether/profile/profile_models.dart';
@@ -299,6 +300,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  Widget _privacySection() {
+    return ListenableBuilder(
+      listenable: AnalyticsConsent.instance,
+      builder: (context, _) => PTToggleRow(
+        icon: Symbols.insights_rounded,
+        title: 'Share usage data',
+        subtitle:
+            'Anonymous counts of things like rooms created and features used, so we know '
+            'what to build next. Never your chats, file names or links.',
+        value: !AnalyticsConsent.instance.optedOut,
+        onChanged: (shareData) => AnalyticsConsent.instance.setOptedOut(!shareData),
+      ),
+    );
+  }
+
   Widget _backHeader({double iconSize = 20, double size = 44, double? titleSize}) {
     return Row(
       spacing: 14,
@@ -328,6 +344,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _identityHeader(profile, vertical: header == .column),
         _nameField(profile),
         _emailField(profile),
+        const Divider(),
+        _privacySection(),
         const Divider(),
         Column(
           spacing: 12,
@@ -439,6 +457,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ],
           ),
         ),
+        const Divider(),
+        _privacySection(),
         PTButton(
           label: 'End guest session',
           icon: Symbols.logout_rounded,

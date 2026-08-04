@@ -225,6 +225,82 @@ void main() {
       expect(properties.containsKey(r'$anon_distinct_id'), isFalse);
     });
   });
+
+  group('opt-out', () {
+    test('an opted-out run queues nothing and sends nothing', () async {
+      final sent = <String>[];
+      final analytics = Analytics()
+        ..init(
+          apiKey: 'phc_test',
+          optedOut: true,
+          transport: (uri, body) async {
+            sent.add(body);
+            return true;
+          },
+        );
+
+      expect(analytics.isEnabled, isFalse);
+      analytics.track('app_opened');
+      analytics.identify('user-1');
+      await analytics.flush();
+
+      expect(analytics.queuedCount, 0);
+      expect(sent, isEmpty);
+    });
+
+    test('opting out mid-session drops what was already queued', () async {
+      final sent = <String>[];
+      final analytics = Analytics()
+        ..init(
+          apiKey: 'phc_test',
+          transport: (uri, body) async {
+            sent.add(body);
+            return true;
+          },
+        );
+
+      analytics.track('room_created');
+      expect(analytics.queuedCount, 1);
+
+      analytics.setOptedOut(true);
+      expect(analytics.queuedCount, 0);
+
+      analytics.track('room_joined');
+      await analytics.flush();
+      expect(sent, isEmpty);
+    });
+
+    test('opting back in resumes from silence rather than replaying', () async {
+      final sent = <String>[];
+      final analytics = Analytics()
+        ..init(
+          apiKey: 'phc_test',
+          transport: (uri, body) async {
+            sent.add(body);
+            return true;
+          },
+        );
+
+      analytics.track('room_created');
+      analytics.setOptedOut(true);
+      analytics.setOptedOut(false);
+
+      expect(analytics.optedOut, isFalse);
+      expect(analytics.queuedCount, 0);
+
+      analytics.track('room_joined');
+      await analytics.flush();
+      expect(sent, hasLength(1));
+      expect(sent.single, contains('room_joined'));
+      expect(sent.single, isNot(contains('room_created')));
+    });
+
+    test('a build with no key still records the choice, for when one is added', () {
+      final analytics = Analytics()..init(apiKey: null, optedOut: true);
+      expect(analytics.optedOut, isTrue);
+      expect(analytics.isEnabled, isFalse);
+    });
+  });
 }
 
 class SocketExceptionStub implements Exception {

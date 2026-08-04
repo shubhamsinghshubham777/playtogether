@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:playtogether/analytics.dart';
+import 'package:playtogether/analytics_consent.dart';
 import 'package:playtogether/app_router.dart';
 import 'package:playtogether/app_version.dart';
 import 'package:playtogether/auth/auth_service.dart';
@@ -57,11 +58,13 @@ Future<void> _bootstrap() async {
   await PTWebView.init();
   await Supabase.initialize(url: Env.supabaseUrl, publishableKey: Env.supabasePublishableKey);
   await AppVersion.load();
+  final optedOut = await AnalyticsConsent.instance.load();
   Analytics.instance.init(
     apiKey: Env.posthogApiKey,
     host: Env.posthogHost,
     distinctId: Supabase.instance.client.auth.currentUser?.id,
     context: {'platform': defaultTargetPlatform.name, 'app_version': AppVersion.current},
+    optedOut: optedOut,
   );
   Analytics.instance.track('app_opened');
   // Must follow initialize (it reads Supabase.instance) and precede runApp, so

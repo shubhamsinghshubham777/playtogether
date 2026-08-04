@@ -973,4 +973,74 @@ void main() {
       );
     });
   });
+
+  group('gate waiver', () {
+    test('a waived member no longer holds the gate shut', () {
+      final members = [
+        _member('host', role: 'host', ready: ReadyStatus.ready, file: 'movie.mkv'),
+        _member('slow'),
+      ];
+      expect(
+        evaluateGateState(hasPresenceSynced: true, media: _localMedia, members: members),
+        GateState.closed,
+      );
+      expect(
+        evaluateGateState(
+          hasPresenceSynced: true,
+          media: _localMedia,
+          members: members,
+          waived: {'slow'},
+        ),
+        GateState.open,
+      );
+    });
+
+    test('a waiver covers only the members it names', () {
+      final members = [
+        _member('host', role: 'host', ready: ReadyStatus.ready, file: 'movie.mkv'),
+        _member('slow'),
+        _member('later'),
+      ];
+      expect(
+        evaluateGateState(
+          hasPresenceSynced: true,
+          media: _localMedia,
+          members: members,
+          waived: {'slow'},
+        ),
+        GateState.closed,
+      );
+    });
+
+    test('waived members drop out of the blocker list the copy is built from', () {
+      final members = [
+        _member('host', role: 'host', ready: ReadyStatus.ready, file: 'movie.mkv'),
+        _member('slow'),
+        _member('later'),
+      ];
+      expect(gateBlockersOf(_localMedia, members, waived: {'slow'}).map((m) => m.userId), [
+        'later',
+      ]);
+      expect(gateBlockersOf(_localMedia, members).map((m) => m.userId), ['slow', 'later']);
+    });
+
+    test('a waiver cannot conjure a gate out of no media', () {
+      expect(
+        evaluateGateState(
+          hasPresenceSynced: true,
+          media: RoomMedia.none,
+          members: [_member('a')],
+          waived: {'a'},
+        ),
+        GateState.closed,
+      );
+    });
+
+    test('memberClearsGate still reports the underlying readiness truthfully', () {
+      final slow = _member('slow');
+      expect(memberSatisfiesGate(slow, _localMedia), isFalse);
+      expect(memberClearsGate(slow, _localMedia, {'slow'}), isTrue);
+      expect(memberClearsGate(slow, _localMedia, const {}), isFalse);
+    });
+  });
 }

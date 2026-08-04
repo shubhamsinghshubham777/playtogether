@@ -52,6 +52,8 @@ class ReadinessOverlay extends StatelessWidget {
     required this.selfIsHost,
     required this.onLocateFile,
     required this.onKick,
+    this.onStartWithout,
+    this.startWithoutLabel,
     this.compact = false,
     this.reveal = 1,
   });
@@ -65,6 +67,9 @@ class ReadinessOverlay extends StatelessWidget {
   /// Null unless *we* are the one who needs to find their copy.
   final VoidCallback? onLocateFile;
   final void Function(PresentMember member)? onKick;
+
+  final VoidCallback? onStartWithout;
+  final String? startWithoutLabel;
   final bool compact;
   final double reveal;
 
@@ -164,6 +169,14 @@ class ReadinessOverlay extends StatelessWidget {
                         icon: Symbols.folder_open_rounded,
                         expand: true,
                         onPressed: onLocateFile,
+                      ),
+                    if (onStartWithout != null)
+                      PTButton(
+                        label: startWithoutLabel ?? 'Start without them',
+                        icon: Symbols.fast_forward_rounded,
+                        variant: .secondary,
+                        expand: true,
+                        onPressed: onStartWithout,
                       ),
                   ],
                 ),
