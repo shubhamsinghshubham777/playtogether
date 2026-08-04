@@ -25,6 +25,8 @@ abstract final class PTColors {
   static const warningBorder = Color(0xFFFACC15);
   static const danger = Color(0xFFFCA5A5);
   static const dangerBorder = Color(0xFFF87171);
+  static const premium = Color(0xFFFBBF24);
+  static const premiumBorder = Color(0xFFD97706);
 
   static const selectionHandle = Color(0xFF22D3EE);
   static const selectionHighlight = Color(0x7322D3EE);

@@ -8,6 +8,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import 'package:playtogether/analytics_consent.dart';
 import 'package:playtogether/auth/auth_service.dart';
 import 'package:playtogether/diagnostics.dart';
+import 'package:playtogether/profile/entitlement_service.dart';
 import 'package:playtogether/profile/profile_models.dart';
 import 'package:playtogether/profile/profile_service.dart';
 import 'package:playtogether/ui/banners.dart';
@@ -166,7 +167,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Scaffold(
       body: AmbientBackground(
         child: ListenableBuilder(
-          listenable: ProfileService.instance,
+          listenable: Listenable.merge([ProfileService.instance, EntitlementService.instance]),
           builder: (context, _) {
             final profile = ProfileService.instance.profile;
             if (profile == null) {
@@ -549,15 +550,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
       crossAxisAlignment: vertical ? .center : .start,
       spacing: 4,
       children: [
-        AnimatedSwitcher(
-          duration: PTMotion.functional(context, PTMotion.state),
-          switchInCurve: PTMotion.enter,
-          switchOutCurve: PTMotion.exit,
-          child: Text(
-            profile.displayName,
-            key: ValueKey(profile.displayName),
-            style: PTText.screenTitle,
-          ),
+        Row(
+          mainAxisSize: .min,
+          mainAxisAlignment: vertical ? .center : .start,
+          spacing: 10,
+          children: [
+            Flexible(
+              child: AnimatedSwitcher(
+                duration: PTMotion.functional(context, PTMotion.state),
+                switchInCurve: PTMotion.enter,
+                switchOutCurve: PTMotion.exit,
+                child: Text(
+                  profile.displayName,
+                  key: ValueKey(profile.displayName),
+                  overflow: .ellipsis,
+                  style: PTText.screenTitle,
+                ),
+              ),
+            ),
+            if (EntitlementService.instance.isPremium) const PremiumBadge(),
+          ],
         ),
         Text(sinceLabel, style: PTText.caption.copyWith(fontWeight: .w400)),
       ],

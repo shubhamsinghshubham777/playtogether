@@ -62,6 +62,13 @@ class TierLimits {
   );
 }
 
+bool tierWearsCrown(String? tier) => tier == kPremiumTier;
+
+Set<String> premiumMembersFrom(Map<String, String> tiers) => {
+  for (final entry in tiers.entries)
+    if (tierWearsCrown(entry.value)) entry.key,
+};
+
 class EntitlementService extends ChangeNotifier {
   EntitlementService._();
   static final instance = EntitlementService._();

@@ -286,6 +286,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
             ProfileService.instance,
             UpdateService.instance,
             RoomService.instance,
+            EntitlementService.instance,
           ]),
           builder: (context, _) => PTResponsive(
             desktop: (_) => _desktop(),
@@ -512,6 +513,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
             displayName: profile?.displayName ?? '?',
             avatarUrl: profile?.avatarUrl,
             size: 32,
+            premium: EntitlementService.instance.isPremium,
           ),
           Text(
             profile?.displayName ?? '…',
@@ -532,6 +534,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
         avatarUrl: profile?.avatarUrl,
         size: size,
         ringColor: PTColors.white(0.15),
+        premium: EntitlementService.instance.isPremium,
       ),
     );
   }

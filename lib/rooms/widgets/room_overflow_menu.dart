@@ -25,6 +25,7 @@ class RoomMenuData {
     required this.transportLock,
     required this.selfId,
     required this.selfIsHost,
+    this.premiumMembers = const {},
   });
 
   static const empty = RoomMenuData(
@@ -42,6 +43,7 @@ class RoomMenuData {
   final bool transportLock;
   final String selfId;
   final bool selfIsHost;
+  final Set<String> premiumMembers;
 
   /// Derived rather than passed alongside, so "who is online" and "who is
   /// ready" can never disagree.
@@ -204,6 +206,7 @@ class _OverflowMenuPanelState extends State<_OverflowMenuPanel> {
                 children: [
                   for (final member in data.members)
                     _MemberRow(
+                      premium: data.premiumMembers.contains(member.userId),
                       key: ValueKey(member.userId),
                       member: member,
                       online: onlineIds.contains(member.userId),
@@ -267,6 +270,7 @@ class _MemberRow extends StatelessWidget {
   const _MemberRow({
     super.key,
     required this.member,
+    required this.premium,
     required this.online,
     required this.isSelf,
     required this.media,
@@ -275,6 +279,7 @@ class _MemberRow extends StatelessWidget {
   });
 
   final RoomMember member;
+  final bool premium;
   final bool online;
   final bool isSelf;
   final RoomMedia media;
@@ -299,6 +304,7 @@ class _MemberRow extends StatelessWidget {
               avatarUrl: member.profile?.avatarUrl,
               size: 34,
               presence: online,
+              premium: premium,
             ),
             Expanded(
               child: Text.rich(

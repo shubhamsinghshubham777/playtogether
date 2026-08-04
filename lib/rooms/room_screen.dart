@@ -70,6 +70,9 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
   LiveKitService? _av;
   List<RoomMember> _members = const [];
   List<PresentMember> _present = const [];
+  Set<String> _premiumMembers = const {};
+  Set<String> _resolvedTierIds = const {};
+  bool _tierFetchInFlight = false;
   bool _loading = true;
 
   PlaybackMode _mode = .local;
@@ -393,6 +396,8 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
       data: {'room_id': widget.roomId, 'role': selfMembership.role, 'members': _members.length},
     );
 
+    unawaited(_refreshMemberTiers());
+
     final sync = SyncService(
       MediaKitSyncPlayer(widget.player),
       room: room,
@@ -561,8 +566,34 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
   // Presence / membership
   // ---------------------------------------------------------------------------
 
+  Future<void> _refreshMemberTiers() async {
+    if (_tierFetchInFlight) return;
+    final seen = {..._members.map((m) => m.userId), ..._present.map((m) => m.userId)};
+    if (seen.difference(_resolvedTierIds).isEmpty) return;
+    _tierFetchInFlight = true;
+    try {
+      final tiers = await RoomService.instance.fetchMemberTiers(widget.roomId);
+      if (!mounted) return;
+      final premium = premiumMembersFrom(tiers);
+      trace(
+        'member tiers resolved',
+        category: 'room',
+        data: {'room_id': widget.roomId, 'members': tiers.length, 'premium': premium.length},
+      );
+      setState(() {
+        _resolvedTierIds = tiers.keys.toSet();
+        _premiumMembers = premium;
+      });
+    } catch (e, s) {
+      reportNonFatal(e, s, during: 'loading member tiers for room ${widget.roomId}');
+    } finally {
+      _tierFetchInFlight = false;
+    }
+  }
+
   Future<void> _onPresenceChanged(List<PresentMember> present) async {
     setState(() => _present = present);
+    unawaited(_refreshMemberTiers());
     _syncGateReveal();
     if (present.length > _peakMembers) _peakMembers = present.length;
     // Don't wait on the member fetch: readiness/online changes should land in
@@ -573,6 +604,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
       final members = await RoomService.instance.fetchMembers(widget.roomId);
       if (!mounted) return;
       setState(() => _members = members);
+      unawaited(_refreshMemberTiers());
       final selfRole = members.where((m) => m.userId == _sync?.userId).firstOrNull?.role;
       if (selfRole != null) {
         final wasHost = _sync?.isHost ?? false;
@@ -608,6 +640,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
         : RoomMenuData(
             members: _members,
             present: _present,
+            premiumMembers: _premiumMembers,
             media: _canonicalMedia,
             transportLock: sync?.transportLock ?? false,
             selfId: sync?.userId ?? '',
@@ -2655,6 +2688,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
                   reveal: t,
                   headline: _gateHeadline,
                   members: _present,
+                  premiumMembers: _premiumMembers,
                   media: _canonicalMedia,
                   selfId: _sync?.userId ?? '',
                   selfIsHost: _sync?.isHost ?? false,
@@ -2993,7 +3027,12 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
       crossAxisAlignment: .end,
       spacing: 8,
       children: [
-        PTAvatar(userId: message.senderId, displayName: message.displayName, size: 26),
+        PTAvatar(
+          userId: message.senderId,
+          displayName: message.displayName,
+          size: 26,
+          premium: _premiumMembers.contains(message.senderId),
+        ),
         Flexible(
           child: Container(
             constraints: const BoxConstraints(maxWidth: 260),
@@ -3150,6 +3189,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
               child: FacecamRail(
                 av: _av!,
                 present: _present,
+                premiumMembers: _premiumMembers,
                 selfId: _sync?.userId ?? '',
                 layout: .railLeft,
                 showNames: _controlsVisible,
@@ -3178,6 +3218,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
                 panel: RoomChatPanel(
                   sync: _sync!,
                   messages: _messages,
+                  premiumMembers: _premiumMembers,
                   typingNames: _typingNames,
                   watchingCount: _present.length,
                   onClose: _toggleChat,
@@ -3277,6 +3318,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
               child: FacecamRail(
                 av: _av!,
                 present: _present,
+                premiumMembers: _premiumMembers,
                 selfId: _sync?.userId ?? '',
                 layout: .stripTop,
               ),
@@ -3324,6 +3366,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
                       ? RoomChatPanel(
                           sync: _sync!,
                           messages: _messages,
+                          premiumMembers: _premiumMembers,
                           typingNames: _typingNames,
                           watchingCount: _present.length,
                           onClose: () {},
@@ -3386,6 +3429,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
                       FacecamRail(
                         av: _av!,
                         present: _present,
+                        premiumMembers: _premiumMembers,
                         selfId: _sync?.userId ?? '',
                         layout: .miniStackRight,
                         maxTiles: 3,
@@ -3405,6 +3449,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
                     panel: RoomChatPanel(
                       sync: _sync!,
                       messages: _messages,
+                      premiumMembers: _premiumMembers,
                       typingNames: _typingNames,
                       watchingCount: _present.length,
                       onClose: _toggleChat,

@@ -56,6 +56,7 @@ class ReadinessOverlay extends StatelessWidget {
     this.startWithoutLabel,
     this.compact = false,
     this.reveal = 1,
+    this.premiumMembers = const {},
   });
 
   final String headline;
@@ -72,6 +73,7 @@ class ReadinessOverlay extends StatelessWidget {
   final String? startWithoutLabel;
   final bool compact;
   final double reveal;
+  final Set<String> premiumMembers;
 
   @override
   Widget build(BuildContext context) {
@@ -147,6 +149,7 @@ class ReadinessOverlay extends StatelessWidget {
                               child: _MemberStatusRow(
                                 member: member,
                                 media: media,
+                                premium: premiumMembers.contains(member.userId),
                                 isSelf: member.userId == selfId,
                                 compact: compact,
                                 // Reserve the kick column on every row, not just the
@@ -193,6 +196,7 @@ class _MemberStatusRow extends StatelessWidget {
   const _MemberStatusRow({
     required this.member,
     required this.media,
+    required this.premium,
     required this.isSelf,
     required this.compact,
     required this.reserveKickSlot,
@@ -201,6 +205,7 @@ class _MemberStatusRow extends StatelessWidget {
 
   final PresentMember member;
   final RoomMedia media;
+  final bool premium;
   final bool isSelf;
   final bool compact;
   final bool reserveKickSlot;
@@ -221,6 +226,7 @@ class _MemberStatusRow extends StatelessWidget {
             displayName: member.displayName,
             avatarUrl: member.avatarUrl,
             size: 30,
+            premium: premium,
           ),
           Expanded(
             child: Text.rich(

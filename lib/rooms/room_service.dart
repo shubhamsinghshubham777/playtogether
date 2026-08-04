@@ -250,6 +250,16 @@ class RoomService extends ChangeNotifier {
     return rows.map<RoomMember>((r) => RoomMember.fromJson(r)).toList();
   }
 
+  Future<Map<String, String>> fetchMemberTiers(String roomId) async {
+    final rows = await _client.rpc('room_member_tiers', params: {'p_room_id': roomId});
+    if (rows is! List) return const {};
+    return {
+      for (final row in rows.cast<Map<String, dynamic>>())
+        if (row['user_id'] is String && row['tier'] is String)
+          row['user_id'] as String: row['tier'] as String,
+    };
+  }
+
   void noteRoomExited() {
     if (_currentRoom == null) return;
     _currentRoom = null;
