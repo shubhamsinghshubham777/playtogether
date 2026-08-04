@@ -50,6 +50,9 @@ app.*.map.json
 
 # FVM Version Cache
 .fvm/
+# Supabase Studio autosaves whatever you type in its SQL editor here.
+supabase/snippets/
+
 # Supabase (local secrets used for `config push` / `secrets set`)
 supabase/.env
 supabase/functions/.env
