@@ -115,8 +115,9 @@ class _LobbyScreenState extends State<LobbyScreen> {
     return '${h}h ${m}m';
   }
 
-  Future<void> _create() async {
+  Future<void> _create({bool isRetry = false}) async {
     setState(() => _creating = true);
+    var roomEndedForRetry = false;
     try {
       final room = await RoomService.instance.createRoom(
         name: _nameController.text,
@@ -128,7 +129,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
       if (code == .unknown) reportNonFatal(e, s, during: 'creating a room');
       if (!mounted) return;
       if (code == .guestRoomLimit) {
-        await _showGuestLimitDialog();
+        roomEndedForRetry = await _showGuestLimitDialog() && !isRetry;
       } else if (code == .roomLimitReached) {
         await _showRoomLimitDialog();
       } else {
@@ -137,6 +138,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
     } finally {
       if (mounted) setState(() => _creating = false);
     }
+    if (roomEndedForRetry && mounted) await _create(isRetry: true);
   }
 
   Future<void> _join(String code, {RoomJoinSource via = RoomJoinSource.code}) async {
@@ -173,7 +175,11 @@ class _LobbyScreenState extends State<LobbyScreen> {
 
   Future<void> _openMyRoom(MyRoom entry) async {
     if (entry.isLive) {
-      context.go(roomPath(entry.room.id));
+      if (entry.isMember) {
+        context.go(roomPath(entry.room.id));
+      } else {
+        await _join(entry.room.code, via: .code);
+      }
       return;
     }
     if (!entry.isHost) {
@@ -251,27 +257,55 @@ class _LobbyScreenState extends State<LobbyScreen> {
   void _snack(String message, {PTSnackKind kind = PTSnackKind.error}) =>
       showPTSnack(context, message, kind: kind);
 
-  Future<void> _showGuestLimitDialog() async {
+  Future<bool> _endBlockingRoom(Room live) async {
+    try {
+      await RoomService.instance.endRoom(live.id);
+      if (mounted) _snack("That's a wrap — your old room has ended.", kind: .success);
+      return true;
+    } catch (e, s) {
+      final failure = RoomErrorCode.fromError(e);
+      if (failure == .unknown) reportNonFatal(e, s, during: 'ending room ${live.id}');
+      if (mounted) _snack(failure.message);
+      return false;
+    } finally {
+      unawaited(_loadMyRooms());
+    }
+  }
+
+  Future<bool> _showGuestLimitDialog() async {
     final live = await RoomService.instance.fetchLiveHostedRoom();
-    if (!mounted) return;
+    trace(
+      'guest room limit hit',
+      category: 'room',
+      data: {'blocking_room_id': live?.id, 'resolved': live != null},
+    );
+    if (!mounted) return false;
+    if (live == null) {
+      reportNonFatal(
+        StateError('guest_room_limit with no readable blocking room'),
+        StackTrace.current,
+        during: 'resolving the room blocking a guest create',
+      );
+      _snack('Your other room is still running, but we could not load it. Try again in a moment.');
+      return false;
+    }
+    Future<bool>? ending;
     await showGlassDialog(
       context: context,
       width: 400,
       builder: (dialogContext) => _GuestLimitDialogBody(
-        roomName: live?.name ?? 'Your live room',
-        onEnd: () async {
+        roomName: live.name,
+        onEnd: () {
           Navigator.of(dialogContext).pop();
-          if (live != null) {
-            await RoomService.instance.endRoom(live.id);
-            _snack("That's a wrap — your old room has ended.", kind: .success);
-          }
+          ending = _endBlockingRoom(live);
         },
         onRejoin: () {
           Navigator.of(dialogContext).pop();
-          if (live != null) context.go(roomPath(live.id));
+          unawaited(_join(live.code, via: .code));
         },
       ),
     );
+    return await ending ?? false;
   }
 
   @override

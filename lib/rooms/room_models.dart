@@ -157,6 +157,7 @@ class MyRoom {
     required this.role,
     required this.memberCount,
     required this.isOwner,
+    required this.isMember,
   });
 
   final Room room;
@@ -165,6 +166,7 @@ class MyRoom {
   final int memberCount;
 
   final bool isOwner;
+  final bool isMember;
 
   bool get isHost => role == 'host';
   bool get isLive => state == .live;
@@ -176,6 +178,7 @@ class MyRoom {
     role: json['role'] as String? ?? 'member',
     memberCount: (json['member_count'] as num?)?.toInt() ?? 0,
     isOwner: json['is_owner'] as bool? ?? false,
+    isMember: json['is_member'] as bool? ?? true,
   );
 }
 

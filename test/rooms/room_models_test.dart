@@ -332,6 +332,19 @@ void main() {
       final entry = MyRoom.fromJson(row(const {'state': 'live', 'role': 'host'}));
       expect(entry.isOwner, isFalse);
     });
+
+    test('a room you created but left reads as owned and not joined', () {
+      final entry = MyRoom.fromJson(
+        row(const {'state': 'live', 'is_owner': true, 'is_member': false}),
+      );
+      expect(entry.isOwner, isTrue);
+      expect(entry.isMember, isFalse);
+    });
+
+    test('membership is assumed when absent, since every listed room used to imply it', () {
+      final entry = MyRoom.fromJson(row(const {'state': 'live', 'role': 'host'}));
+      expect(entry.isMember, isTrue);
+    });
   });
 
   group('RoomExitEdge', () {

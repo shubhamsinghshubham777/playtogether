@@ -1,5 +1,5 @@
 begin;
-select plan(46);
+select plan(57);
 
 create function pg_temp.mk_user(p_guest boolean default false) returns uuid
 language plpgsql as $$
@@ -438,6 +438,106 @@ select is(
    where topic = 'room:' || (select v from t where k = 'doomed_room')::text),
   'deleted',
   'the eviction carries a reason, so the copy can say the room is gone for good');
+
+do $$
+declare v_ghost uuid; v_room public.rooms;
+begin
+  v_ghost := pg_temp.mk_user(true);
+  insert into t values ('ghost', v_ghost);
+  perform pg_temp.act_as(v_ghost);
+  v_room := public.create_room('Abandoned room', 60);
+  insert into t values ('abandoned_room', v_room.id);
+  perform public.leave_room(v_room.id);
+end $$;
+
+select is(
+  (select count(*) from public.room_members
+   where room_id = (select v from t where k = 'abandoned_room')),
+  0::bigint,
+  'leaving your own room really does drop the membership row');
+
+select is(
+  (select count(*) from public.list_my_rooms()
+   where id = (select v from t where k = 'abandoned_room')),
+  1::bigint,
+  'a room you created but left is still listed, or its cap would trap you with no way out');
+
+select is(
+  (select is_member from public.list_my_rooms()
+   where id = (select v from t where k = 'abandoned_room')),
+  false,
+  'the listing says you are not in it, so the client rejoins rather than opening a channel it cannot authorize');
+
+select is(
+  (select is_owner from public.list_my_rooms()
+   where id = (select v from t where k = 'abandoned_room')),
+  true,
+  'ownership survives leaving, which is what keeps delete_room reachable');
+
+select throws_ok(
+  $$ select public.create_room('Second guest room', 60) $$,
+  'guest_room_limit',
+  'the abandoned room still counts against the cap, so the listing and the cap now agree');
+
+do $$ begin perform pg_temp.act_as((select v from t where k = 'free')); end $$;
+
+select is(
+  (select count(*) from public.list_my_rooms()
+   where id = (select v from t where k = 'abandoned_room')),
+  0::bigint,
+  'a room someone else abandoned is not listed for anyone but its owner');
+
+do $$
+declare v_ender uuid; v_room public.rooms;
+begin
+  v_ender := pg_temp.mk_user(true);
+  insert into t values ('ender', v_ender);
+  perform pg_temp.act_as(v_ender);
+  v_room := public.create_room('Room to end', 60);
+  insert into t values ('ender_room', v_room.id);
+  perform public.leave_room(v_room.id);
+end $$;
+
+select lives_ok(
+  $$ select public.end_room((select v from t where k = 'ender_room')) $$,
+  'the creator can end a room they have left, which is the only way out of their own cap');
+
+select is(
+  (select count(*) from public.rooms where id = (select v from t where k = 'ender_room')),
+  0::bigint,
+  'and a guest room is deleted outright at retirement, so the cap is genuinely freed');
+
+do $$
+declare v_owner uuid; v_member uuid; v_room public.rooms;
+begin
+  v_owner := pg_temp.mk_user();
+  v_member := pg_temp.mk_user();
+  insert into t values ('end_owner', v_owner), ('end_member', v_member);
+  perform pg_temp.act_as(v_owner);
+  v_room := public.create_room('Guarded room', 60);
+  insert into t values ('guarded_room', v_room.id);
+  perform pg_temp.act_as(v_member);
+  perform public.join_room(v_room.code);
+end $$;
+
+select throws_ok(
+  $$ select public.end_room((select v from t where k = 'guarded_room')) $$,
+  'not_host',
+  'a plain member still cannot end the room — the creator branch widened nothing else');
+
+do $$ begin perform pg_temp.act_as((select v from t where k = 'free')); end $$;
+
+select throws_ok(
+  $$ select public.end_room((select v from t where k = 'guarded_room')) $$,
+  'not_host',
+  'and a stranger certainly cannot');
+
+do $$ begin perform pg_temp.act_as((select v from t where k = 'end_member')); end $$;
+
+select throws_ok(
+  $$ select public.delete_room((select v from t where k = 'guarded_room')) $$,
+  'not_owner',
+  'ending is not deleting: a member who inherits the room still never gets delete');
 
 select * from finish();
 rollback;
