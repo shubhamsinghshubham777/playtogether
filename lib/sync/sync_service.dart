@@ -116,8 +116,11 @@ class SyncService {
 
   PresentMember? get gateBlocker => gateBlockers.firstOrNull;
 
-  final _roomEndedController = StreamController<void>.broadcast();
-  Stream<void> get roomEndedStream => _roomEndedController.stream;
+  final _roomEndedController = StreamController<String?>.broadcast();
+
+  /// Carries the server's reason, so eviction copy can tell "the session is
+  /// over, see you in the lobby" apart from "this room no longer exists".
+  Stream<String?> get roomEndedStream => _roomEndedController.stream;
 
   final _gateResumedController = StreamController<void>.broadcast();
 
@@ -269,7 +272,7 @@ class SyncService {
 
   void _handleRoomEnded(Map<String, dynamic> payload) {
     if (_disposed) return;
-    _roomEndedController.add(null);
+    _roomEndedController.add(payload['reason'] as String?);
   }
 
   bool _transportLock = false;

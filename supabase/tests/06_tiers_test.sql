@@ -1,5 +1,5 @@
 begin;
-select plan(41);
+select plan(46);
 
 create function pg_temp.mk_user(p_guest boolean default false) returns uuid
 language plpgsql as $$
@@ -346,14 +346,14 @@ select throws_ok(
 
 select throws_ok(
   $$ select public.delete_room((select v from t where k = 'pos_room')) $$,
-  'not_host',
+  'not_owner',
   'a stranger cannot delete a room');
 
 do $$ begin perform pg_temp.act_as((select v from t where k = 'pos_member')); end $$;
 
 select throws_ok(
   $$ select public.delete_room((select v from t where k = 'pos_room')) $$,
-  'not_host',
+  'not_owner',
   'a plain member cannot delete the room either');
 
 select is(
@@ -382,7 +382,62 @@ end $$;
 select is(
   (select count(*) from public.rooms where id = (select v from t where k = 'pos_room')),
   0::bigint,
-  'the host can delete a room outright, in any state');
+  'the room creator can delete a room outright, in any state');
+
+do $$
+declare v_owner uuid; v_heir uuid; v_room public.rooms;
+begin
+  v_owner := pg_temp.mk_user();
+  v_heir := pg_temp.mk_user();
+  insert into t values ('succ_owner', v_owner), ('heir', v_heir);
+  perform pg_temp.act_as(v_owner);
+  v_room := public.create_room('Succession room', 60);
+  insert into t values ('succ_room', v_room.id);
+  perform pg_temp.act_as(v_heir);
+  perform public.join_room(v_room.code);
+  perform pg_temp.act_as(v_owner);
+  perform public.leave_room(v_room.id);
+  perform pg_temp.act_as(v_heir);
+end $$;
+
+select is(
+  (select role from public.room_members
+   where room_id = (select v from t where k = 'succ_room')
+     and user_id = (select v from t where k = 'heir')),
+  'host',
+  'leaving hands the room to the next member, as before');
+
+select throws_ok(
+  $$ select public.delete_room((select v from t where k = 'succ_room')) $$,
+  'not_owner',
+  'an acting host who did not create the room cannot delete it');
+
+select lives_ok(
+  $$ select public.end_room((select v from t where k = 'succ_room')) $$,
+  'an acting host can still end the session, which is the power they do have');
+
+do $$
+declare v_room public.rooms;
+begin
+  perform pg_temp.act_as((select v from t where k = 'succ_owner'));
+  v_room := public.create_room('Doomed room', 60);
+  insert into t values ('doomed_room', v_room.id);
+  delete from realtime.messages;
+  perform public.delete_room(v_room.id);
+end $$;
+
+select is(
+  (select count(*) from realtime.messages
+   where event = 'room_ended'
+     and topic = 'room:' || (select v from t where k = 'doomed_room')::text),
+  1::bigint,
+  'deleting a room tells everyone still in it, before the row disappears');
+
+select is(
+  (select payload ->> 'reason' from realtime.messages
+   where topic = 'room:' || (select v from t where k = 'doomed_room')::text),
+  'deleted',
+  'the eviction carries a reason, so the copy can say the room is gone for good');
 
 select * from finish();
 rollback;

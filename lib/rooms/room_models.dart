@@ -156,12 +156,15 @@ class MyRoom {
     required this.state,
     required this.role,
     required this.memberCount,
+    required this.isOwner,
   });
 
   final Room room;
   final RoomState state;
   final String role;
   final int memberCount;
+
+  final bool isOwner;
 
   bool get isHost => role == 'host';
   bool get isLive => state == .live;
@@ -172,6 +175,7 @@ class MyRoom {
     state: RoomState.fromWire(json['state'] as String?),
     role: json['role'] as String? ?? 'member',
     memberCount: (json['member_count'] as num?)?.toInt() ?? 0,
+    isOwner: json['is_owner'] as bool? ?? false,
   );
 }
 
@@ -260,6 +264,7 @@ enum RoomErrorCode {
     "Guest rooms can't be extended — sign in to get more time.",
   ),
   notAMember('not_a_member', "You're not in that room any more."),
+  notOwner('not_owner', 'Only the person who made this room can delete it.'),
   notHost('not_host', 'Only the host can do that.'),
   cannotKickSelf('cannot_kick_self', "You can't remove yourself — leave the room instead."),
   invalidDuration('invalid_duration', 'Pick a duration between 5 minutes and 4 hours.'),

@@ -310,13 +310,27 @@ void main() {
 
     test('a listing row carries the caller standing alongside the room', () {
       final entry = MyRoom.fromJson(
-        row(const {'state': 'dormant', 'role': 'host', 'member_count': 3}),
+        row(const {'state': 'dormant', 'role': 'host', 'member_count': 3, 'is_owner': true}),
       );
       expect(entry.room.name, 'Movie night');
       expect(entry.isDormant, isTrue);
       expect(entry.isLive, isFalse);
       expect(entry.isHost, isTrue);
+      expect(entry.isOwner, isTrue);
       expect(entry.memberCount, 3);
+    });
+
+    test('an acting host is not the owner, so deletion stays with the creator', () {
+      final entry = MyRoom.fromJson(
+        row(const {'state': 'live', 'role': 'host', 'member_count': 2, 'is_owner': false}),
+      );
+      expect(entry.isHost, isTrue);
+      expect(entry.isOwner, isFalse);
+    });
+
+    test('ownership is never assumed when the server did not say so', () {
+      final entry = MyRoom.fromJson(row(const {'state': 'live', 'role': 'host'}));
+      expect(entry.isOwner, isFalse);
     });
   });
 }

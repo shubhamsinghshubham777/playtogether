@@ -420,7 +420,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
         setState(() => _gateState = state);
         _syncGateReveal();
       }),
-      sync.roomEndedStream.listen((_) => _onRoomEnded()),
+      sync.roomEndedStream.listen(_onRoomEndedRemotely),
       sync.kickedStream.listen((_) => _onKicked()),
       sync.transportLockStream.listen((_) {
         setState(() {});
@@ -1828,6 +1828,23 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
   }
 
   Future<void> _onRoomEnded({String reason = 'room_ended'}) => _evictSelf(reason: reason);
+
+  void _onRoomEndedRemotely(String? reason) {
+    if (reason == 'deleted') {
+      unawaited(_onRoomDeleted());
+    } else {
+      unawaited(_onRoomEnded());
+    }
+  }
+
+  Future<void> _onRoomDeleted() => _evictSelf(
+    reason: 'deleted',
+    title: 'This room is gone',
+    body:
+        'Whoever made this room deleted it, so there is nothing left to come back to. '
+        'Head to the lobby and start a fresh one.',
+    icon: Symbols.delete_forever_rounded,
+  );
 
   /// The host removed us. Same teardown as a room ending — only the copy
   /// differs — because from this client's side the room is equally over.

@@ -877,6 +877,40 @@ void main() {
         h.dispose();
       });
     });
+
+    test('a deleted room carries its reason, so the copy can say it is gone', () {
+      fakeAsync((async) {
+        final h = _Harness()..connect();
+        final reasons = <String?>[];
+        h.service.roomEndedStream.listen(reasons.add);
+        async.flushMicrotasks();
+
+        h.channel.deliver(SyncEventType.roomEnded, {
+          'senderId': 'server',
+          'timestamp': 100,
+          'reason': 'deleted',
+        });
+        async.flushMicrotasks();
+
+        expect(reasons, ['deleted']);
+        h.dispose();
+      });
+    });
+
+    test('an eviction with no reason still evicts, for older senders', () {
+      fakeAsync((async) {
+        final h = _Harness()..connect();
+        final reasons = <String?>[];
+        h.service.roomEndedStream.listen(reasons.add);
+        async.flushMicrotasks();
+
+        h.channel.deliver(SyncEventType.roomEnded, {'senderId': 'host', 'timestamp': 100});
+        async.flushMicrotasks();
+
+        expect(reasons, [null]);
+        h.dispose();
+      });
+    });
   });
 
   group('chat', () {

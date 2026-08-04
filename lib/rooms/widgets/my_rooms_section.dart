@@ -198,8 +198,10 @@ class _RoomRowState extends State<_RoomRow> {
                   size: 34,
                   iconSize: 17,
                   glass: false,
-                  tooltip: entry.isHost ? 'Delete room' : 'Only the host can delete this',
-                  onPressed: entry.isHost ? widget.onDelete : null,
+                  tooltip: entry.isOwner
+                      ? 'Delete room'
+                      : 'Only the person who made this room can delete it',
+                  onPressed: entry.isOwner ? widget.onDelete : null,
                 ),
                 Icon(
                   Symbols.chevron_right_rounded,
@@ -278,8 +280,8 @@ class DeleteRoomDialog extends StatelessWidget {
               TextSpan(
                 text: dormant
                     ? " goes for good, along with everyone's place in it. There's no undo."
-                    : ' ends for everyone in it right now, and goes for good. '
-                          "There's no undo.",
+                    : ' goes for good. Anyone still watching gets sent back to their '
+                          "lobby right away. There's no undo.",
               ),
             ],
           ),
