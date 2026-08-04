@@ -861,4 +861,116 @@ void main() {
       expect(sent, ['👏']);
     });
   });
+
+  group('resume decision', () {
+    test('reopens the stored file when it still matches the room media', () {
+      expect(
+        shouldAutoReopenLocalFile(
+          media: _localMedia,
+          storedFileName: 'movie.mkv',
+          storedFileExists: true,
+          loadedFileName: null,
+          isPickerOpen: false,
+        ),
+        isTrue,
+      );
+    });
+
+    test('never reopens a file the room has moved off', () {
+      expect(
+        shouldAutoReopenLocalFile(
+          media: _localMedia,
+          storedFileName: 'other.mkv',
+          storedFileExists: true,
+          loadedFileName: null,
+          isPickerOpen: false,
+        ),
+        isFalse,
+      );
+    });
+
+    test('a path that no longer resolves is not reopened', () {
+      expect(
+        shouldAutoReopenLocalFile(
+          media: _localMedia,
+          storedFileName: 'movie.mkv',
+          storedFileExists: false,
+          loadedFileName: null,
+          isPickerOpen: false,
+        ),
+        isFalse,
+      );
+    });
+
+    test('does nothing when the right file is already open', () {
+      expect(
+        shouldAutoReopenLocalFile(
+          media: _localMedia,
+          storedFileName: 'movie.mkv',
+          storedFileExists: true,
+          loadedFileName: 'movie.mkv',
+          isPickerOpen: false,
+        ),
+        isFalse,
+      );
+    });
+
+    test('a picker that is open owns the choice', () {
+      expect(
+        shouldAutoReopenLocalFile(
+          media: _localMedia,
+          storedFileName: 'movie.mkv',
+          storedFileExists: true,
+          loadedFileName: null,
+          isPickerOpen: true,
+        ),
+        isFalse,
+      );
+    });
+
+    test('youtube rooms never consult the local path map', () {
+      expect(
+        shouldAutoReopenLocalFile(
+          media: _ytMedia,
+          storedFileName: 'movie.mkv',
+          storedFileExists: true,
+          loadedFileName: null,
+          isPickerOpen: false,
+        ),
+        isFalse,
+      );
+    });
+
+    test('resumes at the held position', () {
+      expect(
+        resumeSeekPosition(
+          held: const Duration(minutes: 12),
+          mediaDuration: const Duration(hours: 2),
+        ),
+        const Duration(minutes: 12),
+      );
+    });
+
+    test('a position at the very start is not worth a seek', () {
+      expect(resumeSeekPosition(held: Duration.zero, mediaDuration: null), isNull);
+      expect(resumeSeekPosition(held: null, mediaDuration: null), isNull);
+    });
+
+    test('a position in the closing credits restarts instead', () {
+      expect(
+        resumeSeekPosition(
+          held: const Duration(minutes: 119, seconds: 55),
+          mediaDuration: const Duration(hours: 2),
+        ),
+        isNull,
+      );
+    });
+
+    test('an unknown duration still resumes', () {
+      expect(
+        resumeSeekPosition(held: const Duration(minutes: 3), mediaDuration: null),
+        const Duration(minutes: 3),
+      );
+    });
+  });
 }

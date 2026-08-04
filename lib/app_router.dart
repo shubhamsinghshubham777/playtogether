@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart' show AuthChangeEvent;
 
 import 'auth/auth_service.dart';
 import 'auth/login_screen.dart';
+import 'profile/entitlement_service.dart';
 import 'profile/profile_screen.dart';
 import 'profile/profile_service.dart';
 import 'rooms/lobby_screen.dart';
@@ -150,8 +151,10 @@ class _AuthRefresh extends ChangeNotifier {
         case AuthChangeEvent.tokenRefreshed:
         case AuthChangeEvent.userUpdated:
           ProfileService.instance.load();
+          EntitlementService.instance.load();
         case AuthChangeEvent.signedOut:
           ProfileService.instance.clear();
+          EntitlementService.instance.clear();
           RoomService.instance.clear();
         default:
           break;

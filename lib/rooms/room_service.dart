@@ -48,6 +48,9 @@ class RoomService extends ChangeNotifier {
       Analytics.instance.track('room_created', {
         'duration_min': durationMinutes,
         'room_id': room.id,
+        'max_members': room.maxMembers,
+        'av_level': room.avLevel.name,
+        'persistent': room.persistent,
       });
       if (durationMinutes >= kRoomDurationCapMinutes) {
         Analytics.instance.track('limit_hit', {'which': 'duration_cap'});
@@ -57,6 +60,10 @@ class RoomService extends ChangeNotifier {
       final failure = RoomErrorCode.fromError(e);
       if (failure == .guestRoomLimit) {
         Analytics.instance.track('limit_hit', {'which': 'guest_room_limit'});
+      } else if (failure == .roomLimitReached) {
+        Analytics.instance.track('limit_hit', {'which': 'room_limit'});
+      } else if (failure == .invalidDuration) {
+        Analytics.instance.track('limit_hit', {'which': 'duration_cap'});
       }
       rethrow;
     }
@@ -116,6 +123,80 @@ class RoomService extends ChangeNotifier {
     await _client.rpc('end_room', params: {'p_room_id': roomId});
   }
 
+  List<MyRoom> _myRooms = const [];
+  List<MyRoom> get myRooms => _myRooms;
+
+  bool _loadingMyRooms = false;
+  bool get loadingMyRooms => _loadingMyRooms;
+
+  Future<List<MyRoom>> loadMyRooms() async {
+    _loadingMyRooms = true;
+    notifyListeners();
+    try {
+      final rows = await _client.rpc('list_my_rooms');
+      final list = (rows as List? ?? const [])
+          .map<MyRoom>((r) => MyRoom.fromJson((r as Map).cast<String, dynamic>()))
+          .toList();
+      _myRooms = list;
+      return list;
+    } finally {
+      _loadingMyRooms = false;
+      notifyListeners();
+    }
+  }
+
+  Future<Room> extendRoom({required String roomId, required int minutes}) async {
+    try {
+      final row = await _client.rpc(
+        'extend_room',
+        params: {'p_room_id': roomId, 'p_minutes': minutes},
+      );
+      final room = _adopt(Room.fromJson(_singleRow(row)));
+      Analytics.instance.track('room_extended', {
+        'room_id': roomId,
+        'added_min': minutes,
+        'total_min': room.durationMinutes,
+      });
+      return room;
+    } catch (e) {
+      final failure = RoomErrorCode.fromError(e);
+      if (failure == .extensionUsed || failure == .extensionCap) {
+        Analytics.instance.track('limit_hit', {'which': failure.code});
+      }
+      rethrow;
+    }
+  }
+
+  Future<Room> resumeRoom({required String roomId, required int minutes}) async {
+    final row = await _client.rpc(
+      'resume_room',
+      params: {'p_room_id': roomId, 'p_minutes': minutes},
+    );
+    final room = _adopt(Room.fromJson(_singleRow(row)));
+    Analytics.instance.track('room_resumed', {'room_id': roomId, 'duration_min': minutes});
+    return room;
+  }
+
+  Future<void> deleteRoom(String roomId) async {
+    await _client.rpc('delete_room', params: {'p_room_id': roomId});
+    _myRooms = _myRooms.where((r) => r.room.id != roomId).toList();
+    if (_currentRoom?.id == roomId) _currentRoom = null;
+    Analytics.instance.track('room_deleted', {'room_id': roomId});
+    notifyListeners();
+  }
+
+  Future<bool> updateMediaPosition({required String roomId, required Duration position}) async {
+    try {
+      await _client.rpc(
+        'update_media_position',
+        params: {'p_room_id': roomId, 'p_position_ms': position.inMilliseconds},
+      );
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Host only. Passing [kind] `.none` clears the room's media entirely.
   Future<Room> setRoomMedia({
     required String roomId,
@@ -169,9 +250,16 @@ class RoomService extends ChangeNotifier {
     return rows.map<RoomMember>((r) => RoomMember.fromJson(r)).toList();
   }
 
+  void noteRoomExited() {
+    if (_currentRoom == null) return;
+    _currentRoom = null;
+    notifyListeners();
+  }
+
   void clear() {
     _currentRoom = null;
     pendingJoinCode = null;
+    _myRooms = const [];
     notifyListeners();
   }
 

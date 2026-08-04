@@ -54,6 +54,7 @@ class RoomControlBar extends StatefulWidget {
     required this.micOn,
     required this.camOn,
     required this.avAvailable,
+    this.camAvailable = true,
     required this.actions,
     this.compact = false,
     this.reactOpen = false,
@@ -68,6 +69,8 @@ class RoomControlBar extends StatefulWidget {
   final bool micOn;
   final bool camOn;
   final bool avAvailable;
+
+  final bool camAvailable;
   final RoomControlBarActions actions;
   final bool compact;
   final bool reactOpen;
@@ -256,15 +259,16 @@ class _RoomControlBarState extends State<RoomControlBar> {
                 tooltip: widget.micOn ? 'Mute mic' : 'Mic on',
                 onPressed: () => actions.onMicToggle(!widget.micOn),
               ),
-              PTIconButton(
-                icon: Symbols.videocam_rounded,
-                active: widget.camOn,
-                glass: false,
-                borderRadius: BorderRadius.circular(12),
-                size: 42,
-                tooltip: widget.camOn ? 'Camera off' : 'Camera on',
-                onPressed: () => actions.onCamToggle(!widget.camOn),
-              ),
+              if (widget.camAvailable)
+                PTIconButton(
+                  icon: Symbols.videocam_rounded,
+                  active: widget.camOn,
+                  glass: false,
+                  borderRadius: BorderRadius.circular(12),
+                  size: 42,
+                  tooltip: widget.camOn ? 'Camera off' : 'Camera on',
+                  onPressed: () => actions.onCamToggle(!widget.camOn),
+                ),
             ],
             if (actions.onReact != null)
               PTIconButton(
@@ -409,14 +413,15 @@ class _RoomControlBarState extends State<RoomControlBar> {
                 iconSize: 20,
                 onPressed: () => actions.onMicToggle(!widget.micOn),
               ),
-              PTIconButton(
-                icon: Symbols.videocam_rounded,
-                active: widget.camOn,
-                glass: false,
-                borderRadius: BorderRadius.circular(12),
-                iconSize: 20,
-                onPressed: () => actions.onCamToggle(!widget.camOn),
-              ),
+              if (widget.camAvailable)
+                PTIconButton(
+                  icon: Symbols.videocam_rounded,
+                  active: widget.camOn,
+                  glass: false,
+                  borderRadius: BorderRadius.circular(12),
+                  iconSize: 20,
+                  onPressed: () => actions.onCamToggle(!widget.camOn),
+                ),
             ],
           ),
         if (actions.onReact != null)

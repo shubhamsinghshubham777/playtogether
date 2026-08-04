@@ -241,4 +241,82 @@ void main() {
       expect(RoomErrorCode.values.last, RoomErrorCode.unknown);
     });
   });
+
+  group('tier-shaped room fields', () {
+    Map<String, dynamic> row(Map<String, dynamic> extra) => {
+      'id': 'r1',
+      'code': 'ABCDEF',
+      'name': 'Movie night',
+      'created_by': 'u1',
+      'created_at': '2026-08-04T12:00:00Z',
+      'duration_minutes': 60,
+      'expires_at': '2026-08-04T13:00:00Z',
+      ...extra,
+    };
+
+    test('a row without the tier columns reads as a free-shaped room', () {
+      final room = Room.fromJson(row(const {}));
+      expect(room.persistent, isFalse);
+      expect(room.avLevel, AvLevel.none);
+      expect(room.maxMembers, 8);
+      expect(room.mediaPosition, isNull);
+    });
+
+    test('the tier columns round-trip', () {
+      final room = Room.fromJson(
+        row(const {
+          'persistent': true,
+          'dormant_hours': 24,
+          'av_level': 'video',
+          'max_members': 16,
+          'media_position_ms': 90000,
+          'media_position_at': '2026-08-04T12:30:00Z',
+          'resumable_until': '2026-08-05T13:00:00Z',
+        }),
+      );
+      expect(room.persistent, isTrue);
+      expect(room.avLevel, AvLevel.video);
+      expect(room.maxMembers, 16);
+      expect(room.mediaPosition, const Duration(seconds: 90));
+      expect(room.resumableUntil, isNotNull);
+      expect(room.goesDormant, isTrue);
+    });
+
+    test('a room with no dormancy and no persistence simply ends', () {
+      final room = Room.fromJson(row(const {'dormant_hours': 0, 'persistent': false}));
+      expect(room.goesDormant, isFalse);
+    });
+
+    test('av levels widen in order', () {
+      expect(AvLevel.none.allowsVoice, isFalse);
+      expect(AvLevel.none.allowsVideo, isFalse);
+      expect(AvLevel.voice.allowsVoice, isTrue);
+      expect(AvLevel.voice.allowsVideo, isFalse);
+      expect(AvLevel.video.allowsVoice, isTrue);
+      expect(AvLevel.video.allowsVideo, isTrue);
+    });
+
+    test('an unknown av level degrades to none rather than granting anything', () {
+      expect(AvLevel.fromWire('ultra'), AvLevel.none);
+      expect(AvLevel.fromWire(null), AvLevel.none);
+    });
+
+    test('an unknown state degrades to expired rather than looking usable', () {
+      expect(RoomState.fromWire('live'), RoomState.live);
+      expect(RoomState.fromWire('dormant'), RoomState.dormant);
+      expect(RoomState.fromWire('who knows'), RoomState.expired);
+      expect(RoomState.fromWire(null), RoomState.expired);
+    });
+
+    test('a listing row carries the caller standing alongside the room', () {
+      final entry = MyRoom.fromJson(
+        row(const {'state': 'dormant', 'role': 'host', 'member_count': 3}),
+      );
+      expect(entry.room.name, 'Movie night');
+      expect(entry.isDormant, isTrue);
+      expect(entry.isLive, isFalse);
+      expect(entry.isHost, isTrue);
+      expect(entry.memberCount, 3);
+    });
+  });
 }

@@ -18,6 +18,33 @@ enum RoomMediaKind {
   String get wire => name;
 }
 
+enum AvLevel {
+  none,
+  voice,
+  video;
+
+  static AvLevel fromWire(String? value) => switch (value) {
+    'voice' => .voice,
+    'video' => .video,
+    _ => .none,
+  };
+
+  bool get allowsVoice => this != .none;
+  bool get allowsVideo => this == .video;
+}
+
+enum RoomState {
+  live,
+  dormant,
+  expired;
+
+  static RoomState fromWire(String? value) => switch (value) {
+    'live' => .live,
+    'dormant' => .dormant,
+    _ => .expired,
+  };
+}
+
 class Room {
   const Room({
     required this.id,
@@ -34,6 +61,13 @@ class Room {
     this.mediaUrl,
     this.mediaUpdatedAt,
     this.transportLock = false,
+    this.persistent = false,
+    this.resumableUntil,
+    this.dormantHours = 0,
+    this.avLevel = .none,
+    this.maxMembers = 8,
+    this.mediaPosition,
+    this.mediaPositionAt,
   });
 
   final String id;
@@ -63,7 +97,19 @@ class Room {
   /// "The host has the remote" — when true only the host may play/pause/seek.
   final bool transportLock;
 
+  final bool persistent;
+  final DateTime? resumableUntil;
+  final int dormantHours;
+
+  final AvLevel avLevel;
+  final int maxMembers;
+
+  final Duration? mediaPosition;
+  final DateTime? mediaPositionAt;
+
   bool get hasMedia => mediaKind != .none;
+
+  bool get goesDormant => persistent || dormantHours > 0;
 
   factory Room.fromJson(Map<String, dynamic> json) {
     return Room(
@@ -85,10 +131,48 @@ class Room {
           ? DateTime.parse(json['media_updated_at'] as String)
           : null,
       transportLock: json['transport_lock'] as bool? ?? false,
+      persistent: json['persistent'] as bool? ?? false,
+      resumableUntil: json['resumable_until'] != null
+          ? DateTime.parse(json['resumable_until'] as String)
+          : null,
+      dormantHours: (json['dormant_hours'] as num?)?.toInt() ?? 0,
+      avLevel: AvLevel.fromWire(json['av_level'] as String?),
+      maxMembers: (json['max_members'] as num?)?.toInt() ?? 8,
+      mediaPosition: json['media_position_ms'] != null
+          ? Duration(milliseconds: (json['media_position_ms'] as num).toInt())
+          : null,
+      mediaPositionAt: json['media_position_at'] != null
+          ? DateTime.parse(json['media_position_at'] as String)
+          : null,
     );
   }
 
   String get inviteLink => 'playtogether://join/$code';
+}
+
+class MyRoom {
+  const MyRoom({
+    required this.room,
+    required this.state,
+    required this.role,
+    required this.memberCount,
+  });
+
+  final Room room;
+  final RoomState state;
+  final String role;
+  final int memberCount;
+
+  bool get isHost => role == 'host';
+  bool get isLive => state == .live;
+  bool get isDormant => state == .dormant;
+
+  factory MyRoom.fromJson(Map<String, dynamic> json) => MyRoom(
+    room: Room.fromJson(json),
+    state: RoomState.fromWire(json['state'] as String?),
+    role: json['role'] as String? ?? 'member',
+    memberCount: (json['member_count'] as num?)?.toInt() ?? 0,
+  );
 }
 
 /// The room's canonical media, split out of [Room] so the sync layer can pass
@@ -160,10 +244,22 @@ class RoomMember {
 /// Friendly-copy mapping for RPC errors (design voice — no raw codes).
 enum RoomErrorCode {
   roomNotFound('room_not_found', "Hmm, we couldn't find a room with that code."),
+  roomDormant('room_dormant', 'That room is napping — the host has to wake it up first.'),
   roomEnded('room_ended', 'That room has already ended.'),
-  roomFull('room_full', 'This room is full — 8 watchers max.'),
+  roomFull('room_full', "This room is full — there's no space for one more."),
   roomBanned('room_banned', "The host removed you from this room, so you can't rejoin."),
   guestRoomLimit('guest_room_limit', 'Guests can host one live room at a time.'),
+  roomLimitReached(
+    'room_limit_reached',
+    "You've hit your room limit — delete an old room or go premium.",
+  ),
+  extensionUsed('extension_used', "You've already used your free hour on us."),
+  extensionCap('extension_cap', "That's as long as a single room can run."),
+  extendNotAllowed(
+    'extend_not_allowed',
+    "Guest rooms can't be extended — sign in to get more time.",
+  ),
+  notAMember('not_a_member', "You're not in that room any more."),
   notHost('not_host', 'Only the host can do that.'),
   cannotKickSelf('cannot_kick_self', "You can't remove yourself — leave the room instead."),
   invalidDuration('invalid_duration', 'Pick a duration between 5 minutes and 4 hours.'),

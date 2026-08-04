@@ -12,12 +12,14 @@ class ReactionStrip extends StatefulWidget {
     required this.open,
     required this.assets,
     required this.onPick,
+    this.reactions = kReactions,
     this.compact = false,
   });
 
   final bool open;
   final ReactionAssets assets;
   final ValueChanged<PTReaction> onPick;
+  final List<PTReaction> reactions;
   final bool compact;
 
   @override
@@ -101,7 +103,7 @@ class _ReactionStripState extends State<ReactionStrip> with SingleTickerProvider
               mainAxisSize: .min,
               spacing: compact ? 2 : 4,
               children: [
-                for (final reaction in kReactions)
+                for (final reaction in widget.reactions)
                   _ReactionCell(
                     reaction: reaction,
                     composition: widget.assets.of(reaction),

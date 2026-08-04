@@ -27,6 +27,7 @@ dependencies:
   package_info_plus: 9.0.1
   responsive_framework: 1.5.1
   sentry_flutter: 9.25.0
+  shared_preferences: 2.5.5
   supabase_flutter: 2.16.0
   uuid: 4.6.0
   window_manager: 0.5.2

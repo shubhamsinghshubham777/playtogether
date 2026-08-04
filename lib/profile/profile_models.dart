@@ -6,6 +6,7 @@ class Profile {
     this.email,
     this.avatarUrl,
     this.createdAt,
+    this.freeExtensionUsed = false,
   });
 
   final String id;
@@ -14,6 +15,8 @@ class Profile {
   final String? email;
   final String? avatarUrl;
   final DateTime? createdAt;
+
+  final bool freeExtensionUsed;
 
   factory Profile.fromJson(Map<String, dynamic> json) {
     return Profile(
@@ -25,10 +28,11 @@ class Profile {
       createdAt: json['created_at'] != null
           ? DateTime.tryParse(json['created_at'] as String)
           : null,
+      freeExtensionUsed: json['free_extension_used'] as bool? ?? false,
     );
   }
 
-  Profile copyWith({String? displayName, String? avatarUrl}) {
+  Profile copyWith({String? displayName, String? avatarUrl, bool? freeExtensionUsed}) {
     return Profile(
       id: id,
       displayName: displayName ?? this.displayName,
@@ -36,6 +40,7 @@ class Profile {
       email: email,
       avatarUrl: avatarUrl ?? this.avatarUrl,
       createdAt: createdAt,
+      freeExtensionUsed: freeExtensionUsed ?? this.freeExtensionUsed,
     );
   }
 }

@@ -22,3 +22,12 @@ const kReactions = <PTReaction>[
 final _byEmoji = {for (final reaction in kReactions) reaction.emoji: reaction};
 
 PTReaction? reactionForEmoji(String? emoji) => emoji == null ? null : _byEmoji[emoji];
+
+const kBaseReactionCount = 8;
+
+List<PTReaction> reactionsForTier(String? tier) => kReactions
+    .take(tier == 'premium' ? kReactions.length : kBaseReactionCount)
+    .toList(growable: false);
+
+bool reactionAllowedForTier(String? emoji, String? tier) =>
+    emoji != null && reactionsForTier(tier).any((r) => r.emoji == emoji);

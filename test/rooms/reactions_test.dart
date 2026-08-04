@@ -154,4 +154,30 @@ void main() {
       expect(reactionForEmoji('${kReactions.first.emoji}${kReactions.last.emoji}'), isNull);
     });
   });
+
+  group('tier gating on the send path', () {
+    test('every tier gets the bundled set today', () {
+      expect(reactionsForTier('guest'), kReactions);
+      expect(reactionsForTier('free'), kReactions);
+      expect(reactionsForTier('premium'), kReactions);
+      expect(reactionsForTier(null), kReactions);
+    });
+
+    test('a bundled emoji is allowed for any tier', () {
+      for (final reaction in kReactions) {
+        expect(reactionAllowedForTier(reaction.emoji, 'free'), isTrue, reason: reaction.emoji);
+        expect(reactionAllowedForTier(reaction.emoji, null), isTrue, reason: reaction.emoji);
+      }
+    });
+
+    test('an emoji we never bundled is refused whatever the tier', () {
+      expect(reactionAllowedForTier('🦄', 'premium'), isFalse);
+      expect(reactionAllowedForTier(null, 'premium'), isFalse);
+      expect(reactionAllowedForTier('', 'premium'), isFalse);
+    });
+
+    test('the base set is never larger than what ships', () {
+      expect(kBaseReactionCount, lessThanOrEqualTo(kReactions.length));
+    });
+  });
 }

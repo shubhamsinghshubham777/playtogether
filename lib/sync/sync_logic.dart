@@ -174,6 +174,31 @@ Duration? gateHeldPosition({
   required Duration? Function() position,
 }) => subjectUserId == userId ? null : position();
 
+bool shouldAutoReopenLocalFile({
+  required RoomMedia media,
+  required String? storedFileName,
+  required bool storedFileExists,
+  required String? loadedFileName,
+  required bool isPickerOpen,
+}) {
+  if (media.kind != .local || media.name == null) return false;
+  if (isPickerOpen) return false;
+  if (loadedFileName == media.name) return false;
+  if (storedFileName != media.name) return false;
+  return storedFileExists;
+}
+
+const kResumeTailWindow = Duration(seconds: 15);
+
+Duration? resumeSeekPosition({required Duration? held, required Duration? mediaDuration}) {
+  if (held == null || held <= Duration.zero) return null;
+  if (mediaDuration != null && mediaDuration > Duration.zero) {
+    if (held >= mediaDuration - kResumeTailWindow) return null;
+    return held;
+  }
+  return held;
+}
+
 /// Host if present, else the earliest joiner; user id breaks ties so every
 /// client elects the same person.
 String? authorityAmong(Iterable<PresentMember> candidates) {

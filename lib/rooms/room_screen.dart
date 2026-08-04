@@ -19,10 +19,13 @@ import 'package:playtogether/player/youtube/pt_youtube_controller.dart';
 import 'package:playtogether/player/youtube/pt_youtube_embed.dart';
 import 'package:playtogether/player/youtube/youtube_links.dart';
 import 'package:playtogether/player/youtube_url_dialog.dart';
+import 'package:playtogether/profile/entitlement_service.dart';
 import 'package:playtogether/profile/profile_service.dart';
+import 'package:playtogether/rooms/local_media_store.dart';
 import 'package:playtogether/rooms/reactions.dart';
 import 'package:playtogether/rooms/room_models.dart';
 import 'package:playtogether/rooms/room_service.dart';
+import 'package:playtogether/rooms/widgets/extend_room_dialog.dart';
 import 'package:playtogether/rooms/widgets/facecam_rail.dart';
 import 'package:playtogether/rooms/widgets/kick_member_dialog.dart';
 import 'package:playtogether/rooms/widgets/play_shared_video_dialog.dart';
@@ -178,6 +181,12 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
   String? _localFileName;
   bool _mismatchDismissed = false;
 
+  bool _resumeAttempted = false;
+  bool _extending = false;
+  Timer? _positionWriteTimer;
+  Duration? _lastWrittenPosition;
+  bool _positionWriteFailing = false;
+
   // Own readiness inputs. `_updateReadiness` derives a ReadyStatus from these
   // and pushes it onto presence, which is what the gate reads.
   bool _isFilePickerOpen = false;
@@ -250,6 +259,10 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
   void _toggleFacecam(String kind, bool on) {
     final av = _av;
     if (av == null) return;
+    if (kind == 'cam' && on && !av.canPublishCamera) {
+      _snack('Cameras are a premium thing — this room is voice only.', kind: .info);
+      return;
+    }
     if (on) _facecamUsed = true;
     Analytics.instance.track('facecam_toggled', {'kind': kind, 'on': on});
     unawaited(kind == 'mic' ? av.setMicEnabled(on) : av.setCamEnabled(on));
@@ -346,6 +359,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
     if (room == null ||
         room.endedAt != null ||
         room.expiresAt.isBefore(RoomService.instance.serverNow)) {
+      _room = room;
       _showEndedDialog();
       return;
     }
@@ -387,6 +401,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
     sync.onRemoteDriftCorrect = _remoteDriftCorrect;
     sync.currentPosition = () => _position;
     sync.isPlaying = () => _playing;
+    sync.entitlementTier = EntitlementService.instance.tier;
 
     _subscriptions.addAll([
       sync.chatMessages.listen((message) {
@@ -471,6 +486,18 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
 
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (_) => _tickCountdown());
     _tickCountdown();
+    _positionWriteTimer = Timer.periodic(
+      const Duration(seconds: 60),
+      (_) => unawaited(_persistPosition()),
+    );
+
+    unawaited(
+      EntitlementService.instance.load().then((_) {
+        if (mounted) _sync?.entitlementTier = EntitlementService.instance.tier;
+      }),
+    );
+
+    unawaited(_resumeFromCanonicalMedia());
 
     // If the state-sync window closes with no media, we're first in — ask
     // what to watch.
@@ -487,8 +514,8 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
       }
     });
 
-    if (LiveKitService.isConfigured) {
-      final av = LiveKitService(roomId: widget.roomId);
+    if (LiveKitService.isAvailableFor(room.avLevel)) {
+      final av = LiveKitService(roomId: widget.roomId, avLevel: room.avLevel);
       setState(() => _av = av);
       av.connect().catchError((_) {});
     }
@@ -501,6 +528,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
       s.cancel();
     }
     _countdownTimer?.cancel();
+    _positionWriteTimer?.cancel();
     _idleSourceTimer?.cancel();
     _controlsHideTimer?.cancel();
     _actionToastTimer?.cancel();
@@ -971,6 +999,8 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
   Future<void> _handleModeSwitch(PlaybackMode targetMode, String? url) async {
     if (targetMode == .youtube && url == null) return;
     Analytics.instance.track('media_selected', {'kind': targetMode.name, 'room_id': widget.roomId});
+    await _persistPosition();
+    _lastWrittenPosition = null;
     if (targetMode == .youtube) {
       if (url != null) {
         _switchToYouTubeMode(url);
@@ -1022,7 +1052,6 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
     }
     final name = _basename(response!);
     final path = response.path;
-    final media = Media(uri);
     trace(
       'local file picked',
       category: 'media',
@@ -1034,13 +1063,22 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
         'path_length': path?.length,
         'exists': path == null ? null : File(path).existsSync(),
         'bytes': path == null ? null : _sizeOf(path),
-        'normalized': _redactPaths(media.uri),
+        'normalized': _redactPaths(Media(uri).uri),
       },
     );
+    await _adoptLocalFile(uri: uri, name: name, path: path);
+  }
+
+  Future<void> _adoptLocalFile({
+    required String uri,
+    required String name,
+    String? path,
+    Duration? seekTo,
+  }) async {
     _localLoadWatchdog?.cancel();
     _localLoadStalled = false;
     try {
-      await widget.player.open(media, play: false);
+      await widget.player.open(Media(uri), play: false);
     } catch (e, s) {
       reportNonFatal(e, s, during: 'opening a local video file');
       if (!mounted) return;
@@ -1052,9 +1090,96 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
     _localFileName = name;
     _mismatchDismissed = false;
     _armLocalLoadWatchdog(name);
+    unawaited(LocalMediaStore.instance.record(roomId: widget.roomId, name: name, path: path));
     unawaited(_announceLocalFile(name));
+    if (seekTo != null) unawaited(_seekOnceLoaded(seekTo, name));
     setState(() {});
     _updateReadiness();
+  }
+
+  Future<void> _seekOnceLoaded(Duration position, String name) async {
+    try {
+      await widget.player.stream.duration
+          .firstWhere((d) => d != Duration.zero)
+          .timeout(const Duration(seconds: 15));
+    } catch (_) {
+      return;
+    }
+    if (!mounted || _mode != .local || _localFileName != name) return;
+    if (_sync?.hasReceivedInitialState ?? false) return;
+    trace(
+      'resuming at the held room position',
+      category: 'room',
+      data: {'room_id': widget.roomId, 'position_ms': position.inMilliseconds},
+    );
+    widget.player.seek(position);
+  }
+
+  Future<void> _resumeFromCanonicalMedia() async {
+    if (_resumeAttempted || _ended || !mounted) return;
+    final media = _canonicalMedia;
+    if (!media.isSet) return;
+    _resumeAttempted = true;
+
+    final held = resumeSeekPosition(held: _room?.mediaPosition, mediaDuration: media.duration);
+
+    if (media.kind == .youtube) {
+      final url = media.url;
+      if (url == null || _youtubeUrl != null) return;
+      trace(
+        'resuming a youtube room from its canonical media',
+        category: 'room',
+        data: {'room_id': widget.roomId, 'position_ms': held?.inMilliseconds},
+      );
+      _resolveFirstSource();
+      _switchToYouTubeMode(url);
+      if (held != null && !(_sync?.hasReceivedInitialState ?? false)) _pendingYtSeek = held;
+      return;
+    }
+
+    final entry = await LocalMediaStore.instance.lookup(widget.roomId);
+    if (!mounted || _ended) return;
+    if (!shouldAutoReopenLocalFile(
+      media: media,
+      storedFileName: entry?.name,
+      storedFileExists: entry?.fileStillExists ?? false,
+      loadedFileName: _localFileName,
+      isPickerOpen: _isFilePickerOpen,
+    )) {
+      return;
+    }
+    trace(
+      'reopening the local file this device had for the room',
+      category: 'room',
+      data: {'room_id': widget.roomId, 'position_ms': held?.inMilliseconds},
+    );
+    _resolveFirstSource();
+    _idleSourceTimer?.cancel();
+    await _adoptLocalFile(uri: entry!.path, name: entry.name, path: entry.path, seekTo: held);
+  }
+
+  Future<void> _persistPosition() async {
+    final sync = _sync;
+    if (sync == null || _ended || !mounted) return;
+    if (!sync.isAuthority || !_canonicalMedia.isSet) return;
+    final position = _position;
+    final last = _lastWrittenPosition;
+    if (last != null && (position - last).abs() < const Duration(seconds: 5)) return;
+    _lastWrittenPosition = position;
+    final written = await RoomService.instance.updateMediaPosition(
+      roomId: widget.roomId,
+      position: position,
+    );
+    if (written) {
+      _positionWriteFailing = false;
+    } else if (!_positionWriteFailing) {
+      _positionWriteFailing = true;
+      trace(
+        'the room position write keeps failing',
+        category: 'room',
+        data: {'room_id': widget.roomId, 'position_ms': position.inMilliseconds},
+      );
+    }
   }
 
   static int? _sizeOf(String path) {
@@ -1207,6 +1332,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
     });
     _publishMenuData();
     _updateReadiness();
+    unawaited(_resumeFromCanonicalMedia());
   }
 
   // ---------------------------------------------------------------------------
@@ -1431,6 +1557,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
       if (!_playing) _trackPlaybackStarted();
       _sync?.broadcastSeek(currentPosition, reason: SyncActionReason.transport);
     }
+    unawaited(_persistPosition());
   }
 
   /// Returns false when the gate or transport lock refused the seek, so
@@ -1448,6 +1575,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
       widget.player.seek(clamped);
     }
     _sync?.broadcastSeek(clamped);
+    unawaited(_persistPosition());
     return true;
   }
 
@@ -1719,6 +1847,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
     if (_ended) return;
     _ended = true;
     _trackWatchSessionEnded();
+    RoomService.instance.noteRoomExited();
     trace(
       'evicted from the room',
       category: 'room',
@@ -1743,9 +1872,32 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
     if (mounted) _showEndedDialog(title: title, body: body, icon: icon);
   }
 
+  ({String title, String body, IconData icon})? get _dormancyCopy {
+    final room = _room;
+    if (room == null || !room.goesDormant) return null;
+    final isHost = _sync?.isHost ?? (room.createdBy == ProfileService.instance.profile?.id);
+    return (
+      title: "Room's taking a nap",
+      body: isHost
+          ? "You're out of time for now, but the room is waiting in your lobby — "
+                'pick it back up whenever you like.'
+          : "You're out of time for now. The host can wake this room back up, and "
+                "it'll be waiting in your lobby.",
+      icon: Symbols.bedtime_rounded,
+    );
+  }
+
   void _showEndedDialog({String? title, String? body, IconData? icon}) {
     _ended = true;
     if (!mounted) return;
+    if (title == null && body == null) {
+      final dormant = _dormancyCopy;
+      if (dormant != null) {
+        title = dormant.title;
+        body = dormant.body;
+        icon ??= dormant.icon;
+      }
+    }
     final isMobile = layoutOf(context) == .portrait;
     showGlassDialog(
       context: context,
@@ -1834,6 +1986,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
   Future<void> _leaveRoom() async {
     trace('leaving the room', category: 'room', data: {'room_id': widget.roomId});
     _trackWatchSessionEnded();
+    await _persistPosition();
     try {
       await RoomService.instance.leaveRoom(widget.roomId);
     } catch (e, s) {
@@ -2052,6 +2205,122 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
     final m = _timeLeft.inMinutes.remainder(60).toString().padLeft(2, '0');
     final s = _timeLeft.inSeconds.remainder(60).toString().padLeft(2, '0');
     return h > 0 ? '$h:$m:$s left' : '$m:$s left';
+  }
+
+  TierLimits get _limits => EntitlementService.instance.limitsOrFallback;
+
+  bool get _hasFreebie =>
+      _limits.hasFreeExtension && !(ProfileService.instance.profile?.freeExtensionUsed ?? false);
+
+  String get _extendLabel {
+    if (_limits.picksExtensionLength) return 'Add time';
+    if (_hasFreebie) return '+1 hour, on us';
+    return 'More time';
+  }
+
+  String get _expirySubtitle {
+    final room = _room;
+    if (room != null && room.goesDormant) {
+      return 'This room naps at $_endsAtLabel — you can pick it back up later.';
+    }
+    return 'Time to wrap up — this room ends at $_endsAtLabel.';
+  }
+
+  Future<void> _extendRoom() async {
+    final room = _room;
+    if (room == null || _extending) return;
+
+    if (!_limits.picksExtensionLength && !_hasFreebie) {
+      await _showPremiumTease(
+        surface: 'room_expiry',
+        headline: _limits.isGuest ? 'Sign in for more time' : 'More time is coming',
+        body: _limits.isGuest
+            ? 'Guest rooms run for an hour and stop there. Sign in with Google and your '
+                  'rooms get longer, keep their spot in your lobby, and can be extended.'
+            : 'Your free hour is spent, and this room wraps at $_endsAtLabel. Premium is '
+                  'nearly here — longer rooms, bigger parties and rooms that keep themselves.',
+        perks: const [
+          'Rooms that run up to 24 hours',
+          'Up to 16 watchers, with video facecams',
+          'Rooms that stay put until you delete them',
+        ],
+      );
+      return;
+    }
+
+    var minutes = _limits.freeExtensionMinutes;
+    if (_limits.picksExtensionLength) {
+      final headroom = _limits.maxTotalSessionMinutes - room.durationMinutes;
+      final options = [30, 60, 120, 240].where((m) => m <= headroom).toList();
+      if (options.isEmpty) {
+        _snack(RoomErrorCode.extensionCap.message, kind: .info);
+        Analytics.instance.track('limit_hit', {'which': 'extension_cap'});
+        return;
+      }
+      final chosen = await showGlassDialog<int>(
+        context: context,
+        width: 420,
+        builder: (_) => ExtendRoomDialog(options: options, headroomMinutes: headroom),
+      );
+      if (chosen == null || !mounted) return;
+      minutes = chosen;
+    }
+
+    setState(() => _extending = true);
+    try {
+      final extended = await RoomService.instance.extendRoom(
+        roomId: widget.roomId,
+        minutes: minutes,
+      );
+      if (!mounted) return;
+      setState(() {
+        _room = extended;
+        _warningDismissed = false;
+      });
+      _tickCountdown();
+      if (_limits.hasFreeExtension) unawaited(ProfileService.instance.load());
+      _snack('More time — this room now runs until $_endsAtLabel.', kind: .success);
+    } catch (e, s) {
+      final failure = RoomErrorCode.fromError(e);
+      if (failure == .unknown) reportNonFatal(e, s, during: 'extending room ${widget.roomId}');
+      if (!mounted) return;
+      if (failure == .extensionUsed || failure == .extensionCap) {
+        await _showPremiumTease(
+          surface: 'room_expiry',
+          headline: 'More time is coming',
+          body: '${failure.message} Premium is nearly here.',
+          perks: const [
+            'Rooms that run up to 24 hours',
+            'Up to 16 watchers, with video facecams',
+            'Rooms that stay put until you delete them',
+          ],
+        );
+      } else {
+        _snack(failure.message);
+      }
+    } finally {
+      if (mounted) setState(() => _extending = false);
+    }
+  }
+
+  Future<void> _showPremiumTease({
+    required String surface,
+    required String headline,
+    required String body,
+    required List<String> perks,
+  }) async {
+    Analytics.instance.track('upgrade_cta_shown', {'surface': surface});
+    await showGlassDialog<void>(
+      context: context,
+      width: 430,
+      builder: (_) => PremiumTeaseDialog(
+        headline: headline,
+        body: body,
+        perks: perks,
+        onNotify: () => Analytics.instance.track('upgrade_cta_clicked', {'surface': surface}),
+      ),
+    );
+    if (mounted) _shortcutFocus.requestFocus();
   }
 
   String get _endsAtLabel {
@@ -2459,7 +2728,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
           offset: -8,
           duration: PTMotion.state,
           child: PTBanner(
-            autoDismissAfter: const Duration(seconds: 10),
+            autoDismissAfter: (_sync?.isHost ?? false) ? null : const Duration(seconds: 10),
             pulseOnArrival: true,
             kind: .warning,
             icon: Symbols.timer_rounded,
@@ -2467,7 +2736,17 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
               final mins = (_timeLeft.inSeconds / 60).ceil();
               return '$mins minute${mins == 1 ? '' : 's'} left';
             }(),
-            subtitle: 'Time to wrap up — this room ends at $_endsAtLabel.',
+            subtitle: _expirySubtitle,
+            trailing: (_sync?.isHost ?? false)
+                ? PTButton(
+                    label: _extendLabel,
+                    variant: .secondary,
+                    height: 38,
+                    expand: false,
+                    loading: _extending,
+                    onPressed: _extending ? null : _extendRoom,
+                  )
+                : null,
             onDismiss: () => setState(() => _warningDismissed = true),
           ),
         ),
@@ -2668,6 +2947,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
       open: _reactOpen,
       assets: _reactionAssets,
       compact: compact,
+      reactions: reactionsForTier(EntitlementService.instance.tier),
       onPick: _sendReaction,
     );
   }
@@ -2798,6 +3078,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
                         micOn: _av?.micEnabled ?? false,
                         camOn: _av?.camEnabled ?? false,
                         avAvailable: _av != null,
+                        camAvailable: _av?.canPublishCamera ?? false,
                         actions: _controlActions,
                         reactOpen: _reactOpen,
                         transportEnabled: _transportBlockedReason == null,
@@ -2883,6 +3164,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
                   micOn: _av?.micEnabled ?? false,
                   camOn: _av?.camEnabled ?? false,
                   avAvailable: _av != null,
+                  camAvailable: _av?.canPublishCamera ?? false,
                   actions: _controlActions,
                   reactOpen: _reactOpen,
                   transportEnabled: _transportBlockedReason == null,
@@ -3021,6 +3303,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
                         micOn: _av?.micEnabled ?? false,
                         camOn: _av?.camEnabled ?? false,
                         avAvailable: _av != null,
+                        camAvailable: _av?.canPublishCamera ?? false,
                         actions: _controlActions,
                         reactOpen: _reactOpen,
                         transportEnabled: _transportBlockedReason == null,

@@ -536,9 +536,11 @@ class SyncService {
 
   final _reactionThrottle = ReactionThrottle();
 
+  String? entitlementTier;
+
   void sendReaction(String emoji) {
     if (_disposed) return;
-    if (reactionForEmoji(emoji) == null) return;
+    if (!reactionAllowedForTier(emoji, entitlementTier)) return;
     Analytics.instance.track('reaction_sent', {'emoji': emoji, 'room_id': room.id});
     // Local echo is mandatory (the channel is self:false) and never throttled.
     _reactionController.add(
@@ -891,6 +893,12 @@ class SyncService {
   ];
 
   bool get _isAuthority => logic.authorityAmong(_authorityCandidates) == userId;
+
+  bool get isAuthority => _isAuthority;
+
+  bool get roomPlaying => _roomPlaying;
+
+  bool get hasReceivedInitialState => _hasReceivedInitialState;
 
   void _handleStateRequest(Map<String, dynamic> payload) {
     // The authority answers — except when the authority is the one asking (a

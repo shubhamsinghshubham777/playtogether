@@ -1,13 +1,20 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import 'package:playtogether/analytics.dart';
 import 'package:playtogether/app_router.dart';
 import 'package:playtogether/app_version.dart';
 import 'package:playtogether/auth/auth_service.dart';
 import 'package:playtogether/diagnostics.dart';
+import 'package:playtogether/profile/entitlement_service.dart';
 import 'package:playtogether/profile/profile_service.dart';
+import 'package:playtogether/rooms/local_media_store.dart';
 import 'package:playtogether/rooms/room_models.dart';
 import 'package:playtogether/rooms/room_service.dart';
+import 'package:playtogether/rooms/widgets/extend_room_dialog.dart';
+import 'package:playtogether/rooms/widgets/my_rooms_section.dart';
 import 'package:playtogether/updates/update_service.dart';
 import 'package:playtogether/ui/banners.dart';
 import 'package:playtogether/ui/buttons.dart';
@@ -33,6 +40,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
   bool _creating = false;
   bool _joining = false;
   int _codeShake = 0;
+  String? _busyRoomId;
 
   /// The entrance choreography is a *first impression*, not a transition.
   /// Static so coming back from a room is instant familiarity rather than a
@@ -44,6 +52,14 @@ class _LobbyScreenState extends State<LobbyScreen> {
   void initState() {
     super.initState();
     _introPlayed = true;
+    unawaited(
+      EntitlementService.instance.load().then((_) {
+        if (!mounted || _durationMinutes <= _durationCap) return;
+        setState(() => _durationMinutes = _durationCap);
+      }),
+    );
+    unawaited(_loadMyRooms());
+    RoomService.instance.addListener(_onRoomServiceChanged);
     if (ProfileService.instance.profile == null) {
       // Consume the parked invite even if the profile fetch fails — the join
       // itself doesn't need the profile.
@@ -59,8 +75,17 @@ class _LobbyScreenState extends State<LobbyScreen> {
     }
   }
 
+  bool _wasInRoom = RoomService.instance.currentRoom != null;
+
+  void _onRoomServiceChanged() {
+    final inRoom = RoomService.instance.currentRoom != null;
+    if (_wasInRoom && !inRoom) unawaited(_loadMyRooms());
+    _wasInRoom = inRoom;
+  }
+
   @override
   void dispose() {
+    RoomService.instance.removeListener(_onRoomServiceChanged);
     _nameController.dispose();
     super.dispose();
   }
@@ -74,9 +99,16 @@ class _LobbyScreenState extends State<LobbyScreen> {
     await _join(code, via: .deeplink);
   }
 
-  String get _durationLabel {
-    final h = _durationMinutes ~/ 60;
-    final m = _durationMinutes % 60;
+  int get _durationCap => EntitlementService.instance.limitsOrFallback.maxSessionMinutes;
+
+  String get _durationCapLabel =>
+      _durationCap >= 120 ? '${_durationCap ~/ 60} hours' : '$_durationCap min';
+
+  String get _durationLabel => _minutesLabel(_durationMinutes);
+
+  static String _minutesLabel(int minutes) {
+    final h = minutes ~/ 60;
+    final m = minutes % 60;
     if (h == 0) return '${m}m';
     if (m == 0) return '${h}h';
     return '${h}h ${m}m';
@@ -96,6 +128,8 @@ class _LobbyScreenState extends State<LobbyScreen> {
       if (!mounted) return;
       if (code == .guestRoomLimit) {
         await _showGuestLimitDialog();
+      } else if (code == .roomLimitReached) {
+        await _showRoomLimitDialog();
       } else {
         _snack(code.message);
       }
@@ -125,6 +159,92 @@ class _LobbyScreenState extends State<LobbyScreen> {
     } finally {
       if (mounted) setState(() => _joining = false);
     }
+  }
+
+  Future<void> _loadMyRooms() async {
+    try {
+      final rooms = await RoomService.instance.loadMyRooms();
+      await LocalMediaStore.instance.prune(keepRoomIds: {for (final r in rooms) r.room.id});
+    } catch (e, s) {
+      reportNonFatal(e, s, during: 'loading the lobby room list');
+    }
+  }
+
+  Future<void> _openMyRoom(MyRoom entry) async {
+    if (entry.isLive) {
+      context.go(roomPath(entry.room.id));
+      return;
+    }
+    if (!entry.isHost) {
+      _snack('Only the host can wake this room back up.', kind: .info);
+      return;
+    }
+    final limits = EntitlementService.instance.limitsOrFallback;
+    final minutes = entry.room.durationMinutes.clamp(5, limits.maxSessionMinutes);
+    setState(() => _busyRoomId = entry.room.id);
+    try {
+      final room = await RoomService.instance.resumeRoom(roomId: entry.room.id, minutes: minutes);
+      if (mounted) context.go(roomPath(room.id));
+    } catch (e, s) {
+      final failure = RoomErrorCode.fromError(e);
+      if (failure == .unknown) reportNonFatal(e, s, during: 'resuming a room from the lobby');
+      if (mounted) _snack(failure.message);
+      unawaited(_loadMyRooms());
+    } finally {
+      if (mounted) setState(() => _busyRoomId = null);
+    }
+  }
+
+  Future<void> _deleteMyRoom(MyRoom entry) async {
+    final confirmed = await showGlassDialog<bool>(
+      context: context,
+      width: 420,
+      builder: (_) => DeleteRoomDialog(roomName: entry.room.name, dormant: entry.isDormant),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _busyRoomId = entry.room.id);
+    try {
+      await RoomService.instance.deleteRoom(entry.room.id);
+      await LocalMediaStore.instance.forget(entry.room.id);
+      if (mounted) _snack('Room deleted.', kind: .success);
+    } catch (e, s) {
+      final failure = RoomErrorCode.fromError(e);
+      if (failure == .unknown) reportNonFatal(e, s, during: 'deleting a room from the lobby');
+      if (mounted) _snack(failure.message);
+    } finally {
+      if (mounted) setState(() => _busyRoomId = null);
+    }
+  }
+
+  Future<void> _showRoomLimitDialog() async {
+    Analytics.instance.track('upgrade_cta_shown', {'surface': 'room_limit'});
+    await showGlassDialog<void>(
+      context: context,
+      width: 430,
+      builder: (_) => PremiumTeaseDialog(
+        headline: "That's all your rooms",
+        body:
+            "You're holding as many rooms as your account allows. Delete one you're done "
+            'with, or hang on — premium is nearly here.',
+        perks: const [
+          'Room for a lot more of them at once',
+          'Rooms that stay put until you delete them',
+          'Up to 16 watchers, with video facecams',
+        ],
+        onNotify: () => Analytics.instance.track('upgrade_cta_clicked', {'surface': 'room_limit'}),
+      ),
+    );
+  }
+
+  Widget _myRoomsSection({bool compact = false}) {
+    return MyRoomsSection(
+      rooms: RoomService.instance.myRooms,
+      serverNow: RoomService.instance.serverNow,
+      busyRoomId: _busyRoomId,
+      compact: compact,
+      onOpen: _openMyRoom,
+      onDelete: _deleteMyRoom,
+    );
   }
 
   void _snack(String message, {PTSnackKind kind = PTSnackKind.error}) =>
@@ -161,7 +281,11 @@ class _LobbyScreenState extends State<LobbyScreen> {
     return Scaffold(
       body: AmbientBackground(
         child: ListenableBuilder(
-          listenable: Listenable.merge([ProfileService.instance, UpdateService.instance]),
+          listenable: Listenable.merge([
+            ProfileService.instance,
+            UpdateService.instance,
+            RoomService.instance,
+          ]),
           builder: (context, _) => PTResponsive(
             desktop: (_) => _desktop(),
             portrait: (_) => _portrait(),
@@ -234,6 +358,17 @@ class _LobbyScreenState extends State<LobbyScreen> {
                     ],
                   ),
                 ),
+                if (RoomService.instance.myRooms.isNotEmpty) ...[
+                  const SizedBox(height: 28),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 888),
+                    child: _intro(
+                      delay: const Duration(milliseconds: 240),
+                      fade: false,
+                      child: _myRoomsSection(),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -264,6 +399,12 @@ class _LobbyScreenState extends State<LobbyScreen> {
             ),
             _createCard(compact: true, delay: const Duration(milliseconds: 60)),
             _joinCard(compact: true, delay: const Duration(milliseconds: 120)),
+            if (RoomService.instance.myRooms.isNotEmpty)
+              _intro(
+                delay: const Duration(milliseconds: 180),
+                fade: false,
+                child: _myRoomsSection(compact: true),
+              ),
           ],
         ),
       ),
@@ -302,10 +443,20 @@ class _LobbyScreenState extends State<LobbyScreen> {
                     ),
                   ),
                   Expanded(
-                    child: _joinCard(
-                      compact: true,
-                      scroll: true,
-                      delay: const Duration(milliseconds: 120),
+                    child: SingleChildScrollView(
+                      child: Column(
+                        mainAxisSize: .min,
+                        spacing: 14,
+                        children: [
+                          _joinCard(compact: true, delay: const Duration(milliseconds: 120)),
+                          if (RoomService.instance.myRooms.isNotEmpty)
+                            _intro(
+                              delay: const Duration(milliseconds: 180),
+                              fade: false,
+                              child: _myRoomsSection(compact: true),
+                            ),
+                        ],
+                      ),
                     ),
                   ),
                 ],
@@ -441,8 +592,9 @@ class _LobbyScreenState extends State<LobbyScreen> {
               ],
             ),
             PTSlider(
-              value: (_durationMinutes - 5) / 235,
-              onChanged: (v) => setState(() => _durationMinutes = 5 + ((v * 235) / 5).round() * 5),
+              value: ((_durationMinutes - 5) / (_durationCap - 5)).clamp(0.0, 1.0),
+              onChanged: (v) =>
+                  setState(() => _durationMinutes = 5 + ((v * (_durationCap - 5)) / 5).round() * 5),
             ),
             if (!compact)
               Row(
@@ -453,7 +605,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
                     style: PTText.mono.copyWith(fontSize: 11, color: PTColors.white(0.35)),
                   ),
                   Text(
-                    '4 hours max',
+                    '$_durationCapLabel max',
                     style: PTText.mono.copyWith(fontSize: 11, color: PTColors.white(0.35)),
                   ),
                 ],
