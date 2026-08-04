@@ -130,8 +130,10 @@ class RoomService extends ChangeNotifier {
   bool get loadingMyRooms => _loadingMyRooms;
 
   Future<List<MyRoom>> loadMyRooms() async {
-    _loadingMyRooms = true;
-    notifyListeners();
+    if (!_loadingMyRooms) {
+      _loadingMyRooms = true;
+      notifyListeners();
+    }
     try {
       final rows = await _client.rpc('list_my_rooms');
       final list = (rows as List? ?? const [])

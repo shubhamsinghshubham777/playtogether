@@ -1043,4 +1043,183 @@ void main() {
       expect(memberClearsGate(slow, _localMedia, const {}), isFalse);
     });
   });
+
+  group('B6 presence trailing throttle', () {
+    late _FakeClock clock;
+    late _FakeScheduler scheduler;
+    late TrailingThrottle<Map<String, dynamic>> throttle;
+    late List<Map<String, dynamic>> sent;
+
+    setUp(() {
+      clock = _FakeClock(_epoch);
+      scheduler = _FakeScheduler(clock);
+      throttle = TrailingThrottle<Map<String, dynamic>>(
+        interval: const Duration(seconds: 2),
+        maxCalls: 4,
+        window: const Duration(seconds: 30),
+        equals: presencePayloadsMatch,
+        now: clock.call,
+        schedule: scheduler.schedule,
+      );
+      sent = [];
+    });
+
+    Map<String, dynamic> state(String ready, {String? file}) => {
+      'ready_status': ready,
+      'loaded_file_name': file,
+    };
+
+    void submit(String ready, {String? file}) =>
+        throttle.submit(state(ready, file: file), sent.add);
+
+    void advance(Duration d) => scheduler.advance(d);
+
+    test('a picker flip that nets to no change costs nothing', () {
+      submit('none');
+      expect(sent.length, 1);
+
+      submit('selecting');
+      advance(const Duration(milliseconds: 500));
+      submit('none');
+      advance(const Duration(seconds: 3));
+
+      expect(sent.length, 1);
+    });
+
+    test('the real file-open flow stays inside the server budget', () {
+      submit('none');
+      submit('selecting');
+      advance(const Duration(milliseconds: 400));
+      submit('none');
+      advance(const Duration(milliseconds: 900));
+      submit('selecting');
+      advance(const Duration(milliseconds: 600));
+      submit('none');
+      advance(const Duration(seconds: 3));
+      submit('none', file: 'movie.mkv');
+      advance(const Duration(seconds: 3));
+      submit('ready', file: 'movie.mkv');
+      advance(const Duration(seconds: 3));
+
+      expect(sent.length, lessThanOrEqualTo(4));
+      expect(sent.last['ready_status'], 'ready');
+    });
+
+    test('no 30-second window ever exceeds the server budget', () {
+      final at = <int>[];
+      void record(Map<String, dynamic> p) {
+        sent.add(p);
+        at.add(clock.now.millisecondsSinceEpoch);
+      }
+
+      for (var i = 0; i < 200; i++) {
+        throttle.submit(state(i.isEven ? 'selecting' : 'none', file: 'f$i'), record);
+        advance(const Duration(milliseconds: 500));
+      }
+
+      for (final start in at) {
+        final inWindow = at.where((t) => t >= start && t - start < 30000).length;
+        expect(inWindow, lessThanOrEqualTo(4));
+      }
+      expect(sent, isNotEmpty);
+    });
+
+    test('the budget frees up once the window rolls past', () {
+      for (var i = 0; i < 8; i++) {
+        submit('ready', file: 'f$i');
+        advance(const Duration(seconds: 2));
+      }
+      expect(sent.length, 4);
+
+      advance(const Duration(seconds: 30));
+      expect(sent.last['loaded_file_name'], 'f7');
+    });
+
+    test('the final state always lands, even when deferred by the budget', () {
+      for (var i = 0; i < 6; i++) {
+        submit('selecting', file: 'f$i');
+        advance(const Duration(seconds: 2));
+      }
+      submit('ready', file: 'final.mkv');
+      advance(const Duration(seconds: 60));
+
+      expect(sent.last['ready_status'], 'ready');
+      expect(sent.last['loaded_file_name'], 'final.mkv');
+      expect(throttle.hasPending, isFalse);
+    });
+
+    test('discardPending drops the superseded queue but keeps the budget', () {
+      submit('none');
+      submit('selecting');
+      throttle.discardPending();
+      submit('ready', file: 'movie.mkv');
+      advance(const Duration(seconds: 3));
+
+      expect(sent.length, 2);
+      expect(sent.last['ready_status'], 'ready');
+    });
+
+    test('renew re-announces an unchanged state, since a new channel knows nothing', () {
+      submit('ready', file: 'movie.mkv');
+      expect(sent.length, 1);
+
+      submit('ready', file: 'movie.mkv');
+      advance(const Duration(seconds: 3));
+      expect(sent.length, 1);
+
+      throttle.renew();
+      submit('ready', file: 'movie.mkv');
+      advance(const Duration(seconds: 3));
+      expect(sent.length, 2);
+    });
+
+    test('a disposed throttle stops writing', () {
+      submit('none');
+      submit('ready', file: 'movie.mkv');
+      throttle.dispose();
+      advance(const Duration(seconds: 30));
+      expect(sent.length, 1);
+    });
+  });
+
+  group('B6b presence payload equality', () {
+    test('identical payloads match', () {
+      expect(presencePayloadsMatch(const {'a': 1, 'b': null}, const {'a': 1, 'b': null}), isTrue);
+    });
+
+    test('a changed value does not match', () {
+      expect(presencePayloadsMatch(const {'a': 1}, const {'a': 2}), isFalse);
+    });
+
+    test('a changed key does not match', () {
+      expect(presencePayloadsMatch(const {'a': 1}, const {'b': 1}), isFalse);
+    });
+
+    test('a differing size does not match', () {
+      expect(presencePayloadsMatch(const {'a': 1}, const {'a': 1, 'b': 2}), isFalse);
+    });
+  });
+
+  group('B7 playable position', () {
+    test('a negative position reported right after open reads as the start', () {
+      expect(playablePosition(const Duration(milliseconds: -41)), Duration.zero);
+    });
+
+    test('a large negative still reads as the start', () {
+      expect(playablePosition(const Duration(seconds: -30)), Duration.zero);
+    });
+
+    test('zero and real positions pass through untouched', () {
+      expect(playablePosition(Duration.zero), Duration.zero);
+      expect(playablePosition(const Duration(milliseconds: 1)), const Duration(milliseconds: 1));
+      expect(playablePosition(const Duration(minutes: 42)), const Duration(minutes: 42));
+    });
+
+    test('a clamped position is one the room write accepts', () {
+      expect(
+        playablePosition(const Duration(milliseconds: -41)).inMilliseconds,
+        greaterThanOrEqualTo(0),
+      );
+    });
+  });
 }

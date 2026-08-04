@@ -191,7 +191,8 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
   String? _evictionReason;
   Timer? _positionWriteTimer;
   Duration? _lastWrittenPosition;
-  bool _positionWriteFailing = false;
+  int _positionWriteFailures = 0;
+  static const _kPositionWriteFailureReport = 3;
 
   // Own readiness inputs. `_updateReadiness` derives a ReadyStatus from these
   // and pushes it onto presence, which is what the gate reads.
@@ -453,7 +454,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
         }
       }),
       widget.player.stream.position.listen((position) {
-        if (_mode == .local) setState(() => _position = position);
+        if (_mode == .local) setState(() => _position = playablePosition(position));
       }),
       widget.player.stream.duration.listen((duration) {
         if (_mode != .local) return;
@@ -948,7 +949,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
       _youtubeController = null;
       _playing = widget.player.state.playing;
       _buffering = widget.player.state.buffering;
-      _position = widget.player.state.position;
+      _position = playablePosition(widget.player.state.position);
       _duration = widget.player.state.duration;
     });
     _sync?.updatePlaybackState('local', null);
@@ -970,7 +971,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
     setState(() {
       _playing = isPlaying;
       _buffering = state == .buffering;
-      _position = controller.position;
+      _position = playablePosition(controller.position);
       if (controller.duration != Duration.zero) _duration = controller.duration;
     });
     if (isPlaying != wasPlaying) _onPlayingChangedForControls(isPlaying);
@@ -1212,13 +1213,16 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
       position: position,
     );
     if (written) {
-      _positionWriteFailing = false;
-    } else if (!_positionWriteFailing) {
-      _positionWriteFailing = true;
+      _positionWriteFailures = 0;
+    } else if (++_positionWriteFailures == _kPositionWriteFailureReport) {
       trace(
         'the room position write keeps failing',
         category: 'room',
-        data: {'room_id': widget.roomId, 'position_ms': position.inMilliseconds},
+        data: {
+          'room_id': widget.roomId,
+          'position_ms': position.inMilliseconds,
+          'failures': _positionWriteFailures,
+        },
       );
     }
   }

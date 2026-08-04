@@ -179,6 +179,20 @@ class MyRoom {
   );
 }
 
+class RoomExitEdge {
+  RoomExitEdge(this._inRoom);
+
+  bool _inRoom;
+
+  bool get inRoom => _inRoom;
+
+  bool observe({required bool inRoom}) {
+    final exited = _inRoom && !inRoom;
+    _inRoom = inRoom;
+    return exited;
+  }
+}
+
 /// The room's canonical media, split out of [Room] so the sync layer can pass
 /// it around without carrying expiry/membership concerns.
 class RoomMedia {

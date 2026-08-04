@@ -1072,4 +1072,63 @@ void main() {
       });
     });
   });
+
+  group('presence coalescing', () {
+    test('a readiness burst does not flood the wire', () {
+      fakeAsync((async) {
+        final h = _Harness(role: 'host')..connect();
+        h.channel.tracked.clear();
+
+        h.service.retrackReadiness(.selecting);
+        h.service.retrackReadiness(.none);
+        h.service.retrackReadiness(.selecting);
+        h.service.retrackReadiness(.none);
+        h.service.retrackReadiness(.ready, loadedFileName: 'movie.mkv');
+        async.elapse(const Duration(seconds: 40));
+
+        expect(h.channel.tracked.length, lessThanOrEqualTo(SyncService.kPresenceMaxCalls));
+      });
+    });
+
+    test('the final readiness always reaches the wire, so the gate cannot strand', () {
+      fakeAsync((async) {
+        final h = _Harness(role: 'host')..connect();
+        h.channel.tracked.clear();
+
+        h.service.retrackReadiness(.selecting);
+        h.service.retrackReadiness(.none);
+        h.service.retrackReadiness(.ready, loadedFileName: 'movie.mkv');
+        async.elapse(const Duration(seconds: 40));
+
+        final last = h.channel.tracked.last;
+        expect(last['ready_status'], 'ready');
+        expect(last['loaded_file_name'], 'movie.mkv');
+      });
+    });
+
+    test('a lone readiness change still lands without waiting on another', () {
+      fakeAsync((async) {
+        final h = _Harness(role: 'host')..connect();
+        h.channel.tracked.clear();
+
+        h.service.retrackReadiness(.ready, loadedFileName: 'movie.mkv');
+        async.elapse(const Duration(seconds: 40));
+
+        expect(h.channel.tracked.last['ready_status'], 'ready');
+      });
+    });
+
+    test('a role change during a burst is not lost', () {
+      fakeAsync((async) {
+        final h = _Harness(role: 'member')..connect();
+        h.channel.tracked.clear();
+
+        h.service.retrackReadiness(.selecting);
+        h.service.updateRole('host');
+        async.elapse(const Duration(seconds: 40));
+
+        expect(h.channel.tracked.last['role'], 'host');
+      });
+    });
+  });
 }

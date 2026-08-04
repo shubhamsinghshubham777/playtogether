@@ -333,4 +333,39 @@ void main() {
       expect(entry.isOwner, isFalse);
     });
   });
+
+  group('RoomExitEdge', () {
+    test('fires once when the room is left', () {
+      final edge = RoomExitEdge(true);
+      expect(edge.observe(inRoom: false), isTrue);
+      expect(edge.observe(inRoom: false), isFalse);
+    });
+
+    test('does not fire on entry, or while staying put', () {
+      final edge = RoomExitEdge(false);
+      expect(edge.observe(inRoom: true), isFalse);
+      expect(edge.observe(inRoom: true), isFalse);
+      expect(edge.observe(inRoom: false), isTrue);
+    });
+
+    test('fires again on a later exit', () {
+      final edge = RoomExitEdge(true);
+      expect(edge.observe(inRoom: false), isTrue);
+      expect(edge.observe(inRoom: true), isFalse);
+      expect(edge.observe(inRoom: false), isTrue);
+    });
+
+    test('a reaction that re-observes synchronously terminates', () {
+      final edge = RoomExitEdge(true);
+      var fired = 0;
+      void react() {
+        fired++;
+        if (fired > 20) return;
+        if (edge.observe(inRoom: false)) react();
+      }
+
+      if (edge.observe(inRoom: false)) react();
+      expect(fired, 1);
+    });
+  });
 }

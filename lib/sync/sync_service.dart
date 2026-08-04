@@ -267,6 +267,7 @@ class SyncService {
           );
           _reconnectAttempts = 0;
           _connectionController.add(true);
+          _presenceThrottle.renew();
           _trackPresence();
           _reannounceFileInfo();
           unawaited(refreshCanonicalMedia());
@@ -378,17 +379,29 @@ class SyncService {
   String? get loadedFileName => _loadedFileName;
   bool get privacyMode => _privacyMode;
 
+  static const kPresenceMaxCalls = 4;
+  static const kPresenceWindow = Duration(seconds: 30);
+
+  final _presenceThrottle = TrailingThrottle<Map<String, dynamic>>(
+    interval: const Duration(seconds: 2),
+    maxCalls: kPresenceMaxCalls,
+    window: kPresenceWindow,
+    equals: presencePayloadsMatch,
+  );
+
+  late final DateTime _presenceJoinedFallback = DateTime.now();
+
   void _trackPresence() {
-    _channel?.track({
+    _presenceThrottle.submit({
       'user_id': userId,
       'display_name': profile.displayName,
       'avatar_url': profile.avatarUrl,
       'role': _role,
-      'joined_at': (_membershipJoinedAt ?? DateTime.now()).toIso8601String(),
+      'joined_at': (_membershipJoinedAt ?? _presenceJoinedFallback).toIso8601String(),
       'ready_status': _readyStatus.wire,
       'loaded_file_name': _loadedFileName,
       'privacy_mode': _privacyMode,
-    });
+    }, (payload) => _channel?.track(payload));
   }
 
   /// Host succession: re-announce presence with the new role.
@@ -412,7 +425,9 @@ class SyncService {
   void retrackReadiness(ReadyStatus status, {String? loadedFileName}) {
     if (_readyStatus == status && _loadedFileName == loadedFileName) return;
     trace(
-      'readiness ${_readyStatus.wire} -> ${status.wire}',
+      _readyStatus == status
+          ? 'readiness ${status.wire}, file changed'
+          : 'readiness ${_readyStatus.wire} -> ${status.wire}',
       category: 'gate',
       data: {'file': loadedFileName},
     );
@@ -1215,6 +1230,7 @@ class SyncService {
       t.cancel();
     }
     _reactionThrottle.dispose();
+    _presenceThrottle.dispose();
     _chatController.close();
     _presenceController.close();
     _typingController.close();

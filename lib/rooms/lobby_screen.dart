@@ -76,12 +76,12 @@ class _LobbyScreenState extends State<LobbyScreen> {
     }
   }
 
-  bool _wasInRoom = RoomService.instance.currentRoom != null;
+  final _roomExit = RoomExitEdge(RoomService.instance.currentRoom != null);
 
   void _onRoomServiceChanged() {
-    final inRoom = RoomService.instance.currentRoom != null;
-    if (_wasInRoom && !inRoom) unawaited(_loadMyRooms());
-    _wasInRoom = inRoom;
+    if (_roomExit.observe(inRoom: RoomService.instance.currentRoom != null)) {
+      unawaited(_loadMyRooms());
+    }
   }
 
   @override

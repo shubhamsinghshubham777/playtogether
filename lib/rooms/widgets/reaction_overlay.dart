@@ -120,7 +120,7 @@ class _ReactionOverlayState extends State<ReactionOverlay> with SingleTickerProv
   final _particles = <_Particle>[];
   final _random = math.Random();
 
-  late final Ticker _ticker = createTicker(_onTick);
+  late final Ticker _ticker;
   final _clock = ValueNotifier<Duration>(Duration.zero);
 
   StreamSubscription<ReactionEvent>? _subscription;
@@ -131,6 +131,7 @@ class _ReactionOverlayState extends State<ReactionOverlay> with SingleTickerProv
   @override
   void initState() {
     super.initState();
+    _ticker = createTicker(_onTick);
     _subscription = widget.reactions.listen(_spawn);
     unawaited(widget.assets.preload());
   }
