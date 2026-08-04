@@ -57,6 +57,7 @@ Future<void> _bootstrap() async {
   // guest captcha can render; everywhere else this returns immediately.
   await PTWebView.init();
   await Supabase.initialize(url: Env.supabaseUrl, publishableKey: Env.supabasePublishableKey);
+  trace('supabase ready', category: 'auth', data: {'local_stack': Env.usingLocalStack});
   await AppVersion.load();
   final optedOut = await AnalyticsConsent.instance.load();
   Analytics.instance.init(

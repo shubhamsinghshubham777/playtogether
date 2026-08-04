@@ -8,6 +8,7 @@ import 'package:playtogether/app_router.dart';
 import 'package:playtogether/app_version.dart';
 import 'package:playtogether/auth/auth_service.dart';
 import 'package:playtogether/diagnostics.dart';
+import 'package:playtogether/env.dart';
 import 'package:playtogether/profile/entitlement_service.dart';
 import 'package:playtogether/profile/profile_service.dart';
 import 'package:playtogether/rooms/local_media_store.dart';
@@ -903,10 +904,10 @@ class _Wordmark extends StatelessWidget {
             ),
             if (AppVersion.label case final version?)
               Text(
-                version,
+                Env.usingLocalStack ? '$version · local' : version,
                 style: PTText.mono.copyWith(
                   fontSize: compact ? 10 : 11,
-                  color: PTColors.white(0.4),
+                  color: Env.usingLocalStack ? PTColors.warning : PTColors.white(0.4),
                 ),
               ),
           ],
