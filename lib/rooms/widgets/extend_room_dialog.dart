@@ -150,12 +150,14 @@ class PremiumTeaseDialog extends StatelessWidget {
     required this.body,
     required this.perks,
     this.onNotify,
+    this.onSignIn,
   });
 
   final String headline;
   final String body;
   final List<String> perks;
   final VoidCallback? onNotify;
+  final VoidCallback? onSignIn;
 
   @override
   Widget build(BuildContext context) {
@@ -214,29 +216,56 @@ class PremiumTeaseDialog extends StatelessWidget {
         ),
         Padding(
           padding: const EdgeInsets.only(top: 6),
-          child: Row(
-            spacing: 11,
-            children: [
-              Expanded(
-                child: PTButton(
-                  label: 'Maybe later',
-                  variant: .secondary,
-                  height: 48,
-                  onPressed: () => Navigator.of(context).pop(),
-                ),
-              ),
-              Expanded(
-                child: PTButton(
-                  label: 'Keep me posted',
-                  height: 48,
-                  onPressed: () {
-                    onNotify?.call();
-                    Navigator.of(context).pop();
-                  },
-                ),
-              ),
-            ],
+          child: onSignIn == null ? _teaseActions(context) : _signInActions(context),
+        ),
+      ],
+    );
+  }
+
+  Widget _teaseActions(BuildContext context) {
+    return Row(
+      spacing: 11,
+      children: [
+        Expanded(
+          child: PTButton(
+            label: 'Maybe later',
+            variant: .secondary,
+            height: 48,
+            onPressed: () => Navigator.of(context).pop(),
           ),
+        ),
+        Expanded(
+          child: PTButton(
+            label: 'Keep me posted',
+            height: 48,
+            onPressed: () {
+              onNotify?.call();
+              Navigator.of(context).pop();
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _signInActions(BuildContext context) {
+    return Column(
+      mainAxisSize: .min,
+      crossAxisAlignment: .stretch,
+      spacing: 11,
+      children: [
+        GoogleButton(
+          label: 'Sign in with Google',
+          onPressed: () {
+            Navigator.of(context).pop();
+            onSignIn?.call();
+          },
+        ),
+        PTButton(
+          label: 'Maybe later',
+          variant: .secondary,
+          height: 48,
+          onPressed: () => Navigator.of(context).pop(),
         ),
       ],
     );

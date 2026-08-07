@@ -11,6 +11,7 @@ import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:playtogether/analytics.dart';
 import 'package:playtogether/app_router.dart';
+import 'package:playtogether/auth/auth_service.dart';
 import 'package:playtogether/av/livekit_service.dart';
 import 'package:playtogether/diagnostics.dart';
 import 'package:playtogether/platform.dart';
@@ -2394,14 +2395,28 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
     if (room == null || _extending) return;
 
     if (!_limits.picksExtensionLength && !_hasFreebie) {
+      if (_limits.isGuest) {
+        await _showPremiumTease(
+          surface: 'room_expiry',
+          headline: 'Sign in for more time',
+          body:
+              'Guest rooms run for an hour and stop there. Sign in with Google — it '
+              'takes a moment, it costs nothing, and this session carries over.',
+          perks: const [
+            'Rooms that run for four hours, not one',
+            'An hour more on the house when you need it',
+            'Rooms that nap in your lobby instead of vanishing',
+          ],
+          onSignIn: _linkGoogleIdentity,
+        );
+        return;
+      }
       await _showPremiumTease(
         surface: 'room_expiry',
-        headline: _limits.isGuest ? 'Sign in for more time' : 'More time is coming',
-        body: _limits.isGuest
-            ? 'Guest rooms run for an hour and stop there. Sign in with Google and your '
-                  'rooms get longer, keep their spot in your lobby, and can be extended.'
-            : 'Your free hour is spent, and this room wraps at $_endsAtLabel. Premium is '
-                  'nearly here — longer rooms, bigger parties and rooms that keep themselves.',
+        headline: 'More time is coming',
+        body:
+            'Your free hour is spent, and this room wraps at $_endsAtLabel. Premium is '
+            'nearly here — longer rooms, bigger parties and rooms that keep themselves.',
         perks: const [
           'Rooms that run up to 24 hours',
           'Up to 16 watchers, with video facecams',
@@ -2471,6 +2486,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
     required String headline,
     required String body,
     required List<String> perks,
+    VoidCallback? onSignIn,
   }) async {
     Analytics.instance.track('upgrade_cta_shown', {'surface': surface});
     await showGlassDialog<void>(
@@ -2480,10 +2496,36 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
         headline: headline,
         body: body,
         perks: perks,
-        onNotify: () => Analytics.instance.track('upgrade_cta_clicked', {'surface': surface}),
+        onNotify: () => Analytics.instance.track('upgrade_cta_clicked', {
+          'surface': surface,
+          'action': 'notify',
+        }),
+        onSignIn: onSignIn == null
+            ? null
+            : () {
+                Analytics.instance.track('upgrade_cta_clicked', {
+                  'surface': surface,
+                  'action': 'sign_in',
+                });
+                onSignIn();
+              },
       ),
     );
     if (mounted) _shortcutFocus.requestFocus();
+  }
+
+  Future<void> _linkGoogleIdentity() async {
+    trace(
+      'starting a guest upgrade from the room',
+      category: 'auth',
+      data: {'room': widget.roomId},
+    );
+    try {
+      await AuthService.instance.linkGoogleIdentity();
+    } catch (e, s) {
+      reportNonFatal(e, s, during: 'linking a Google identity from the expiry upsell');
+      if (mounted) _snack("Couldn't start Google sign-in — try again.");
+    }
   }
 
   String get _endsAtLabel {
