@@ -36,6 +36,13 @@ bool FlutterWindow::OnCreate() {
   // window is shown. It is a no-op if the first frame hasn't completed yet.
   flutter_controller_->ForceRedraw();
 
+  // Keep the native window visible while Flutter is starting. The Dart side
+  // enters fullscreen after its first frame; leaving this window hidden until
+  // the callback above races that request on Windows and can result in a
+  // fullscreen window that is never presented. Show() is idempotent, so the
+  // first-frame callback remains useful as a fallback.
+  Show();
+
   return true;
 }
 
