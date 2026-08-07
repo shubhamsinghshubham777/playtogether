@@ -106,12 +106,12 @@ Pre-releases are excluded from that feed, so they never reach existing installs.
 | `lib/ui/` | Design system: theme/tokens, glass panels, buttons, inputs, dialogs |
 | `lib/auth/`, `lib/profile/` | Sign-in flows, Turnstile dialog, profile + avatar management |
 | `lib/rooms/` | Lobby, room screen and its widgets, room models/service |
-| `lib/sync/` | `SyncService` — the realtime sync engine (see `CLAUDE.md` for invariants) |
+| `lib/sync/` | `SyncService` — the realtime sync engine (see `AGENTS.md` / `CLAUDE.md` for invariants) |
 | `lib/av/` | LiveKit connection + track management |
 | `lib/updates/` | Desktop self-update: appcast check + native updater handoff |
 | `supabase/` | Migrations (schema/RLS/RPCs/cron), edge functions, auth config |
 
-`CLAUDE.md` documents the architecture and the sync-engine invariants in depth.
+`AGENTS.md` and `CLAUDE.md` document the architecture and the sync-engine invariants in depth.
 
 ## Credits
 
