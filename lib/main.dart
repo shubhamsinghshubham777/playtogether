@@ -72,7 +72,7 @@ Future<void> _bootstrap() async {
   // the auth stream has an error handler before the first deep link can land.
   AuthService.instance.start();
   runApp(const MainApp());
-  if (isDesktop) unawaited(_enterFullScreen());
+  if (isDesktop && !kDebugMode) unawaited(_enterFullScreen());
   if (supportsSelfUpdate) unawaited(UpdateService.instance.checkForUpdate());
 }
 
