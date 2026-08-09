@@ -43,6 +43,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
   bool _joining = false;
   int _codeShake = 0;
   String? _busyRoomId;
+  Timer? _myRoomsPollTimer;
 
   /// The entrance choreography is a *first impression*, not a transition.
   /// Static so coming back from a room is instant familiarity rather than a
@@ -61,6 +62,11 @@ class _LobbyScreenState extends State<LobbyScreen> {
       }),
     );
     unawaited(_loadMyRooms());
+    _myRoomsPollTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+      if (mounted && RoomService.instance.currentRoom == null) {
+        unawaited(_loadMyRooms());
+      }
+    });
     RoomService.instance.addListener(_onRoomServiceChanged);
     if (ProfileService.instance.profile == null) {
       // Consume the parked invite even if the profile fetch fails — the join
@@ -87,6 +93,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
 
   @override
   void dispose() {
+    _myRoomsPollTimer?.cancel();
     RoomService.instance.removeListener(_onRoomServiceChanged);
     _nameController.dispose();
     super.dispose();
@@ -184,7 +191,26 @@ class _LobbyScreenState extends State<LobbyScreen> {
       return;
     }
     if (!entry.isHost) {
-      _snack('Only the host can wake this room back up.', kind: .info);
+      setState(() => _busyRoomId = entry.room.id);
+      try {
+        final rooms = await RoomService.instance.loadMyRooms();
+        final fresh = rooms.where((r) => r.room.id == entry.room.id).firstOrNull;
+        if (fresh != null && fresh.isLive) {
+          if (mounted) {
+            if (fresh.isMember) {
+              context.go(roomPath(fresh.room.id));
+            } else {
+              await _join(fresh.room.code, via: .code);
+            }
+          }
+          return;
+        }
+      } catch (e, s) {
+        reportNonFatal(e, s, during: 'checking live status for napping room');
+      } finally {
+        if (mounted) setState(() => _busyRoomId = null);
+      }
+      if (mounted) _snack('Only the host can wake this room back up.', kind: .info);
       return;
     }
     final limits = EntitlementService.instance.limitsOrFallback;

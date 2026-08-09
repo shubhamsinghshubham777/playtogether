@@ -10,7 +10,6 @@ import 'package:material_symbols_icons/symbols.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:playtogether/analytics.dart';
-import 'package:playtogether/app_router.dart';
 import 'package:playtogether/auth/auth_service.dart';
 import 'package:playtogether/av/livekit_service.dart';
 import 'package:playtogether/diagnostics.dart';
@@ -1953,6 +1952,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
     IconData? icon,
   }) async {
     if (_ended) return;
+    await _persistPosition();
     _ended = true;
     _evictionReason = reason;
     _trackWatchSessionEnded();
@@ -2127,17 +2127,32 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
     try {
       final limits = EntitlementService.instance.limitsOrFallback;
       final minutes = room.durationMinutes.clamp(5, limits.maxSessionMinutes);
-      final resumed = await RoomService.instance.resumeRoom(
-        roomId: widget.roomId,
-        minutes: minutes,
-      );
+      await RoomService.instance.resumeRoom(roomId: widget.roomId, minutes: minutes);
       if (!mounted) return;
       if (dialogContext.mounted) Navigator.of(dialogContext).pop();
-      // Re-entered rather than revived in place: the sync service, player and
-      // gate were all torn down by the eviction, and go_router keys the room
-      // page by id, so this rebuilds the screen from scratch.
-      context.go('/lobby');
-      context.go(roomPath(resumed.id));
+      _ended = false;
+      _evictionReason = null;
+      _resumeAttempted = false;
+      _lastWrittenPosition = null;
+      _positionWriteFailures = 0;
+      _localFileName = null;
+      _duration = Duration.zero;
+      _position = Duration.zero;
+      _playing = false;
+      _buffering = false;
+      _gateState = .indeterminate;
+      _awaitingFirstSource = true;
+      for (final s in _subscriptions) {
+        s.cancel();
+      }
+      _subscriptions.clear();
+      _countdownTimer?.cancel();
+      _positionWriteTimer?.cancel();
+      _idleSourceTimer?.cancel();
+      _localLoadWatchdog?.cancel();
+      _ytBufferFallbackTimer?.cancel();
+      setState(() => _loading = true);
+      await _init();
     } catch (e, s) {
       final failure = RoomErrorCode.fromError(e);
       if (failure == .unknown) reportNonFatal(e, s, during: 'resuming a room from its wrap-up');

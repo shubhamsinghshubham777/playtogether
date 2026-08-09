@@ -1,5 +1,5 @@
 begin;
-select plan(57);
+select plan(58);
 
 create function pg_temp.mk_user(p_guest boolean default false) returns uuid
 language plpgsql as $$
@@ -190,6 +190,16 @@ begin
     where id in ((select v from t where k = 'free_room'),
                  (select v from t where k = 'guest_room'),
                  (select v from t where k = 'premium_room'));
+end $$;
+
+select is(
+  (select public.room_state(r) from public.rooms r
+   where r.id = (select v from t where k = 'free_room')),
+  'dormant',
+  'a free room past its expiry is dormant even before sweep_rooms runs');
+
+do $$
+begin
   perform public.sweep_rooms();
 end $$;
 

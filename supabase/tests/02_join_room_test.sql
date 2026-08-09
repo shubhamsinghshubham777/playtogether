@@ -98,7 +98,7 @@ select throws_ok(
 
 select throws_ok(
   $$ select public.join_room((select v from c where k = 'expired_code')) $$,
-  'room_ended',
+  'room_dormant',
   'a room past its expiry cannot be joined, before the sweep has run');
 
 do $$
