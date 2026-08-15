@@ -45,5 +45,15 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  // Redirect logged-in users away from /auth to /account (or their intended redirect)
+  if (user && pathname.startsWith("/auth") && !pathname.startsWith("/auth/callback")) {
+    const redirectParam = request.nextUrl.searchParams.get("redirect");
+    const targetPath =
+      redirectParam && redirectParam.startsWith("/") && !redirectParam.startsWith("//")
+        ? redirectParam
+        : "/account";
+    return NextResponse.redirect(new URL(targetPath, request.url));
+  }
+
   return supabaseResponse;
 }

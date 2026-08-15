@@ -465,7 +465,9 @@ function AccountDashboard() {
                   <Clock className="w-3.5 h-3.5 text-purple-400" /> Session Limit
                 </span>
                 <span className="font-bold text-white">
-                  {entitlement?.max_session_minutes
+                  {entitlement?.max_total_session_minutes
+                    ? `${entitlement.max_total_session_minutes / 60}h`
+                    : entitlement?.max_session_minutes
                     ? `${entitlement.max_session_minutes / 60}h`
                     : "4h"}
                 </span>
@@ -474,8 +476,22 @@ function AccountDashboard() {
                 <span className="flex items-center gap-2">
                   <Video className="w-3.5 h-3.5 text-purple-400" /> Facecams
                 </span>
-                <span className="font-bold text-white uppercase">
-                  {entitlement?.av_level ?? "voice"}
+                <span className="font-bold text-white">
+                  {entitlement?.av_level === "video"
+                    ? "HD Video"
+                    : entitlement?.av_level === "voice"
+                    ? "Voice"
+                    : "None"}
+                </span>
+              </li>
+              <li className="flex items-center justify-between border-b border-white/5 pb-2">
+                <span className="flex items-center gap-2">
+                  <Sparkles className="w-3.5 h-3.5 text-purple-400" /> Persistent Rooms
+                </span>
+                <span className="font-bold text-white">
+                  {(entitlement?.persistent_room_cap ?? 0) > 0
+                    ? `${entitlement?.persistent_room_cap}`
+                    : "0 (24h nap)"}
                 </span>
               </li>
             </ul>

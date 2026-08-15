@@ -1,18 +1,58 @@
 "use client";
 
-import { Suspense, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Logo } from "@/components/Logo";
 import { GlassPanel } from "@/components/GlassPanel";
 import { createClient } from "@/lib/supabase/client";
-import { ShieldCheck, Info } from "lucide-react";
+import { ShieldCheck, Info, Loader2 } from "lucide-react";
 
 function AuthCard() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const redirect = searchParams.get("redirect") || "/account";
+  const [checkingAuth, setCheckingAuth] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const supabase = createClient();
+
+  useEffect(() => {
+    let ignore = false;
+
+    async function checkExistingSession() {
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (ignore) return;
+        if (user) {
+          router.replace(redirect);
+          return;
+        }
+      } catch (err) {
+        console.error("Auth check failed:", err);
+      } finally {
+        if (!ignore) {
+          setCheckingAuth(false);
+        }
+      }
+    }
+
+    checkExistingSession();
+
+    const { data: authListener } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        if (session?.user) {
+          router.replace(redirect);
+        }
+      }
+    );
+
+    return () => {
+      ignore = true;
+      authListener.subscription.unsubscribe();
+    };
+  }, [redirect, router, supabase]);
 
   const handleGoogleSignIn = async () => {
     setIsLoading(true);
@@ -44,6 +84,23 @@ function AuthCard() {
       setIsLoading(false);
     }
   };
+
+  if (checkingAuth) {
+    return (
+      <GlassPanel
+        glow="purple"
+        className="p-8 sm:p-10 space-y-4 max-w-md w-full border-purple-500/25 bg-[#141024]/90 text-center"
+      >
+        <div className="flex justify-center mb-2">
+          <Logo size="lg" />
+        </div>
+        <div className="flex items-center justify-center gap-2 text-sm text-purple-200 py-4">
+          <Loader2 className="w-4 h-4 animate-spin text-purple-400" />
+          <span>Verifying session...</span>
+        </div>
+      </GlassPanel>
+    );
+  }
 
   return (
     <GlassPanel

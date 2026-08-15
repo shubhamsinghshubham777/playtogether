@@ -5,26 +5,66 @@ import { useRouter } from "next/navigation";
 import { PRICING_TIERS } from "@/lib/constants";
 import { PlanCard } from "./PlanCard";
 import { GlassPanel } from "./GlassPanel";
+import { LocationDebugSwitcher } from "./LocationDebugSwitcher";
 import { openPaddleCheckout } from "./PaddleCheckout";
 import { createClient } from "@/lib/supabase/client";
-import { Check, Minus } from "lucide-react";
+import { usePricing } from "@/lib/usePricing";
+import { Check, Minus, Loader2 } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 
 export function PricingTable() {
   const [billingCycle, setBillingCycle] = useState<"monthly" | "annual">("annual");
   const [user, setUser] = useState<User | null>(null);
+  const [isPremium, setIsPremium] = useState(false);
   const [isLoadingCheckout, setIsLoadingCheckout] = useState(false);
   const router = useRouter();
   const supabase = createClient();
+  const {
+    monthlyFormatted,
+    annualFormatted,
+    monthlyEquivalentFormatted,
+    savingsPct,
+    isLoading: isPriceLoading,
+  } = usePricing();
 
   useEffect(() => {
+    let ignore = false;
     async function checkAuth() {
       const {
         data: { user },
       } = await supabase.auth.getUser();
+      if (ignore) return;
       setUser(user);
+      if (user) {
+        try {
+          const { data: entData } = await supabase.rpc("my_entitlement");
+          if (ignore) return;
+          if (entData) {
+            const ent = Array.isArray(entData) ? entData[0] : entData;
+            setIsPremium(ent?.tier === "premium");
+          } else {
+            const { data: sub } = await supabase
+              .from("subscriptions")
+              .select("tier, current_period_end")
+              .eq("user_id", user.id)
+              .maybeSingle();
+            if (ignore) return;
+            if (sub?.tier === "premium") {
+              const isExpired =
+                sub.current_period_end &&
+                new Date(sub.current_period_end) < new Date();
+              setIsPremium(!isExpired);
+            }
+          }
+        } catch {
+          if (!ignore) setIsPremium(false);
+        }
+      }
     }
     checkAuth();
+    return () => {
+      ignore = true;
+    };
   }, [supabase]);
 
   const handleSelectPlan = async (tierKey: string) => {
@@ -34,6 +74,11 @@ export function PricingTable() {
     }
 
     if (tierKey === "premium") {
+      if (isPremium) {
+        router.push("/account");
+        return;
+      }
+
       if (!user) {
         router.push("/auth?redirect=/pricing");
         return;
@@ -61,21 +106,31 @@ export function PricingTable() {
     }
   };
 
-  const premiumPrice = billingCycle === "annual" ? "$29.99" : "$3.99";
-  const premiumSubPrice =
-    billingCycle === "annual"
-      ? "$2.49 / mo (Billed annually — Save 37%)"
-      : "Billed monthly. Cancel anytime.";
+  const premiumPrice = isPriceLoading ? (
+    <span className="inline-flex items-center gap-2 py-1 text-2xl font-mono text-amber-400 font-bold">
+      <Loader2 className="w-6 h-6 animate-spin" />
+    </span>
+  ) : billingCycle === "annual" ? (
+    annualFormatted
+  ) : (
+    monthlyFormatted
+  );
+
+  const premiumSubPrice = isPriceLoading
+    ? "Fetching live pricing from Paddle..."
+    : billingCycle === "annual"
+    ? `${monthlyEquivalentFormatted} (Billed annually — Save ${savingsPct})`
+    : "Billed monthly. Cancel anytime.";
 
   return (
     <div className="space-y-12">
-      {/* Controls Bar: Billing Toggle */}
-      <div className="flex items-center justify-center">
+      {/* Controls Bar: Billing Toggle & Debug Switcher */}
+      <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
         {/* Monthly / Annual Toggle */}
         <div className="p-1 rounded-2xl bg-[#141024] border border-purple-500/20 flex items-center shadow-inner">
           <button
             onClick={() => setBillingCycle("monthly")}
-            className={`px-5 py-2 rounded-xl text-sm font-semibold transition-all ${
+            className={`px-5 py-2 rounded-xl text-sm font-semibold transition-all cursor-pointer ${
               billingCycle === "monthly"
                 ? "btn-primary-gradient text-white shadow-md shadow-purple-900/40"
                 : "text-gray-400 hover:text-white"
@@ -85,7 +140,7 @@ export function PricingTable() {
           </button>
           <button
             onClick={() => setBillingCycle("annual")}
-            className={`px-5 py-2 rounded-xl text-sm font-semibold transition-all flex items-center gap-2 ${
+            className={`px-5 py-2 rounded-xl text-sm font-semibold transition-all flex items-center gap-2 cursor-pointer ${
               billingCycle === "annual"
                 ? "btn-primary-gradient text-white shadow-md shadow-purple-900/40"
                 : "text-gray-400 hover:text-white"
@@ -93,10 +148,12 @@ export function PricingTable() {
           >
             <span>Annual Billing</span>
             <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30">
-              Save 37%
+              Save {savingsPct}
             </span>
           </button>
         </div>
+
+        <LocationDebugSwitcher />
       </div>
 
       {/* Pricing Cards Grid */}
@@ -129,13 +186,19 @@ export function PricingTable() {
         {/* Premium Tier */}
         <PlanCard
           name={PRICING_TIERS.premium.name}
-          badge={PRICING_TIERS.premium.badge}
+          badge={isPremium ? "Active Plan" : PRICING_TIERS.premium.badge}
           price={premiumPrice}
           periodText={billingCycle === "annual" ? "/year" : "/month"}
           subPrice={premiumSubPrice}
           description={PRICING_TIERS.premium.description}
           features={PRICING_TIERS.premium.features}
-          ctaText={user ? "Upgrade to Premium" : "Sign in to Subscribe"}
+          ctaText={
+            isPremium
+              ? "Manage Subscription"
+              : user
+              ? "Upgrade to Premium"
+              : "Sign in to Subscribe"
+          }
           isPremium
           isLoading={isLoadingCheckout}
           onSelect={() => handleSelectPlan("premium")}

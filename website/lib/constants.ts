@@ -7,6 +7,7 @@ export const SITE_CONFIG = {
   supportEmail: "support@playtogether.app",
   githubRepo: "https://github.com/shubhamsinghshubham777/playtogether",
   creatorName: "Shubham Singh",
+  creatorGithub: "https://github.com/shubhamsinghshubham777",
 };
 
 export const PRICING_TIERS = {

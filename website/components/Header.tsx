@@ -12,23 +12,84 @@ import Image from "next/image";
 
 export function Header() {
   const [user, setUser] = useState<User | null>(null);
+  const [isPremium, setIsPremium] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const pathname = usePathname();
   const supabase = createClient();
 
   useEffect(() => {
+    let ignore = false;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+
+    async function checkTier(userId?: string) {
+      if (!userId) {
+        if (!ignore) setIsPremium(false);
+        return;
+      }
+      try {
+        const { data: entData } = await supabase.rpc("my_entitlement");
+        if (ignore) return;
+        if (entData) {
+          const ent = Array.isArray(entData) ? entData[0] : entData;
+          setIsPremium(ent?.tier === "premium");
+        } else {
+          const { data: sub } = await supabase
+            .from("subscriptions")
+            .select("tier, current_period_end")
+            .eq("user_id", userId)
+            .maybeSingle();
+          if (ignore) return;
+          if (sub?.tier === "premium") {
+            const isExpired =
+              sub.current_period_end && new Date(sub.current_period_end) < new Date();
+            setIsPremium(!isExpired);
+          } else {
+            setIsPremium(false);
+          }
+        }
+      } catch {
+        if (!ignore) setIsPremium(false);
+      }
+    }
+
     async function getUser() {
       const {
         data: { user },
       } = await supabase.auth.getUser();
+      if (ignore) return;
       setUser(user);
+      if (user) {
+        checkTier(user.id);
+        const channelName = `header_subs_${user.id}_${Date.now()}`;
+        channel = supabase
+          .channel(channelName)
+          .on(
+            "postgres_changes",
+            {
+              event: "*",
+              schema: "public",
+              table: "subscriptions",
+              filter: `user_id=eq.${user.id}`,
+            },
+            () => {
+              checkTier(user.id);
+            }
+          )
+          .subscribe();
+      }
     }
     getUser();
 
     const { data: authListener } = supabase.auth.onAuthStateChange(
       (_event, session) => {
-        setUser(session?.user ?? null);
+        const currentUser = session?.user ?? null;
+        setUser(currentUser);
+        if (currentUser) {
+          checkTier(currentUser.id);
+        } else {
+          setIsPremium(false);
+        }
       }
     );
 
@@ -38,7 +99,11 @@ export function Header() {
     window.addEventListener("scroll", handleScroll);
 
     return () => {
+      ignore = true;
       authListener.subscription.unsubscribe();
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
       window.removeEventListener("scroll", handleScroll);
     };
   }, [supabase]);
@@ -53,10 +118,10 @@ export function Header() {
 
   return (
     <header
-      className={`fixed top-0 inset-x-0 z-50 transition-all duration-300 ${
+      className={`fixed top-0 inset-x-0 z-50 transition-all duration-300 border-b ${
         scrolled
-          ? "bg-[#0B0A14]/85 backdrop-blur-md border-b border-purple-500/10 shadow-lg shadow-black/40 py-3.5"
-          : "bg-transparent py-5"
+          ? "bg-[#0B0A14]/85 backdrop-blur-md border-purple-500/10 shadow-lg shadow-black/40 py-3.5"
+          : "bg-[#0B0A14]/0 backdrop-blur-none border-purple-500/0 shadow-none py-5"
       }`}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between">
@@ -89,7 +154,11 @@ export function Header() {
             <div className="flex items-center gap-3">
               <Link
                 href="/account"
-                className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#161226]/80 hover:bg-[#201A38] border border-purple-400/20 hover:border-purple-400/40 transition-all duration-200 group"
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#161226]/80 hover:bg-[#201A38] border transition-all duration-200 group ${
+                  isPremium
+                    ? "border-amber-400/30 hover:border-amber-400/50"
+                    : "border-purple-400/20 hover:border-purple-400/40"
+                }`}
               >
                 {user.user_metadata?.avatar_url ? (
                   <Image
@@ -97,25 +166,38 @@ export function Header() {
                     alt={user.user_metadata?.full_name || "Profile"}
                     width={24}
                     height={24}
-                    className="w-6 h-6 rounded-full border border-purple-400/30"
+                    className={`w-6 h-6 rounded-full border ${
+                      isPremium ? "border-amber-400/50" : "border-purple-400/30"
+                    }`}
                   />
                 ) : (
-                  <div className="w-6 h-6 rounded-full bg-purple-600 flex items-center justify-center text-xs font-bold text-white">
+                  <div
+                    className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white ${
+                      isPremium ? "bg-amber-600" : "bg-purple-600"
+                    }`}
+                  >
                     {user.email?.charAt(0).toUpperCase() || "U"}
                   </div>
                 )}
                 <span className="text-xs font-medium text-purple-200 group-hover:text-white max-w-[120px] truncate">
                   {user.user_metadata?.full_name || user.email?.split("@")[0]}
                 </span>
+                {isPremium && (
+                  <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30">
+                    ★ Premium
+                  </span>
+                )}
               </Link>
-              <PTButton
-                href="/pricing"
-                variant="gold"
-                size="sm"
-                leftIcon={<Sparkles className="w-3.5 h-3.5" />}
-              >
-                Upgrade
-              </PTButton>
+              {!isPremium && (
+                <PTButton
+                  href="/pricing"
+                  variant="gold"
+                  size="sm"
+                  leftIcon={<Sparkles className="w-3.5 h-3.5" />}
+                >
+                  Upgrade
+                </PTButton>
+              )}
             </div>
           ) : (
             <div className="flex items-center gap-3">
@@ -170,25 +252,48 @@ export function Header() {
                 <Link
                   href="/account"
                   onClick={() => setMobileMenuOpen(false)}
-                  className="flex items-center gap-3 p-3 rounded-xl bg-[#161226] border border-purple-400/20"
+                  className={`flex items-center justify-between p-3 rounded-xl bg-[#161226] border ${
+                    isPremium ? "border-amber-400/30" : "border-purple-400/20"
+                  }`}
                 >
-                  <UserIcon className="w-5 h-5 text-purple-400" />
-                  <div className="flex flex-col">
-                    <span className="text-sm font-semibold text-white">
-                      {user.user_metadata?.full_name || "My Account"}
-                    </span>
-                    <span className="text-xs text-gray-400">{user.email}</span>
+                  <div className="flex items-center gap-3">
+                    {user.user_metadata?.avatar_url ? (
+                      <Image
+                        src={user.user_metadata.avatar_url}
+                        alt={user.user_metadata?.full_name || "Profile"}
+                        width={32}
+                        height={32}
+                        className={`w-8 h-8 rounded-full border ${
+                          isPremium ? "border-amber-400/40" : "border-purple-400/30"
+                        }`}
+                      />
+                    ) : (
+                      <UserIcon className="w-5 h-5 text-purple-400" />
+                    )}
+                    <div className="flex flex-col">
+                      <span className="text-sm font-semibold text-white">
+                        {user.user_metadata?.full_name || "My Account"}
+                      </span>
+                      <span className="text-xs text-gray-400">{user.email}</span>
+                    </div>
                   </div>
+                  {isPremium && (
+                    <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30">
+                      ★ Premium
+                    </span>
+                  )}
                 </Link>
-                <PTButton
-                  href="/pricing"
-                  variant="gold"
-                  size="md"
-                  className="w-full"
-                  leftIcon={<Sparkles className="w-4 h-4" />}
-                >
-                  Upgrade to Premium
-                </PTButton>
+                {!isPremium && (
+                  <PTButton
+                    href="/pricing"
+                    variant="gold"
+                    size="md"
+                    className="w-full"
+                    leftIcon={<Sparkles className="w-4 h-4" />}
+                  >
+                    Upgrade to Premium
+                  </PTButton>
+                )}
               </>
             ) : (
               <>

@@ -66,12 +66,9 @@ export function Footer() {
               <li>
                 <Link
                   href="/pricing"
-                  className="hover:text-white transition-colors flex items-center gap-1.5"
+                  className="hover:text-white transition-colors"
                 >
-                  <span>Pricing & Plans</span>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-400/15 text-amber-300 border border-amber-400/30">
-                    PRO
-                  </span>
+                  Pricing & Plans
                 </Link>
               </li>
               <li>
@@ -158,14 +155,15 @@ export function Footer() {
             <span>© {currentYear} {SITE_CONFIG.name}. All rights reserved.</span>
             <span>•</span>
             <span className="inline-flex items-center gap-1">
-              Made with <Heart className="w-3 h-3 text-rose-500 fill-rose-500" /> by {SITE_CONFIG.creatorName}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-4 text-gray-400">
-            <span className="flex items-center gap-1.5 text-emerald-400">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              All Systems Operational
+              Made with <Heart className="w-3 h-3 text-rose-500 fill-rose-500" /> by{" "}
+              <a
+                href={SITE_CONFIG.creatorGithub}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-purple-300 hover:text-white underline underline-offset-4 decoration-purple-400/50 hover:decoration-purple-200 font-medium transition-all"
+              >
+                {SITE_CONFIG.creatorName}
+              </a>
             </span>
           </div>
         </div>

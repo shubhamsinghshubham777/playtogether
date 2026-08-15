@@ -25,7 +25,7 @@ export function Logo({ className = "", size = "md" }: LogoProps) {
       >
         <div className="w-full h-full bg-[#161226]/80 rounded-[10px] flex items-center justify-center backdrop-blur-xs">
           <svg
-            className={`${s.play} text-[#C9B8FF] fill-current translate-x-0.5 transition-transform duration-200 group-hover:scale-110`}
+            className={`${s.play} text-[#C9B8FF] fill-current transition-transform duration-200 group-hover:scale-110`}
             viewBox="0 0 24 24"
           >
             <path d="M8 5.14v14l11-7-11-7z" />

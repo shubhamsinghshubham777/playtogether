@@ -6,8 +6,8 @@ import { Check, Sparkles } from "lucide-react";
 interface PlanCardProps {
   name: string;
   badge?: string;
-  price: string;
-  subPrice?: string;
+  price: React.ReactNode;
+  subPrice?: React.ReactNode;
   periodText?: string;
   description: string;
   features: string[];
