@@ -46,6 +46,7 @@ function AccountDashboard() {
   const [subscription, setSubscription] = useState<SubscriptionData | null>(null);
   const [loading, setLoading] = useState(true);
   const [verifying, setVerifying] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const celebratedRef = useRef(false);
 
@@ -56,6 +57,7 @@ function AccountDashboard() {
 
   useEffect(() => {
     let ignore = false;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
 
     async function loadData() {
       try {
@@ -63,47 +65,78 @@ function AccountDashboard() {
           data: { user },
         } = await supabase.auth.getUser();
 
+        if (ignore) return;
         if (!user) {
           router.push("/auth?redirect=/account");
           return;
         }
-        if (!ignore) setUser(user);
+        setUser(user);
 
-        // Call my_entitlement RPC
-        const { data: entData, error: entError } = await supabase.rpc(
-          "my_entitlement"
-        );
-        if (!ignore) {
-          if (!entError && entData) {
-            const ent = Array.isArray(entData) ? entData[0] : entData;
-            setEntitlement(ent);
-          } else {
-            setEntitlement({
-              tier: "free",
-              max_live_rooms: 4,
-              max_members: 8,
-              max_session_minutes: 240,
-              max_total_session_minutes: 240,
-              av_level: "voice",
-              persistent_room_cap: 0,
-              dormant_hours: 24,
-              free_extension_minutes: 60,
-            });
-          }
+        const [entRes, subRes] = await Promise.all([
+          supabase.rpc("my_entitlement"),
+          supabase.from("subscriptions").select("*").eq("user_id", user.id).maybeSingle(),
+        ]);
+
+        if (ignore) return;
+
+        if (!entRes.error && entRes.data) {
+          const ent = Array.isArray(entRes.data) ? entRes.data[0] : entRes.data;
+          setEntitlement(ent);
+        } else {
+          setEntitlement({
+            tier: "free",
+            max_live_rooms: 4,
+            max_members: 8,
+            max_session_minutes: 240,
+            max_total_session_minutes: 240,
+            av_level: "voice",
+            persistent_room_cap: 0,
+            dormant_hours: 24,
+            free_extension_minutes: 60,
+          });
         }
 
-        // Query subscriptions table
-        const { data: subData } = await supabase
-          .from("subscriptions")
-          .select("*")
-          .eq("user_id", user.id)
-          .maybeSingle();
+        setSubscription(subRes.data ?? null);
 
-        if (!ignore && subData) {
-          setSubscription(subData);
+        const channelName = `account_subs_${user.id}_${Date.now()}`;
+        const newChannel = supabase
+          .channel(channelName)
+          .on(
+            "postgres_changes",
+            {
+              event: "*",
+              schema: "public",
+              table: "subscriptions",
+              filter: `user_id=eq.${user.id}`,
+            },
+            async () => {
+              if (ignore) return;
+              const { data: updatedEnt } = await supabase.rpc("my_entitlement");
+              if (updatedEnt && !ignore) {
+                const ent = Array.isArray(updatedEnt) ? updatedEnt[0] : updatedEnt;
+                setEntitlement(ent);
+              }
+              const { data: updatedSub } = await supabase
+                .from("subscriptions")
+                .select("*")
+                .eq("user_id", user.id)
+                .maybeSingle();
+              if (!ignore) {
+                setSubscription(updatedSub ?? null);
+              }
+            }
+          );
+
+        if (ignore) {
+          supabase.removeChannel(newChannel);
+          return;
         }
+
+        channel = newChannel.subscribe();
       } catch (err) {
-        console.error("Failed to load user account data:", err);
+        if (!ignore) {
+          console.error("Failed to load user account data:", err);
+        }
       } finally {
         if (!ignore) setLoading(false);
       }
@@ -113,10 +146,12 @@ function AccountDashboard() {
 
     return () => {
       ignore = true;
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
     };
   }, [router, supabase]);
 
-  // Handle post-purchase celebration (fires strictly once)
   useEffect(() => {
     if (!isSubscribedRedirect || celebratedRef.current) return;
     celebratedRef.current = true;
@@ -133,7 +168,6 @@ function AccountDashboard() {
     }
   }, [isSubscribedRedirect]);
 
-  // Handle post-purchase verification & fulfillment
   useEffect(() => {
     if (!isSubscribedRedirect) return;
 
@@ -168,6 +202,31 @@ function AccountDashboard() {
       ignore = true;
     };
   }, [isSubscribedRedirect, supabase]);
+
+  const handleCancelSubscription = async () => {
+    if (!window.confirm("Are you sure you want to cancel your Premium subscription? Your account will revert to the Free tier.")) {
+      return;
+    }
+    setIsCancelling(true);
+    try {
+      const res = await fetch("/api/paddle/cancel", { method: "POST" });
+      if (res.ok) {
+        setSubscription(null);
+        const { data: entData } = await supabase.rpc("my_entitlement");
+        if (entData) {
+          const ent = Array.isArray(entData) ? entData[0] : entData;
+          setEntitlement(ent);
+        }
+      } else {
+        alert("Failed to cancel subscription. Please contact support.");
+      }
+    } catch (err) {
+      console.error("Cancellation error:", err);
+      alert("An error occurred while canceling. Please try again.");
+    } finally {
+      setIsCancelling(false);
+    }
+  };
 
   const handleSignOut = async () => {
     setIsLoggingOut(true);
@@ -212,10 +271,8 @@ function AccountDashboard() {
 
   return (
     <div className="relative py-12 md:py-16 px-4 sm:px-6 lg:px-8 max-w-5xl mx-auto space-y-8">
-      {/* Background Glow */}
       <div className="glow-blob-purple top-10 left-1/2 -translate-x-1/2 opacity-30" />
 
-      {/* Purchase Success / Verification Banner */}
       {isSubscribedRedirect && (
         <GlassPanel
           glow="gold"
@@ -240,7 +297,6 @@ function AccountDashboard() {
         </GlassPanel>
       )}
 
-      {/* Account Overview Header */}
       <GlassPanel className="p-8 space-y-6 border-purple-500/20">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
           <div className="flex items-center gap-4">
@@ -288,9 +344,7 @@ function AccountDashboard() {
         </div>
       </GlassPanel>
 
-      {/* Subscription & Entitlements Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Current Plan Card (2 cols) */}
         <GlassPanel
           glow={isPremium ? "gold" : "purple"}
           className={`md:col-span-2 p-8 space-y-6 flex flex-col justify-between ${
@@ -314,7 +368,6 @@ function AccountDashboard() {
               )}
             </div>
 
-            {/* Plan Details */}
             {isPremium ? (
               <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-400/20 space-y-2 text-xs text-amber-200">
                 <p className="font-semibold text-white flex items-center gap-1.5">
@@ -350,12 +403,28 @@ function AccountDashboard() {
 
           <div className="pt-4 flex flex-wrap items-center gap-4">
             {isPremium ? (
-              <a
-                href="mailto:support@playtogether.app?subject=Subscription%20Support"
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white text-xs font-semibold border border-white/10 transition-colors"
-              >
-                <span>Manage Subscription</span>
-              </a>
+              <>
+                <button
+                  onClick={handleCancelSubscription}
+                  disabled={isCancelling}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-300 hover:text-red-200 text-xs font-semibold border border-red-500/30 transition-all cursor-pointer disabled:opacity-50"
+                >
+                  {isCancelling ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Cancelling...</span>
+                    </>
+                  ) : (
+                    <span>Cancel Subscription</span>
+                  )}
+                </button>
+                <a
+                  href="mailto:support@playtogether.app?subject=Subscription%20Support"
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white text-xs font-semibold border border-white/10 transition-colors"
+                >
+                  <span>Contact Support</span>
+                </a>
+              </>
             ) : (
               <PTButton
                 href="/pricing"
@@ -369,7 +438,6 @@ function AccountDashboard() {
           </div>
         </GlassPanel>
 
-        {/* Live Entitlements Box */}
         <GlassPanel className="p-6 space-y-4 border-purple-500/20 flex flex-col justify-between">
           <div className="space-y-3">
             <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400 font-mono">

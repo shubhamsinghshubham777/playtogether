@@ -8,7 +8,6 @@ export async function POST(request: Request) {
     const signatureHeader = request.headers.get("paddle-signature");
     const webhookSecret = process.env.PADDLE_WEBHOOK_SECRET_KEY;
 
-    // Verify webhook signature if configured
     if (webhookSecret && signatureHeader) {
       const parts = signatureHeader.split(";").reduce((acc, part) => {
         const [k, v] = part.split("=");
@@ -35,8 +34,6 @@ export async function POST(request: Request) {
     const event = JSON.parse(rawBody);
     const eventType = event.event_type;
     const data = event.data;
-
-    const supabase = createAdminClient();
     const userId = data?.custom_data?.user_id;
 
     if (!userId) {
@@ -44,7 +41,22 @@ export async function POST(request: Request) {
       return NextResponse.json({ received: true });
     }
 
-    if (
+    const supabase = createAdminClient();
+    const isDeactivation =
+      eventType === "subscription.canceled" ||
+      eventType === "subscription.past_due" ||
+      eventType === "subscription.paused" ||
+      data?.status === "canceled" ||
+      data?.status === "paused" ||
+      data?.status === "past_due";
+
+    if (isDeactivation) {
+      const { error } = await supabase.from("subscriptions").delete().eq("user_id", userId);
+      if (error) {
+        console.error("Failed to delete subscription:", error);
+        return NextResponse.json({ error: "Database delete error" }, { status: 500 });
+      }
+    } else if (
       eventType === "subscription.activated" ||
       eventType === "subscription.created" ||
       eventType === "subscription.updated" ||
@@ -54,6 +66,19 @@ export async function POST(request: Request) {
         data?.current_billing_period?.ends_at ||
         data?.billing_period?.ends_at ||
         new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
+      const { data: existing } = await supabase
+        .from("subscriptions")
+        .select("tier, current_period_end")
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (
+        existing?.tier === "premium" &&
+        existing?.current_period_end === currentPeriodEnd
+      ) {
+        return NextResponse.json({ success: true, deduplicated: true });
+      }
 
       const { error } = await supabase.from("subscriptions").upsert(
         {
@@ -67,24 +92,8 @@ export async function POST(request: Request) {
       );
 
       if (error) {
-        console.error("Failed to upsert subscription in Supabase:", error);
+        console.error("Failed to upsert subscription:", error);
         return NextResponse.json({ error: "Database error" }, { status: 500 });
-      }
-    } else if (
-      eventType === "subscription.canceled" ||
-      eventType === "subscription.past_due"
-    ) {
-      const currentPeriodEnd = data?.current_billing_period?.ends_at;
-      if (currentPeriodEnd && new Date(currentPeriodEnd) > new Date()) {
-        await supabase
-          .from("subscriptions")
-          .update({
-            current_period_end: currentPeriodEnd,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("user_id", userId);
-      } else {
-        await supabase.from("subscriptions").delete().eq("user_id", userId);
       }
     }
 

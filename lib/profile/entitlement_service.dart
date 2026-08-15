@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:playtogether/diagnostics.dart';
 import 'package:playtogether/rooms/room_models.dart';
@@ -75,6 +77,9 @@ class EntitlementService extends ChangeNotifier {
 
   SupabaseClient get _client => Supabase.instance.client;
 
+  RealtimeChannel? _subscriptionChannel;
+  Timer? _debounceTimer;
+
   TierLimits? _limits;
 
   TierLimits? get limits => _limits;
@@ -85,10 +90,12 @@ class EntitlementService extends ChangeNotifier {
   bool get isPremium => _limits?.isPremium ?? false;
 
   Future<TierLimits?> load() async {
-    if (_client.auth.currentUser == null) {
+    final user = _client.auth.currentUser;
+    if (user == null) {
       clear();
       return null;
     }
+    _ensureRealtimeSubscribed(user.id);
     try {
       final row = await _client.rpc('my_entitlement');
       if (row == null) return _limits;
@@ -101,6 +108,37 @@ class EntitlementService extends ChangeNotifier {
     } catch (e, s) {
       reportNonFatal(e, s, during: 'loading the caller entitlement');
       return _limits;
+    }
+  }
+
+  void _ensureRealtimeSubscribed(String userId) {
+    if (_subscriptionChannel != null) return;
+    try {
+      _subscriptionChannel = _client.channel('public:subscriptions:$userId')
+        ..onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'subscriptions',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'user_id',
+            value: userId,
+          ),
+          callback: (payload) {
+            trace(
+              'subscription realtime update received',
+              category: 'auth',
+              data: {'eventType': payload.eventType.name},
+            );
+            _debounceTimer?.cancel();
+            _debounceTimer = Timer(const Duration(milliseconds: 200), () {
+              refresh();
+            });
+          },
+        )
+        ..subscribe();
+    } catch (e, s) {
+      reportNonFatal(e, s, during: 'subscribing to subscription realtime channel');
     }
   }
 
@@ -119,6 +157,16 @@ class EntitlementService extends ChangeNotifier {
   }
 
   void clear() {
+    _debounceTimer?.cancel();
+    _debounceTimer = null;
+    if (_subscriptionChannel != null) {
+      try {
+        _client.removeChannel(_subscriptionChannel!);
+      } catch (e, s) {
+        reportNonFatal(e, s, during: 'cleaning up subscription realtime channel');
+      }
+      _subscriptionChannel = null;
+    }
     if (_limits == null) return;
     _limits = null;
     notifyListeners();
