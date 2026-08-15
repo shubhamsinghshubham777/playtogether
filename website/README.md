@@ -1,36 +1,85 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# PlayTogether Web Portal
+
+The official web application for [PlayTogether](https://playtogether.app) — featuring the marketing landing page, app downloads, release changelogs, FAQ and legal policies, Supabase authentication, and Paddle Merchant of Record (MoR) billing checkout & account management.
+
+## Tech Stack
+
+- **Framework**: [Next.js 15](https://nextjs.org/) (App Router) + React 19
+- **Styling**: [Tailwind CSS v4](https://tailwindcss.com/) with dark violet glassmorphism tokens matching the Flutter app design system
+- **Auth & Database**: [Supabase](https://supabase.com/) (`@supabase/ssr`) with PostgreSQL row-level security and Realtime subscriptions
+- **Billing**: [Paddle Billing](https://developer.paddle.com/) Merchant of Record (`@paddle/paddle-js`, `@paddle/paddle-node-sdk`)
+- **Testing**: Node.js built-in test runner (`node --test`) with TypeScript
 
 ## Getting Started
 
-First, run the development server:
+### 1. Install Dependencies
+
+```bash
+npm install
+```
+
+### 2. Configure Environment Variables
+
+Copy `.env.example` to `.env.local`:
+
+```bash
+cp .env.example .env.local
+```
+
+Required environment variables:
+- `NEXT_PUBLIC_SUPABASE_URL`: Supabase URL (e.g. `http://127.0.0.1:54321` for local dev or production project URL)
+- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`: Supabase anon/publishable key
+- `SUPABASE_SERVICE_ROLE_KEY`: Supabase service role secret (used securely by webhook handlers to update `subscriptions`)
+- `NEXT_PUBLIC_PADDLE_CLIENT_TOKEN`: Paddle client-side token (`test_...` or `live_...`)
+- `NEXT_PUBLIC_PADDLE_ENVIRONMENT`: `sandbox` for development, `production` for live
+- `NEXT_PUBLIC_PADDLE_MONTHLY_PRICE_ID`: Paddle price ID for Monthly plan
+- `NEXT_PUBLIC_PADDLE_ANNUAL_PRICE_ID`: Paddle price ID for Annual plan
+- `PADDLE_API_KEY`: Paddle API secret key
+- `PADDLE_WEBHOOK_SECRET_KEY`: Paddle notification webhook secret key (`pdl_ntfset_...`)
+
+### 3. Run Development Server
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Visit [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 4. Run Tests
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm test
+```
 
-## Learn More
+Runs the test suite in `tests/` (testing Paddle webhook signature validation, database write deduplication, and subscription lifecycle logic).
 
-To learn more about Next.js, take a look at the following resources:
+## Local Paddle Webhook Testing
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Paddle webhooks can be forwarded to your local development server using [Hookdeck](https://hookdeck.com) or the [Paddle CLI](https://developer.paddle.com/tools/cli):
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+# Using Hookdeck
+hookdeck listen 3000 playtogether-webhooks --path /api/paddle/webhook
 
-## Deploy on Vercel
+# Using Paddle CLI
+paddle webhook:listen --url http://localhost:3000/api/paddle/webhook
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Copy the webhook secret provided by Hookdeck / Paddle into `PADDLE_WEBHOOK_SECRET_KEY` in `.env.local`.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Key Routes & Architecture
+
+### User-Facing Pages
+- `/` — Homepage featuring interactive hero playback synchronizer and feature breakdown
+- `/pricing` & `/premium` — Interactive plan selector, FAQ, and embedded Paddle Checkout overlay
+- `/account` — Authenticated account overview, subscription status, renewal date, and cancellation action
+- `/auth` & `/auth/callback` — Supabase Google OAuth and magic link authentication flows
+- `/download` — Desktop installers for macOS (DMG) and Windows (Inno Setup)
+- `/changelog` — Release history fetched directly from GitHub releases
+- `/faq`, `/privacy`, `/terms`, `/refund` — Help center and compliance documentation
+
+### API Route Handlers
+- `POST /api/paddle/webhook` — Receives and verifies Paddle subscription webhooks (`subscription.created`, `subscription.updated`, `subscription.activated`, `subscription.canceled`, `subscription.past_due`, `subscription.paused`), applying write-deduplication before updating Supabase.
+- `POST /api/paddle/cancel` — Authenticated endpoint allowing users to cancel their active subscription at period end.
+- `GET /api/paddle/prices` — Real-time price query endpoint proxying Paddle Billing pricing.
+- `GET /api/releases/latest` — Proxies GitHub release assets and metadata for downloads.
