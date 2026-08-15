@@ -22,6 +22,7 @@ export interface GitHubRelease {
 export interface ReleaseAssetInfo {
   version: string;
   tagName: string;
+  name: string;
   publishedAt: string;
   macDownloadUrl: string;
   macSizeMb: number;
@@ -35,12 +36,13 @@ const FALLBACK_VERSION = "0.11.0";
 const FALLBACK_RELEASE: ReleaseAssetInfo = {
   version: FALLBACK_VERSION,
   tagName: `v${FALLBACK_VERSION}`,
+  name: `v${FALLBACK_VERSION}`,
   publishedAt: "2026-08-11T12:00:00Z",
   macDownloadUrl: `https://github.com/shubhamsinghshubham777/playtogether/releases/download/v${FALLBACK_VERSION}/PlayTogether-${FALLBACK_VERSION}-macOS.dmg`,
   macSizeMb: 42.5,
   winDownloadUrl: `https://github.com/shubhamsinghshubham777/playtogether/releases/download/v${FALLBACK_VERSION}/PlayTogether-${FALLBACK_VERSION}-Windows.exe`,
   winSizeMb: 38.2,
-  body: "### What's New\n- Synchronized local media & YouTube player enhancements\n- Voice & Video facecams powered by LiveKit\n- Persistent room memory and tier entitlements\n- Desktop fullscreen & keyboard shortcuts (F, Esc, Space)",
+  body: "### What's New\n- Synchronized local media & YouTube player enhancements\n- Real-time Voice & Video facecams\n- Persistent room memory and tier entitlements\n- Desktop fullscreen & keyboard shortcuts (F, Esc, Space)",
   htmlUrl: `https://github.com/shubhamsinghshubham777/playtogether/releases/tag/v${FALLBACK_VERSION}`,
 };
 
@@ -62,7 +64,9 @@ export async function getLatestRelease(): Promise<ReleaseAssetInfo> {
     }
 
     const data: GitHubRelease = await res.json();
-    const cleanVersion = data.tag_name.replace(/^v/, "");
+    const rawVersion = data.name || data.tag_name;
+    const cleanVersion = rawVersion.replace(/^v/, "").replace(/_\d+$/, "");
+    const titleName = data.name ? data.name.replace(/_\d+$/, "") : `v${cleanVersion}`;
 
     const macAsset = data.assets.find(
       (a) => a.name.endsWith(".dmg") || a.name.includes("macOS")
@@ -74,6 +78,7 @@ export async function getLatestRelease(): Promise<ReleaseAssetInfo> {
     return {
       version: cleanVersion,
       tagName: data.tag_name,
+      name: titleName,
       publishedAt: data.published_at,
       macDownloadUrl:
         macAsset?.browser_download_url ||

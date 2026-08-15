@@ -50,7 +50,7 @@ export async function openPaddleCheckout({
     // Dev fallback if mock token is used
     if (process.env.NODE_ENV === "development" || !token || token.includes("test_")) {
       const confirmMock = window.confirm(
-        "Development Mode: Paddle is running in test/sandbox. Would you like to simulate a successful checkout redirect to /account?"
+        "Development Mode: Running in test/sandbox. Would you like to simulate a successful checkout redirect to /account?"
       );
       if (confirmMock) {
         window.location.href = successUrl;

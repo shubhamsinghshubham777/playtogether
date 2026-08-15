@@ -163,7 +163,7 @@ function AuthCard() {
       <div className="pt-2 border-t border-white/5 text-center">
         <p className="text-[11px] text-gray-500 flex items-center justify-center gap-1.5">
           <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-          <span>Secure authentication via Supabase Auth</span>
+          <span>Secure, encrypted authentication</span>
         </p>
       </div>
     </GlassPanel>

@@ -21,13 +21,13 @@ export default async function ChangelogPage() {
       name: "PlayTogether 0.11.0 — Facecams & Persistent Rooms",
       published_at: "2026-08-11T12:00:00Z",
       body: `### New Features
-- **LiveKit Facecams**: Real-time HD Video and low-latency Voice facecams integrated directly into rooms.
+- **Video & Voice Facecams**: Real-time HD Video and low-latency Voice facecams integrated directly into rooms.
 - **Persistent Rooms**: Premium hosts can now create named, permanent rooms that never expire.
 - **Animated Lottie Reactions**: 24 expressive Google Noto animated emoji reactions floating dynamically over video.
 - **Room Dormancy & Nap**: Free rooms nap for 24h upon expiration, resuming local file timestamps seamlessly.
 
 ### Performance & Engine
-- Upgraded libmpv / media_kit integration with improved hardware decoding on macOS & Windows.
+- Upgraded video playback engine with improved hardware decoding on macOS & Windows.
 - Clock-skew resistant server time synchronization for millisecond-accurate play/pause events.`,
       html_url: "https://github.com/shubhamsinghshubham777/playtogether/releases",
     },
@@ -84,7 +84,7 @@ export default async function ChangelogPage() {
                     <div className="flex items-center gap-2">
                       <Tag className="w-4 h-4 text-purple-400" />
                       <span className="text-xl font-bold text-white font-[family-name:var(--font-space-grotesk)]">
-                        {rel.name || rel.tag_name}
+                        {(rel.name || rel.tag_name).replace(/_\d+$/, "")}
                       </span>
                     </div>
                     <span className="text-xs text-gray-400 font-mono flex items-center gap-1.5 mt-1">

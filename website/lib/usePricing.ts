@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useSyncExternalStore } from "react";
 import { getPaddleInstance } from "@/components/PaddleCheckout";
 import {
   COUNTRY_CURRENCY_MAP,
@@ -18,6 +18,29 @@ const PADDLE_ANNUAL_PRICE_ID =
 // In-memory client-side price cache to eliminate duplicate network calls
 const clientPriceCache: Record<string, LocalizedPriceData> = {};
 
+function subscribeMockCountry(callback: () => void) {
+  if (typeof window === "undefined") return () => {};
+  window.addEventListener("pt_mock_country_changed", callback);
+  window.addEventListener("storage", callback);
+  return () => {
+    window.removeEventListener("pt_mock_country_changed", callback);
+    window.removeEventListener("storage", callback);
+  };
+}
+
+function getMockCountrySnapshot(): string | null {
+  if (typeof window === "undefined") return null;
+  const urlParams = new URLSearchParams(window.location.search);
+  const paramMock = urlParams.get("mock_country") || urlParams.get("country");
+  const storedMock = localStorage.getItem("playtogether_mock_country");
+  const activeMock = paramMock || storedMock || null;
+  return activeMock ? activeMock.toUpperCase() : null;
+}
+
+function getMockCountryServerSnapshot(): string | null {
+  return null;
+}
+
 export function usePricing() {
   const [data, setData] = useState<LocalizedPriceData>({
     monthlyFormatted: "$3.99",
@@ -32,25 +55,20 @@ export function usePricing() {
     savingsPct: "37%",
   });
   const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [mockCountry, setMockCountryState] = useState<string | null>(() => {
-    if (typeof window !== "undefined") {
-      const urlParams = new URLSearchParams(window.location.search);
-      const paramMock = urlParams.get("mock_country") || urlParams.get("country");
-      const storedMock = localStorage.getItem("playtogether_mock_country");
-      const activeMock = paramMock || storedMock || null;
-      return activeMock ? activeMock.toUpperCase() : null;
-    }
-    return null;
-  });
+
+  // Synchronize mock country cleanly across server/client with zero hydration mismatch
+  const mockCountry = useSyncExternalStore(
+    subscribeMockCountry,
+    getMockCountrySnapshot,
+    getMockCountryServerSnapshot
+  );
 
   const setMockCountry = useCallback((country: string | null) => {
     if (country) {
       const upper = country.toUpperCase();
       localStorage.setItem("playtogether_mock_country", upper);
-      setMockCountryState(upper);
     } else {
       localStorage.removeItem("playtogether_mock_country");
-      setMockCountryState(null);
     }
     if (typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent("pt_mock_country_changed", { detail: country }));
@@ -68,18 +86,6 @@ export function usePricing() {
       }
     };
   }, [setMockCountry]);
-
-  // Sync when mock country changes in other components
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const customEvent = e as CustomEvent<string | null>;
-      setMockCountryState(customEvent.detail ? customEvent.detail.toUpperCase() : null);
-    };
-    window.addEventListener("pt_mock_country_changed", handler);
-    return () => {
-      window.removeEventListener("pt_mock_country_changed", handler);
-    };
-  }, []);
 
   const fetchPricing = useCallback(async () => {
     const country = mockCountry || detectUserCountry();

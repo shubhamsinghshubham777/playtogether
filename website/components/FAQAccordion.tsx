@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { ChevronDown } from "lucide-react";
-import { GlassPanel } from "./GlassPanel";
 
 interface FAQItem {
   q: string;
@@ -28,20 +27,23 @@ export function FAQAccordion({ items }: FAQAccordionProps) {
         const buttonId = `faq-btn-${idx}`;
 
         return (
-          <GlassPanel
+          <div
             key={idx}
-            className={`p-0 border transition-all duration-300 overflow-hidden ${
+            className={`glass-panel rounded-2xl relative border transition-all duration-300 overflow-hidden ${
               isOpen
                 ? "border-purple-400/30 bg-[#171228]/95 shadow-lg shadow-purple-950/20"
                 : "border-purple-500/15 hover:border-purple-400/25 bg-[#141024]/80"
             }`}
           >
+            {/* Subtle top inner border highlight */}
+            <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-purple-400/20 to-transparent pointer-events-none" />
+
             <button
               id={buttonId}
               onClick={() => toggle(idx)}
               aria-expanded={isOpen}
               aria-controls={panelId}
-              className="w-full p-5 text-left flex items-center justify-between gap-4 font-semibold text-white hover:text-[#C9B8FF] transition-colors focus:outline-hidden cursor-pointer group"
+              className="w-full p-5 text-left flex items-center justify-between gap-4 font-semibold text-white hover:text-[#C9B8FF] transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-purple-400/50 cursor-pointer group"
             >
               <span className="text-base font-[family-name:var(--font-space-grotesk)] transition-colors group-hover:text-purple-200">
                 {item.q}
@@ -70,7 +72,7 @@ export function FAQAccordion({ items }: FAQAccordionProps) {
                 </div>
               </div>
             </div>
-          </GlassPanel>
+          </div>
         );
       })}
     </div>

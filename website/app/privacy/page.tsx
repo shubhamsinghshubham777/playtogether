@@ -44,22 +44,22 @@ export default function PrivacyPage() {
           </h2>
           <ul className="space-y-2.5 text-xs text-gray-300">
             <li>
-              <strong className="text-white">Account Information:</strong> When you sign in with Google, we store your email address, display name, and avatar URL in Supabase Auth.
+              <strong className="text-white">Account Information:</strong> When you sign in with Google, we store your email address, display name, and avatar URL securely for authentication.
             </li>
             <li>
-              <strong className="text-white">Crash &amp; Diagnostic Reports:</strong> Powered by Sentry (device model, OS version, call stacks). Does not collect personal data.
+              <strong className="text-white">Crash &amp; Diagnostic Reports:</strong> Device model, OS version, and stack traces to ensure app stability. Does not collect personal data.
             </li>
             <li>
-              <strong className="text-white">Product Analytics:</strong> Powered by PostHog to measure feature usage. You can toggle this off at any time in the desktop app under <em>Profile &rarr; &ldquo;Share usage data&rdquo;</em>.
+              <strong className="text-white">Product Analytics:</strong> Anonymous telemetry to measure feature usage. You can toggle this off at any time in the desktop app under <em>Profile &rarr; &ldquo;Share usage data&rdquo;</em>.
             </li>
             <li>
-              <strong className="text-white">Voice &amp; Video Streams:</strong> Relayed in real-time over encrypted WebRTC via LiveKit. Video and audio are <strong>never recorded or stored</strong> on our servers.
+              <strong className="text-white">Voice &amp; Video Streams:</strong> Relayed in real-time over encrypted connections. Video and audio are <strong>never recorded or stored</strong> on our servers.
             </li>
             <li>
               <strong className="text-white">Room Chat &amp; Reactions:</strong> Temporary messages and emoji reactions are stored strictly for the duration of the room and purged automatically upon room expiry.
             </li>
             <li>
-              <strong className="text-white">Payment Information:</strong> Handled entirely by Paddle (Merchant of Record). We never see or store your credit card or UPI details.
+              <strong className="text-white">Payment Information:</strong> Handled entirely by our authorized Merchant of Record. We never see or store your credit card or UPI details.
             </li>
           </ul>
         </section>
@@ -78,17 +78,16 @@ export default function PrivacyPage() {
 
         <section className="space-y-3">
           <h2 className="text-xl font-bold text-white font-[family-name:var(--font-space-grotesk)]">
-            3. Third-Party Infrastructure Providers
+            3. Infrastructure &amp; Security
           </h2>
           <p className="text-xs">
-            We partner with best-in-class infrastructure providers to operate the service:
+            We partner with industry-standard, privacy-compliant infrastructure providers to operate the service:
           </p>
           <ul className="space-y-1 text-xs text-gray-400 list-disc list-inside">
-            <li><strong>Supabase:</strong> Authentication and Realtime sync message channels.</li>
-            <li><strong>LiveKit:</strong> Low-latency WebRTC facecam and voice relay.</li>
-            <li><strong>Paddle:</strong> Payment processing, billing, and subscription lifecycle.</li>
-            <li><strong>Sentry:</strong> Application performance and crash diagnostics.</li>
-            <li><strong>PostHog:</strong> Privacy-conscious product telemetry (opt-out available).</li>
+            <li><strong>Authentication &amp; Cloud Database:</strong> Secure user accounts and real-time synchronization channels.</li>
+            <li><strong>Real-time Media Relays:</strong> Low-latency encrypted facecam and voice streaming.</li>
+            <li><strong>Payment Gateway &amp; Billing:</strong> Compliant Merchant of Record payment processing and subscription management.</li>
+            <li><strong>Diagnostics &amp; Telemetry:</strong> Crash diagnostics and privacy-conscious product metrics (opt-out available).</li>
           </ul>
         </section>
 
@@ -111,7 +110,7 @@ export default function PrivacyPage() {
             5. Cookies
           </h2>
           <p>
-            The PlayTogether website uses only strictly essential cookies required to manage your authenticated Supabase user session. We do not use third-party advertising or cross-site tracking cookies.
+            The PlayTogether website uses only strictly essential cookies required to manage your authenticated user session. We do not use third-party advertising or cross-site tracking cookies.
           </p>
         </section>
 

@@ -53,8 +53,8 @@ export default function TermsPage() {
           <p>You agree not to:</p>
           <ul className="list-disc list-inside space-y-1.5 text-gray-400 text-xs">
             <li>Use the service to broadcast abusive, harmful, or illegal communications.</li>
-            <li>Interfere with, overburden, or compromise the integrity of our Realtime relay infrastructure.</li>
-            <li>Attempt to reverse-engineer server-side security definer RPCs or bypass room limits.</li>
+            <li>Interfere with, overburden, or compromise the integrity of our real-time relay infrastructure.</li>
+            <li>Attempt to reverse-engineer server APIs or bypass room limits.</li>
           </ul>
         </section>
 
@@ -63,7 +63,7 @@ export default function TermsPage() {
             4. Premium Subscriptions &amp; Billing
           </h2>
           <p>
-            Paid subscriptions provide enhanced features including persistent rooms, 16-member limits, and video facecams. All subscriptions are processed securely by Paddle (our Merchant of Record).
+            Paid subscriptions provide enhanced features including persistent rooms, 16-member limits, and video facecams. All subscriptions are processed securely through our authorized Merchant of Record.
           </p>
           <p>
             Subscriptions are billed on a recurring monthly or annual basis. We reserve the right to modify subscription pricing with at least 30 days prior notice.

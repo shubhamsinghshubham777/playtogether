@@ -117,7 +117,7 @@ export function PricingTable() {
   );
 
   const premiumSubPrice = isPriceLoading
-    ? "Fetching live pricing from Paddle..."
+    ? "Fetching live pricing..."
     : billingCycle === "annual"
     ? `${monthlyEquivalentFormatted} (Billed annually — Save ${savingsPct})`
     : "Billed monthly. Cancel anytime.";

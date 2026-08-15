@@ -68,7 +68,7 @@ export const PRICING_TIERS = {
       "4 active rooms per host",
       "Up to 8 participants per room",
       "4-hour session duration",
-      "Low-latency Voice facecams (LiveKit)",
+      "Low-latency Voice facecams",
       "1 free 60-min extension per session",
       "Rooms nap for 24h (resumes where you left off)",
       "Syncs account across all your devices",
@@ -103,7 +103,7 @@ export const PRICING_TIERS = {
       "20 persistent rooms with custom names",
       "Up to 16 participants per room",
       "Up to 24-hour continuous sessions",
-      "HD Video + Voice facecams (LiveKit)",
+      "HD Video + Voice facecams",
       "24 animated Lottie reaction emoji",
       "Persistent rooms (never expire or delete)",
       "Room host privileges denormalized to all joiners",
@@ -143,11 +143,11 @@ export const FAQ_ITEMS = [
       },
       {
         q: "What media formats are supported?",
-        a: "PlayTogether supports all major local video containers and codecs via libmpv / media_kit (MP4, MKV, AVI, WEBM, MOV, etc.) along with direct YouTube video playback."
+        a: "PlayTogether supports all major local video containers and codecs (MP4, MKV, AVI, WEBM, MOV, etc.) along with direct YouTube video playback."
       },
       {
         q: "Does PlayTogether stream or upload my video files to other people?",
-        a: "No! PlayTogether does not upload, stream, or re-encode your files. Each participant plays their own local copy of the file on their machine. PlayTogether synchronizes only the playback state (timestamps, play/pause, seeks) and chat over private Supabase Realtime channels."
+        a: "No! PlayTogether does not upload, stream, or re-encode your files. Each participant plays their own local copy of the file on their machine. PlayTogether synchronizes only the playback state (timestamps, play/pause, seeks) and chat over private, encrypted real-time channels."
       },
       {
         q: "What happens when a room expires?",
@@ -164,7 +164,7 @@ export const FAQ_ITEMS = [
       },
       {
         q: "How do I subscribe?",
-        a: "Sign in with your Google account on our website (/auth), visit the Pricing page (/pricing), and select either Monthly or Annual billing. Payments are processed securely via Paddle (Credit/Debit Cards, PayPal, Apple Pay, Google Pay, and UPI in India)."
+        a: "Sign in with your Google account on our website (/auth), visit the Pricing page (/pricing), and select either Monthly or Annual billing. Payments are processed securely (Credit/Debit Cards, PayPal, Apple Pay, Google Pay, and UPI in India)."
       },
       {
         q: "Can I cancel anytime?",
@@ -189,11 +189,11 @@ export const FAQ_ITEMS = [
       },
       {
         q: "Can I opt out of analytics?",
-        a: "Yes. In the desktop app under Profile → 'Share usage data', you can toggle anonymous product analytics off at any time. Crash reporting via Sentry carries no personal data."
+        a: "Yes. In the desktop app under Profile → 'Share usage data', you can toggle anonymous product analytics off at any time. Crash and diagnostic reporting carries no personal data."
       },
       {
         q: "Are voice and video facecams recorded?",
-        a: "Never. Voice and video streams are transmitted end-to-end via LiveKit WebRTC relays and are never recorded or stored on any server."
+        a: "Never. Voice and video streams are transmitted end-to-end via encrypted real-time relays and are never recorded or stored on any server."
       }
     ]
   }

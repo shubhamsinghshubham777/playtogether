@@ -28,7 +28,7 @@ export default async function DownloadPage() {
       <div className="text-center max-w-3xl mx-auto space-y-4">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-500/10 border border-purple-400/20 text-xs font-mono text-purple-300">
           <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-          <span>Latest Release: {release.tagName}</span>
+          <span>Latest Release: {release.name || `v${release.version}`}</span>
         </div>
         <h1 className="text-4xl sm:text-6xl font-extrabold text-white tracking-tight font-[family-name:var(--font-space-grotesk)]">
           Download <span className="text-gradient-brand">PlayTogether.</span>

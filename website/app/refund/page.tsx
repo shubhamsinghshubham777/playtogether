@@ -5,7 +5,7 @@ import { RefreshCcw } from "lucide-react";
 
 export const metadata: Metadata = {
   title: "Refund Policy (14-Day Money-Back Guarantee)",
-  description: "PlayTogether 14-day no-questions-asked refund policy for Paddle subscriptions.",
+  description: "PlayTogether 14-day no-questions-asked refund policy for Premium subscriptions.",
 };
 
 export default function RefundPage() {
@@ -43,7 +43,7 @@ export default function RefundPage() {
             1. Requesting a Refund
           </h2>
           <p>
-            All subscriptions are processed securely via Paddle (our Merchant of Record).
+            All subscriptions are processed securely through our authorized Merchant of Record.
           </p>
           <ul className="space-y-1.5 text-xs text-gray-400 list-disc list-inside">
             <li>To request a refund, email <a href={`mailto:${SITE_CONFIG.supportEmail}`} className="text-purple-300 underline">{SITE_CONFIG.supportEmail}</a> with your account email address.</li>

@@ -16,7 +16,7 @@ export default function PricingPage() {
     },
     {
       q: "What payment methods do you accept?",
-      a: "We process payments securely via Paddle (Credit/Debit Cards, PayPal, Apple Pay, Google Pay, and UPI in India)."
+      a: "We process payments securely (Credit/Debit Cards, PayPal, Apple Pay, Google Pay, and UPI in India)."
     },
     {
       q: "Can I cancel my subscription anytime?",

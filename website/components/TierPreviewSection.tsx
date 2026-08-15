@@ -71,7 +71,7 @@ export function TierPreviewSection() {
             </p>
             <ul className="text-xs text-gray-300 space-y-2 pt-2 border-t border-white/5">
               <li className="flex items-center gap-2">
-                <Check className="w-3.5 h-3.5 text-purple-400" /> LiveKit Voice Facecams
+                <Check className="w-3.5 h-3.5 text-purple-400" /> Voice Facecams
               </li>
               <li className="flex items-center gap-2">
                 <Check className="w-3.5 h-3.5 text-purple-400" /> 24h Room Dormancy Sleep

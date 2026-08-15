@@ -1,7 +1,9 @@
+import Link from "next/link";
 import { PTButton } from "@/components/PTButton";
 import { GlassPanel } from "@/components/GlassPanel";
 import { HeroSyncSimulator } from "@/components/HeroSyncSimulator";
 import { TierPreviewSection } from "@/components/TierPreviewSection";
+import { getLatestRelease } from "@/lib/github";
 import {
   Download,
   Film,
@@ -14,7 +16,10 @@ import {
   Sparkles,
 } from "lucide-react";
 
-export default function HomePage() {
+export default async function HomePage() {
+  const release = await getLatestRelease();
+  const displayTag = release.name || `v${release.version || "0.11.0"}`;
+
   return (
     <div className="relative overflow-hidden">
       {/* Background Ambient Glows */}
@@ -24,11 +29,14 @@ export default function HomePage() {
       {/* 1. HERO SECTION */}
       <section className="relative pt-12 pb-20 md:pt-20 md:pb-28 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto text-center space-y-8">
         {/* Release / Intro Pill */}
-        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-purple-500/10 border border-purple-400/30 text-purple-200 text-xs font-semibold shadow-inner">
-          <Sparkles className="w-3.5 h-3.5 text-amber-300 animate-pulse" />
-          <span>PlayTogether 0.11.0 is now live</span>
-          <ArrowRight className="w-3 h-3 text-purple-400" />
-        </div>
+        <Link
+          href="/changelog"
+          className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-purple-500/10 border border-purple-400/30 text-purple-200 text-xs font-semibold shadow-inner hover:bg-purple-500/20 hover:border-purple-400/50 hover:text-white transition-all duration-200 group cursor-pointer"
+        >
+          <Sparkles className="w-3.5 h-3.5 text-amber-300 animate-pulse group-hover:scale-110 transition-transform" />
+          <span>PlayTogether {displayTag} is now live</span>
+          <ArrowRight className="w-3 h-3 text-purple-400 group-hover:translate-x-0.5 transition-transform" />
+        </Link>
 
         {/* Hero Title */}
         <div className="space-y-4 max-w-4xl mx-auto">
@@ -154,7 +162,7 @@ export default function HomePage() {
               Sync Any Media
             </h3>
             <p className="text-sm text-gray-400 leading-relaxed">
-              Native hardware-accelerated playback via libmpv for local MKV,
+              Native hardware-accelerated playback for local MKV,
               MP4, and 4K HDR files alongside direct YouTube stream sync.
             </p>
           </GlassPanel>
@@ -168,7 +176,7 @@ export default function HomePage() {
               Voice &amp; Video Facecams
             </h3>
             <p className="text-sm text-gray-400 leading-relaxed">
-              Powered by LiveKit WebRTC relays. See and hear your friends with
+              Ultra-low latency real-time facecams. See and hear your friends with
               crisp 1080p video, active speaker detection, and low CPU overhead.
             </p>
           </GlassPanel>

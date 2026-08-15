@@ -1,15 +1,32 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import Image from "next/image";
 import {
   Play,
   Pause,
-  Volume2,
-  Users,
   Mic,
+  MicOff,
+  Video,
+  VideoOff,
+  Smile,
+  Music,
+  Subtitles,
+  Tv,
+  FolderOpen,
+  Volume2,
+  VolumeX,
+  Copy,
+  Check,
+  Keyboard,
+  Timer,
   MessageSquare,
-  Sparkles,
-  ShieldCheck,
+  MoreVertical,
+  ChevronLeft,
+  ChevronRight,
+  Crown,
+  X,
+  Send,
 } from "lucide-react";
 
 interface ReactionBubble {
@@ -17,34 +34,68 @@ interface ReactionBubble {
   emoji: string;
   x: number;
   y: number;
+  rotation: number;
 }
+
+const AVAILABLE_EMOJIS = ["🔥", "🍿", "😂", "💜", "👏", "🎉", "🚀", "❤️"];
 
 export function HeroSyncSimulator() {
   const [isPlaying, setIsPlaying] = useState(true);
-  const [progress, setProgress] = useState(38.4); // percentage
-  const [currentTimeSec, setCurrentTimeSec] = useState(3842); // 01:04:02
-  const totalDurationSec = 7200; // 02:00:00
+  const [currentTimeSec, setCurrentTimeSec] = useState(35); // 00:35
+  const totalDurationSec = 8673; // 02:24:33
   const [reactions, setReactions] = useState<ReactionBubble[]>([]);
-  const [activeTab, setActiveTab] = useState<"video" | "youtube">("video");
-  const reactionCounter = useRef(0);
+  const [showReactionStrip, setShowReactionStrip] = useState(false);
+  const [showChat, setShowChat] = useState(false);
+  const [showCams, setShowCams] = useState(true);
+  const [micOn, setMicOn] = useState(false);
+  const [camOn, setCamOn] = useState(false);
+  const [volume, setVolume] = useState(0.85);
+  const [isMuted, setIsMuted] = useState(false);
+  const [copiedCode, setCopiedCode] = useState(false);
+  const [hoverSeekSec, setHoverSeekSec] = useState<number | null>(null);
+  const [hoverSeekPct, setHoverSeekPct] = useState<number | null>(null);
+  const [chatInput, setChatInput] = useState("");
+  const [chatMessages, setChatMessages] = useState([
+    { id: 1, sender: "Maya", text: "That sound design was unreal 🤯", color: "text-purple-300" },
+    { id: 2, sender: "Guest-0397", text: "Wait, don't skip the credits!!", color: "text-pink-300" },
+  ]);
 
-  // Simulated playback timer
+  const [isVisible, setIsVisible] = useState(true);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const reactionCounter = useRef(0);
+  const scrubberRef = useRef<HTMLDivElement>(null);
+
+  // Pause playback timer when component is not in the viewport
   useEffect(() => {
-    if (!isPlaying) return;
+    const el = containerRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        setIsVisible(entry.isIntersecting);
+      },
+      { threshold: 0.05 }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  // Playback timer - active when visible
+  useEffect(() => {
+    if (!isPlaying || !isVisible) return;
     const interval = setInterval(() => {
-      setProgress((prev) => (prev >= 100 ? 0 : prev + 0.15));
       setCurrentTimeSec((prev) => (prev >= totalDurationSec ? 0 : prev + 1));
     }, 1000);
     return () => clearInterval(interval);
-  }, [isPlaying]);
+  }, [isPlaying, isVisible]);
 
   const formatTime = (sec: number) => {
     const hrs = Math.floor(sec / 3600);
     const mins = Math.floor((sec % 3600) / 60);
     const secs = Math.floor(sec % 60);
-    return `${hrs.toString().padStart(2, "0")}:${mins
-      .toString()
-      .padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+    if (hrs > 0) {
+      return `${hrs}:${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+    }
+    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   };
 
   const triggerReaction = (emoji: string) => {
@@ -53,236 +104,579 @@ export function HeroSyncSimulator() {
     const newBubble: ReactionBubble = {
       id: count,
       emoji,
-      x: 30 + ((count * 17) % 40),
-      y: 60 + ((count * 13) % 20),
+      x: 35 + ((count * 19) % 35),
+      y: 65 + ((count * 11) % 15),
+      rotation: ((count * 23) % 40) - 20,
     };
-    setReactions((prev) => [...prev.slice(-8), newBubble]);
+    setReactions((prev) => [...prev.slice(-10), newBubble]);
     setTimeout(() => {
       setReactions((prev) => prev.filter((r) => r.id !== newBubble.id));
     }, 2200);
   };
 
-  return (
-    <div className="relative w-full max-w-5xl mx-auto rounded-2xl md:rounded-3xl p-1.5 md:p-2 bg-gradient-to-b from-purple-500/30 via-purple-900/10 to-transparent shadow-2xl shadow-purple-950/60 border border-purple-400/20">
-      {/* Outer Glow */}
-      <div className="absolute -inset-1 bg-gradient-to-r from-purple-600/30 to-pink-600/30 rounded-3xl blur-xl opacity-50 -z-10" />
+  const handleCopyCode = () => {
+    navigator.clipboard?.writeText?.("WZ2CWX");
+    setCopiedCode(true);
+    setTimeout(() => setCopiedCode(false), 1600);
+  };
 
-      {/* Main App Container */}
-      <div className="bg-[#0B0A14] rounded-xl md:rounded-2xl overflow-hidden border border-white/5 flex flex-col">
-        {/* App Titlebar */}
-        <div className="bg-[#120F22] px-4 py-3 border-b border-purple-500/15 flex items-center justify-between">
+  const handleSkip = (seconds: number) => {
+    setCurrentTimeSec((prev) =>
+      Math.max(0, Math.min(totalDurationSec, prev + seconds))
+    );
+  };
+
+  const handleScrubberMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!scrubberRef.current) return;
+    const rect = scrubberRef.current.getBoundingClientRect();
+    const x = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+    const pct = x / rect.width;
+    setHoverSeekPct(pct * 100);
+    setHoverSeekSec(Math.round(pct * totalDurationSec));
+  };
+
+  const handleScrubberClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!scrubberRef.current) return;
+    const rect = scrubberRef.current.getBoundingClientRect();
+    const x = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+    const pct = x / rect.width;
+    setCurrentTimeSec(Math.round(pct * totalDurationSec));
+  };
+
+  const handleSendMessage = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!chatInput.trim()) return;
+    setChatMessages((prev) => [
+      ...prev,
+      {
+        id: Date.now(),
+        sender: "You",
+        text: chatInput.trim(),
+        color: "text-purple-400 font-semibold",
+      },
+    ]);
+    setChatInput("");
+  };
+
+  const progressPercent = (currentTimeSec / totalDurationSec) * 100;
+
+  return (
+    <div
+      ref={containerRef}
+      className="relative w-full max-w-5xl mx-auto rounded-2xl md:rounded-3xl p-1 md:p-2 bg-gradient-to-b from-purple-500/25 via-purple-900/10 to-transparent shadow-2xl shadow-purple-950/70 border border-purple-400/20"
+    >
+      {/* Outer Ambient Glow */}
+      <div className="absolute -inset-1 bg-gradient-to-r from-purple-600/25 to-pink-600/25 rounded-3xl blur-2xl opacity-60 -z-10" />
+
+      {/* Main macOS Application Container */}
+      <div className="bg-[#0B0A14] rounded-xl md:rounded-2xl overflow-hidden border border-white/10 flex flex-col shadow-2xl select-none">
+        {/* macOS App Titlebar */}
+        <div className="bg-[#0e0c1a] px-3.5 md:px-4 py-2.5 border-b border-white/5 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-red-500/80" />
-            <div className="w-3 h-3 rounded-full bg-amber-500/80" />
-            <div className="w-3 h-3 rounded-full bg-emerald-500/80" />
-            <span className="text-xs font-mono text-gray-400 ml-2 hidden sm:inline">
-              Room <strong className="text-purple-300">#PT-7892</strong>
+            <div className="w-3 h-3 rounded-full bg-[#FF5F56] border border-black/20" />
+            <div className="w-3 h-3 rounded-full bg-[#FFBD2E] border border-black/20" />
+            <div className="w-3 h-3 rounded-full bg-[#27C93F] border border-black/20" />
+            <span className="text-xs font-medium text-gray-300 ml-2 font-[family-name:var(--font-outfit)]">
+              PlayTogether
             </span>
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-300 text-xs font-mono border border-emerald-500/20">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-              Sync: 12ms
-            </span>
-            <span className="hidden sm:flex items-center gap-1 px-2.5 py-1 rounded-full bg-purple-500/10 text-purple-300 text-xs font-mono border border-purple-500/20">
-              <Users className="w-3 h-3" /> 4 watching
+            <span className="text-[11px] font-mono text-purple-300/80 bg-purple-500/10 px-2 py-0.5 rounded-full border border-purple-500/20">
+              v0.11.0
             </span>
           </div>
         </div>
 
-        {/* Workspace Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-4 min-h-[380px] md:min-h-[460px]">
-          {/* Main Video Viewport (3 cols) */}
-          <div className="lg:col-span-3 bg-black relative flex flex-col justify-between overflow-hidden group">
-            {/* Mock Video Canvas / Background Art */}
-            <div
-              className={`absolute inset-0 bg-cover bg-center transition-all duration-700 ${
-                activeTab === "video"
-                  ? "bg-gradient-to-br from-indigo-950 via-purple-950 to-slate-950"
-                  : "bg-gradient-to-br from-rose-950 via-slate-950 to-purple-950"
-              }`}
-            >
-              {/* Sci-Fi Cinematic Visual Backdrop Effect */}
-              <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-purple-800/25 via-indigo-900/10 to-transparent flex items-center justify-center">
-                <div className="text-center space-y-2 opacity-90">
-                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-500/20 border border-purple-400/30 text-purple-200 text-xs">
-                    <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                    {activeTab === "video"
-                      ? "Local File: Interstellar_4K_HDR.mkv"
-                      : "YouTube: Cyberpunk 2077 Night City Live"}
-                  </div>
-                  <p className="text-xl md:text-2xl font-bold tracking-tight text-white/90 font-[family-name:var(--font-space-grotesk)]">
-                    Synchronized Media Stream
-                  </p>
-                  <p className="text-xs text-purple-300/70 font-mono">
-                    Bitrate: 28.4 Mbps • Direct libmpv Core Engine
-                  </p>
-                </div>
-              </div>
-            </div>
+        {/* Video Canvas & Floating Overlay Viewport */}
+        <div className="relative w-full aspect-[16/10] sm:aspect-[16/9] min-h-[380px] sm:min-h-[440px] md:min-h-[500px] overflow-hidden bg-black flex flex-col justify-between">
+          {/* Real Cinematic Background Still */}
+          <div className="absolute inset-0 z-0">
+            <Image
+              src="/sample_movie_frame.jpg"
+              alt="Cinematic Movie Still"
+              fill
+              priority
+              sizes="(max-width: 1024px) 100vw, 1024px"
+              className="object-cover object-center brightness-90 contrast-105"
+            />
+            {/* Subtle Vignette Gradients */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/10 to-black/60 pointer-events-none" />
+            <div className="absolute inset-0 bg-gradient-to-r from-black/40 via-transparent to-black/40 pointer-events-none" />
+          </div>
 
-            {/* Floating Dynamic Reaction Bubbles */}
+          {/* Floating Reactions Overlay */}
+          <div className="absolute inset-0 pointer-events-none z-30 overflow-hidden">
             {reactions.map((r) => (
               <div
                 key={r.id}
-                style={{ left: `${r.x}%`, top: `${r.y}%` }}
-                className="absolute text-4xl animate-bounce pointer-events-none transition-all duration-1000 z-30 drop-shadow-[0_4px_12px_rgba(0,0,0,0.8)]"
+                style={{
+                  left: `${r.x}%`,
+                  bottom: `${r.y}%`,
+                  transform: `rotate(${r.rotation}deg)`,
+                }}
+                className="absolute text-4xl sm:text-5xl animate-bounce transition-all duration-1000 drop-shadow-[0_4px_16px_rgba(0,0,0,0.9)]"
               >
                 {r.emoji}
               </div>
             ))}
+          </div>
 
-            {/* Top Video Overlay Bar */}
-            <div className="relative z-10 p-4 flex items-center justify-between bg-gradient-to-b from-black/80 to-transparent">
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setActiveTab("video")}
-                  className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
-                    activeTab === "video"
-                      ? "bg-purple-600 text-white shadow-md shadow-purple-600/30"
-                      : "bg-white/10 text-gray-300 hover:bg-white/20"
-                  }`}
-                >
-                  Local File Sync
-                </button>
-                <button
-                  onClick={() => setActiveTab("youtube")}
-                  className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
-                    activeTab === "youtube"
-                      ? "bg-rose-600 text-white shadow-md shadow-rose-600/30"
-                      : "bg-white/10 text-gray-300 hover:bg-white/20"
-                  }`}
-                >
-                  YouTube Sync
-                </button>
+          {/* TOP BAR OVERLAYS */}
+          <div className="relative z-20 p-3 sm:p-4 md:p-5 flex items-start justify-between gap-3">
+            {/* Top Left: Room Pill */}
+            <div className="backdrop-blur-xl bg-[#141022]/80 border border-white/10 rounded-full px-3 py-1.5 sm:px-4 sm:py-2 shadow-2xl shadow-black/60 flex items-center gap-2 sm:gap-3.5">
+              <span className="text-xs sm:text-sm font-semibold text-white font-[family-name:var(--font-space-grotesk)] tracking-tight">
+                test room
+              </span>
+
+              {/* Room Code Chip */}
+              <button
+                onClick={handleCopyCode}
+                title="Click to copy room code"
+                className="bg-[#A78BFA]/15 border border-[#A78BFA]/35 hover:bg-[#A78BFA]/25 transition-all rounded-full px-2 sm:px-2.5 py-0.5 sm:py-1 flex items-center gap-1 sm:gap-1.5 text-[11px] sm:text-xs font-mono font-medium text-[#C9B8FF] tracking-wider cursor-pointer active:scale-95"
+              >
+                <span>WZ2CWX</span>
+                {copiedCode ? (
+                  <Check className="w-3 h-3 text-emerald-400" />
+                ) : (
+                  <Copy className="w-3 h-3 text-purple-300 opacity-80" />
+                )}
+              </button>
+
+              {/* Keyboard Shortcuts Icon Button */}
+              <div
+                className="text-gray-400 hover:text-white p-1 rounded-md transition-colors cursor-pointer hidden sm:block"
+                title="Keyboard shortcuts"
+              >
+                <Keyboard className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </div>
 
-              <div className="flex items-center gap-1.5 text-xs text-gray-300 bg-black/50 px-2.5 py-1 rounded-md backdrop-blur-sm border border-white/10">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                <span className="hidden sm:inline">Authority:</span>
-                <span className="font-semibold text-purple-300">Alex (Host)</span>
+              {/* Expiry Countdown Timer */}
+              <div className="flex items-center gap-1 text-[11px] sm:text-xs font-mono font-medium text-amber-300/90 pl-0.5">
+                <Timer className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-400 animate-pulse" />
+                <span>02:03 left</span>
               </div>
             </div>
 
-            {/* Bottom Playback Controls */}
-            <div className="relative z-10 p-4 bg-gradient-to-t from-black/90 via-black/60 to-transparent space-y-3">
-              {/* Progress Bar */}
-              <div
-                className="relative w-full h-1.5 bg-white/20 hover:h-2 rounded-full cursor-pointer transition-all overflow-hidden"
-                onClick={(e) => {
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  const clickX = e.clientX - rect.left;
-                  const newPct = (clickX / rect.width) * 100;
-                  setProgress(newPct);
-                  setCurrentTimeSec(Math.floor((newPct / 100) * totalDurationSec));
-                }}
+            {/* Top Right: Chat & Overflow Actions */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowChat(!showChat)}
+                title="Toggle room chat"
+                className={`w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 rounded-full backdrop-blur-xl border flex items-center justify-center transition-all cursor-pointer shadow-xl shadow-black/40 relative active:scale-95 ${showChat
+                  ? "bg-purple-600/90 border-purple-400 text-white shadow-purple-500/30"
+                  : "bg-[#141022]/80 border-white/10 hover:border-purple-400/40 text-gray-300 hover:text-white"
+                  }`}
               >
-                <div
-                  className="h-full bg-gradient-to-r from-purple-500 to-pink-500 rounded-full relative"
-                  style={{ width: `${progress}%` }}
-                >
-                  <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow-md shadow-purple-500/50" />
-                </div>
-              </div>
+                <MessageSquare className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
+                {!showChat && (
+                  <span className="w-2 h-2 rounded-full bg-purple-400 absolute top-1.5 right-1.5 ring-2 ring-[#141022]" />
+                )}
+              </button>
 
-              {/* Control Buttons */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => setIsPlaying(!isPlaying)}
-                    className="p-2.5 rounded-full bg-purple-600 hover:bg-purple-500 text-white transition-transform active:scale-95 shadow-md shadow-purple-900/50"
-                    aria-label={isPlaying ? "Pause" : "Play"}
-                  >
-                    {isPlaying ? (
-                      <Pause className="w-4 h-4 fill-current" />
-                    ) : (
-                      <Play className="w-4 h-4 fill-current translate-x-0.5" />
-                    )}
-                  </button>
-
-                  <span className="text-xs font-mono text-gray-300">
-                    {formatTime(currentTimeSec)} / {formatTime(totalDurationSec)}
-                  </span>
-                </div>
-
-                {/* Quick Reaction Bar */}
-                <div className="flex items-center gap-1.5 bg-black/60 px-2.5 py-1 rounded-full border border-white/10 backdrop-blur-md">
-                  {["🔥", "🍿", "😂", "💜", "👏"].map((emoji) => (
-                    <button
-                      key={emoji}
-                      onClick={() => triggerReaction(emoji)}
-                      className="text-base hover:scale-130 transition-transform active:scale-90 p-0.5 cursor-pointer"
-                      title={`Send ${emoji} reaction`}
-                    >
-                      {emoji}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              <button
+                title="More options"
+                className="w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 rounded-full backdrop-blur-xl bg-[#141022]/80 border border-white/10 hover:border-purple-400/40 text-gray-300 hover:text-white flex items-center justify-center transition-all cursor-pointer shadow-xl shadow-black/40 active:scale-95"
+              >
+                <MoreVertical className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
+              </button>
             </div>
           </div>
 
-          {/* Side Panel: Facecams & Live Chat (1 col) */}
-          <div className="lg:col-span-1 bg-[#120E24] border-t lg:border-t-0 lg:border-l border-purple-500/15 flex flex-col justify-between p-3.5 space-y-4">
-            {/* LiveKit Facecams Grid */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-purple-300/70">
-                <span>Facecams (LiveKit)</span>
-                <span className="text-[10px] text-emerald-400 font-mono flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  HD 1080p
-                </span>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                {/* Tile 1: Alex */}
-                <div className="relative aspect-video rounded-lg bg-purple-950/60 border border-purple-400/30 overflow-hidden flex items-center justify-center">
-                  <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-xs font-bold text-white shadow">
-                    A
+          {/* LEFT FLOATING FACECAM RAIL (FacecamRail) */}
+          <div className="relative z-20 px-3 sm:px-4 md:px-5 flex-1 flex flex-col justify-start">
+            <div
+              className={`transition-all duration-300 flex flex-col gap-2.5 ${showCams
+                ? "opacity-100 translate-x-0"
+                : "opacity-0 -translate-x-4 pointer-events-none"
+                }`}
+            >
+              {/* Tile 1: Shubham Singh (Host / Premium / Active Ring) */}
+              <div className="w-36 sm:w-40 md:w-44 h-20 sm:h-24 md:h-26 rounded-2xl bg-gradient-to-br from-[#1F1A33] to-[#151021] border-2 border-[#C4A8FF] shadow-[0_0_18px_rgba(196,168,255,0.3)] relative overflow-hidden flex flex-col items-center justify-center p-2">
+                {/* User Avatar with Crown */}
+                <div className="relative">
+                  <div className="w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 rounded-full bg-gradient-to-tr from-[#60A5FA] to-[#818CF8] flex items-center justify-center text-xs sm:text-sm font-bold text-white shadow-md">
+                    S
                   </div>
-                  <div className="absolute bottom-1 left-1.5 text-[10px] font-medium text-white/90 bg-black/60 px-1 rounded">
-                    Alex (Host)
-                  </div>
-                  <div className="absolute top-1 right-1 p-0.5 rounded bg-emerald-500/20 text-emerald-300">
-                    <Mic className="w-2.5 h-2.5" />
-                  </div>
+                  <Crown
+                    className="w-3.5 h-3.5 text-amber-400 fill-amber-400 absolute -top-1.5 -right-1 drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]"
+                    aria-label="Premium Host"
+                  />
                 </div>
 
-                {/* Tile 2: Maya */}
-                <div className="relative aspect-video rounded-lg bg-pink-950/60 border border-pink-400/30 overflow-hidden flex items-center justify-center ring-1 ring-purple-400/50">
-                  <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-pink-500 to-rose-500 flex items-center justify-center text-xs font-bold text-white shadow">
-                    M
-                  </div>
-                  <div className="absolute bottom-1 left-1.5 text-[10px] font-medium text-white/90 bg-black/60 px-1 rounded">
-                    Maya
-                  </div>
-                  <div className="absolute top-1 right-1 p-0.5 rounded bg-emerald-500/20 text-emerald-300 animate-pulse">
-                    <Volume2 className="w-2.5 h-2.5" />
-                  </div>
+                {/* Name & Cam Status */}
+                <div className="mt-1 flex items-center gap-1 text-[10px] sm:text-[11px] font-medium text-white/80 font-[family-name:var(--font-outfit)]">
+                  <span>Shubham Singh</span>
+                  <VideoOff className="w-2.5 h-2.5 text-white/40" />
+                </div>
+
+                {/* Mic Muted Badge (Top Right) */}
+                <div className="absolute top-1.5 right-1.5 w-4.5 h-4.5 sm:w-5 sm:h-5 rounded-full bg-[#2A1414]/90 border border-red-500/40 text-red-400 flex items-center justify-center shadow-sm">
+                  <MicOff className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+                </div>
+              </div>
+
+              {/* Tile 2: Guest-0397 */}
+              <div className="w-36 sm:w-40 md:w-44 h-20 sm:h-24 md:h-26 rounded-2xl bg-gradient-to-br from-[#1F1A33] to-[#151021] border border-white/10 shadow-lg relative overflow-hidden flex flex-col items-center justify-center p-2">
+                {/* User Avatar */}
+                <div className="w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 rounded-full bg-gradient-to-tr from-[#F472B6] to-[#C084FC] flex items-center justify-center text-xs sm:text-sm font-bold text-white shadow-md">
+                  G
+                </div>
+
+                {/* Name & Cam Status */}
+                <div className="mt-1 flex items-center gap-1 text-[10px] sm:text-[11px] font-medium text-white/65 font-[family-name:var(--font-outfit)]">
+                  <span>Guest-0397</span>
+                  <VideoOff className="w-2.5 h-2.5 text-white/40" />
+                </div>
+
+                {/* Mic Muted Badge (Top Right) */}
+                <div className="absolute top-1.5 right-1.5 w-4.5 h-4.5 sm:w-5 sm:h-5 rounded-full bg-[#2A1414]/90 border border-red-500/40 text-red-400 flex items-center justify-center shadow-sm">
+                  <MicOff className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
                 </div>
               </div>
             </div>
 
-            {/* Simulated Live Chat */}
-            <div className="flex-1 flex flex-col justify-end space-y-2 border-t border-white/5 pt-3">
-              <div className="text-[11px] font-semibold text-gray-400 flex items-center gap-1">
-                <MessageSquare className="w-3 h-3 text-purple-400" />
-                <span>Room Chat</span>
+            {/* Hide/Show Cams Action Pill */}
+            <button
+              onClick={() => setShowCams(!showCams)}
+              className="mt-2 backdrop-blur-md bg-[#141022]/80 border border-white/10 hover:border-purple-400/40 hover:bg-[#1C1630] transition-all rounded-full px-2.5 sm:px-3 py-1 text-[10px] sm:text-xs font-medium text-white/70 flex items-center gap-1 cursor-pointer w-fit shadow-md active:scale-95"
+            >
+              {showCams ? (
+                <>
+                  <ChevronLeft className="w-3 h-3 text-purple-300" />
+                  <span>Hide cams</span>
+                </>
+              ) : (
+                <>
+                  <ChevronRight className="w-3 h-3 text-purple-300" />
+                  <span>Show cams</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          {/* FLOATING CHAT OVERLAY PANEL (Toggled via Chat Button) */}
+          {showChat && (
+            <div className="absolute top-16 sm:top-18 md:top-20 right-3 sm:right-4 md:right-5 w-64 sm:w-72 md:w-80 z-25 backdrop-blur-2xl bg-[#141022]/95 border border-purple-400/30 rounded-2xl p-3.5 shadow-2xl space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="flex items-center justify-between border-b border-white/10 pb-2">
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-white">
+                  <MessageSquare className="w-3.5 h-3.5 text-purple-400" />
+                  <span>Room Chat</span>
+                </div>
+                <button
+                  onClick={() => setShowChat(false)}
+                  className="text-gray-400 hover:text-white p-1 rounded transition-colors"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
               </div>
 
-              <div className="space-y-1.5 text-xs">
-                <div className="p-1.5 rounded-lg bg-white/5 border border-white/5">
-                  <span className="font-semibold text-purple-300">Maya: </span>
-                  <span className="text-gray-300">That sound design was unreal 🤯</span>
-                </div>
-                <div className="p-1.5 rounded-lg bg-white/5 border border-white/5">
-                  <span className="font-semibold text-pink-300">Jordan: </span>
-                  <span className="text-gray-300">Wait, don&apos;t skip the credits!!</span>
-                </div>
-                <div className="p-1.5 rounded-lg bg-purple-500/10 border border-purple-500/20 text-[11px] text-purple-200 flex items-center gap-1">
+              {/* Chat Message List */}
+              <div className="space-y-2 max-h-44 overflow-y-auto text-xs pr-1">
+                {chatMessages.map((msg) => (
+                  <div
+                    key={msg.id}
+                    className="p-2 rounded-lg bg-white/5 border border-white/5 text-gray-200 leading-snug"
+                  >
+                    <span className={`font-semibold ${msg.color}`}>
+                      {msg.sender}:{" "}
+                    </span>
+                    <span>{msg.text}</span>
+                  </div>
+                ))}
+                <div className="p-1.5 rounded-lg bg-purple-500/10 border border-purple-500/20 text-[11px] text-purple-200 flex items-center gap-1.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-ping" />
                   <span>Alex is typing...</span>
+                </div>
+              </div>
+
+              {/* Chat Input Bar */}
+              <form onSubmit={handleSendMessage} className="flex gap-1.5 pt-1">
+                <input
+                  type="text"
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  placeholder="Send a chat message..."
+                  className="flex-1 bg-black/40 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-purple-400"
+                />
+                <button
+                  type="submit"
+                  className="p-1.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-white transition-colors cursor-pointer"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                </button>
+              </form>
+            </div>
+          )}
+
+          {/* BOTTOM FLOATING PLAYER CONTROL DOCK (RoomControlBar) */}
+          <div className="relative z-20 p-3 sm:p-4 md:p-5 flex flex-col items-center">
+            {/* Reaction Selector Strip (Popup above dock) */}
+            {showReactionStrip && (
+              <div className="mb-2 backdrop-blur-2xl bg-[#141022]/90 border border-purple-400/30 px-3 py-1.5 rounded-full flex items-center gap-2 shadow-2xl animate-in fade-in slide-in-from-bottom-2 duration-150">
+                {AVAILABLE_EMOJIS.map((emoji) => (
+                  <button
+                    key={emoji}
+                    onClick={() => triggerReaction(emoji)}
+                    className="text-lg hover:scale-135 transition-transform active:scale-95 cursor-pointer p-0.5"
+                    title={`React ${emoji}`}
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Main Glass Control Panel */}
+            <div className="w-full max-w-3xl backdrop-blur-2xl bg-[#141022]/85 border border-white/10 rounded-2xl md:rounded-3xl px-3 sm:px-5 md:px-6 py-2.5 sm:py-3.5 md:py-4 shadow-2xl shadow-black/80 space-y-2 sm:space-y-3">
+              {/* Row 1: Timeline Scrubber */}
+              <div className="flex items-center gap-2.5 sm:gap-4">
+                <span className="text-xs sm:text-[13px] font-mono font-medium text-white min-w-[38px]">
+                  {formatTime(currentTimeSec)}
+                </span>
+
+                {/* Scrubber Bar with Hover Preview Chip */}
+                <div
+                  ref={scrubberRef}
+                  onMouseMove={handleScrubberMouseMove}
+                  onMouseLeave={() => {
+                    setHoverSeekSec(null);
+                    setHoverSeekPct(null);
+                  }}
+                  onClick={handleScrubberClick}
+                  className="relative flex-1 h-1.5 sm:h-2 bg-white/15 hover:h-2.5 rounded-full cursor-pointer transition-all group"
+                >
+                  {/* Hover Seek Preview Chip */}
+                  {hoverSeekSec !== null && hoverSeekPct !== null && (
+                    <div
+                      style={{ left: `${hoverSeekPct}%` }}
+                      className="absolute -top-7 -translate-x-1/2 px-2 py-0.5 rounded bg-[#161226] border border-white/20 text-[10px] font-mono text-purple-200 shadow-xl pointer-events-none"
+                    >
+                      {formatTime(hoverSeekSec)}
+                    </div>
+                  )}
+
+                  {/* Active Progress Fill */}
+                  <div
+                    className="h-full bg-gradient-to-r from-[#8B5CF6] via-[#A855F7] to-[#C084FC] rounded-full relative"
+                    style={{ width: `${progressPercent}%` }}
+                  >
+                    {/* Glowing White Thumb Dot */}
+                    <div className="absolute right-0 top-1/2 -translate-y-1/2 w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 bg-white rounded-full shadow-[0_0_8px_rgba(255,255,255,0.9),0_0_16px_rgba(168,85,247,0.8)] transform scale-100 group-hover:scale-125 transition-transform" />
+                  </div>
+                </div>
+
+                <span className="text-xs sm:text-[13px] font-mono text-white/50 min-w-[50px] text-right">
+                  {formatTime(totalDurationSec)}
+                </span>
+              </div>
+
+              {/* Row 2: Control Action Buttons (Left / Center / Right) */}
+              <div className="flex items-center justify-between pt-0.5">
+                {/* Left Section: AV Toggles & Reaction Trigger */}
+                <div className="flex items-center gap-1 sm:gap-2">
+                  {/* Mic Toggle */}
+                  <button
+                    onClick={() => setMicOn(!micOn)}
+                    title={micOn ? "Mute mic" : "Unmute mic"}
+                    className={`p-1.5 sm:p-2 rounded-xl transition-all cursor-pointer ${micOn
+                      ? "bg-purple-600/30 text-purple-300 border border-purple-400/40"
+                      : "text-gray-400 hover:text-white hover:bg-white/10"
+                      }`}
+                  >
+                    {micOn ? (
+                      <Mic className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
+                    ) : (
+                      <MicOff className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
+                    )}
+                  </button>
+
+                  {/* Camera Toggle */}
+                  <button
+                    onClick={() => setCamOn(!camOn)}
+                    title={camOn ? "Turn camera off" : "Turn camera on"}
+                    className={`p-1.5 sm:p-2 rounded-xl transition-all cursor-pointer ${camOn
+                      ? "bg-purple-600/30 text-purple-300 border border-purple-400/40"
+                      : "text-gray-400 hover:text-white hover:bg-white/10"
+                      }`}
+                  >
+                    {camOn ? (
+                      <Video className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
+                    ) : (
+                      <VideoOff className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
+                    )}
+                  </button>
+
+                  {/* Reaction Button */}
+                  <button
+                    onClick={() => {
+                      setShowReactionStrip(!showReactionStrip);
+                      triggerReaction(
+                        AVAILABLE_EMOJIS[
+                        Math.floor(Math.random() * AVAILABLE_EMOJIS.length)
+                        ]
+                      );
+                    }}
+                    title="Send reaction"
+                    className={`p-1.5 sm:p-2 rounded-xl transition-all cursor-pointer ${showReactionStrip
+                      ? "bg-purple-600/30 text-purple-300 border border-purple-400/40"
+                      : "text-gray-400 hover:text-white hover:bg-white/10"
+                      }`}
+                  >
+                    <Smile className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
+                  </button>
+
+                  {/* Divider */}
+                  <div className="w-px h-5 bg-white/10 mx-0.5 hidden sm:block" />
+
+                  {/* Audio Tracks */}
+                  <button
+                    title="Audio tracks"
+                    className="p-1.5 sm:p-2 rounded-xl text-gray-400 hover:text-white hover:bg-white/10 transition-all cursor-pointer hidden sm:block"
+                  >
+                    <Music className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
+                  </button>
+
+                  {/* Subtitles */}
+                  <button
+                    title="Subtitles"
+                    className="p-1.5 sm:p-2 rounded-xl text-gray-400 hover:text-white hover:bg-white/10 transition-all cursor-pointer hidden sm:block"
+                  >
+                    <Subtitles className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
+                  </button>
+                </div>
+
+                {/* Center Section: Rewind 10, Big Glowing Play Button, Forward 10 */}
+                <div className="flex items-center gap-2 sm:gap-4">
+                  {/* Replay 10s */}
+                  <button
+                    onClick={() => handleSkip(-10)}
+                    title="Skip backward 10s"
+                    className="p-1.5 sm:p-2 rounded-xl text-gray-300 hover:text-white hover:bg-white/10 transition-all cursor-pointer active:-rotate-45"
+                  >
+                    <svg
+                      className="w-5 h-5 sm:w-6 sm:h-6"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                      <path d="M3 3v5h5" />
+                      <text
+                        x="12"
+                        y="15.5"
+                        textAnchor="middle"
+                        fontSize="7"
+                        fontWeight="bold"
+                        fill="currentColor"
+                        stroke="none"
+                        fontFamily="monospace"
+                      >
+                        10
+                      </text>
+                    </svg>
+                  </button>
+
+                  {/* Large Glowing Purple Play/Pause Button */}
+                  <button
+                    onClick={() => setIsPlaying(!isPlaying)}
+                    title={isPlaying ? "Pause" : "Play"}
+                    className="w-10 h-10 sm:w-11 sm:h-11 md:w-12 md:h-12 rounded-full bg-gradient-to-tr from-[#8B5CF6] via-[#9333EA] to-[#A855F7] text-white flex items-center justify-center shadow-[0_0_24px_rgba(168,85,247,0.6)] hover:shadow-[0_0_32px_rgba(168,85,247,0.9)] hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                    aria-label={isPlaying ? "Pause" : "Play"}
+                  >
+                    {isPlaying ? (
+                      <Pause className="w-5 h-5 fill-current" />
+                    ) : (
+                      <Play className="w-5 h-5 fill-current translate-x-0.5" />
+                    )}
+                  </button>
+
+                  {/* Forward 10s */}
+                  <button
+                    onClick={() => handleSkip(10)}
+                    title="Skip forward 10s"
+                    className="p-1.5 sm:p-2 rounded-xl text-gray-300 hover:text-white hover:bg-white/10 transition-all cursor-pointer active:rotate-45"
+                  >
+                    <svg
+                      className="w-5 h-5 sm:w-6 sm:h-6"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M21 12a9 9 0 1 1-9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+                      <path d="M21 3v5h-5" />
+                      <text
+                        x="12"
+                        y="15.5"
+                        textAnchor="middle"
+                        fontSize="7"
+                        fontWeight="bold"
+                        fill="currentColor"
+                        stroke="none"
+                        fontFamily="monospace"
+                      >
+                        10
+                      </text>
+                    </svg>
+                  </button>
+                </div>
+
+                {/* Right Section: Stream Source, Open File, Volume */}
+                <div className="flex items-center gap-1 sm:gap-2">
+                  {/* Switch Stream Source */}
+                  <button
+                    title="Switch source (YouTube / Local)"
+                    className="p-1.5 sm:p-2 rounded-xl text-gray-400 hover:text-white hover:bg-white/10 transition-all cursor-pointer hidden sm:block"
+                  >
+                    <Tv className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
+                  </button>
+
+                  {/* Open File */}
+                  <button
+                    title="Open local file"
+                    className="p-1.5 sm:p-2 rounded-xl text-gray-400 hover:text-white hover:bg-white/10 transition-all cursor-pointer hidden sm:block"
+                  >
+                    <FolderOpen className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
+                  </button>
+
+                  {/* Volume Control */}
+                  <div className="flex items-center gap-1 sm:gap-1.5 pl-1">
+                    <button
+                      onClick={() => setIsMuted(!isMuted)}
+                      title={isMuted || volume === 0 ? "Unmute" : "Mute"}
+                      className="p-1.5 sm:p-2 rounded-xl text-gray-400 hover:text-white hover:bg-white/10 transition-all cursor-pointer"
+                    >
+                      {isMuted || volume === 0 ? (
+                        <VolumeX className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
+                      ) : (
+                        <Volume2 className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
+                      )}
+                    </button>
+
+                    {/* Volume Slider Track */}
+                    <div
+                      onClick={(e) => {
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        const x = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+                        const newVol = Number((x / rect.width).toFixed(2));
+                        setVolume(newVol);
+                        if (isMuted && newVol > 0) setIsMuted(false);
+                      }}
+                      className="w-14 sm:w-20 md:w-24 h-1.5 bg-white/15 hover:h-2 rounded-full overflow-hidden relative cursor-pointer hidden xs:block transition-all"
+                    >
+                      <div
+                        className="h-full bg-gradient-to-r from-purple-500 to-pink-500 rounded-full"
+                        style={{ width: `${isMuted ? 0 : volume * 100}%` }}
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
