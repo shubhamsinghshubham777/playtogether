@@ -37,6 +37,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (ProfileService.instance.profile == null) {
       ProfileService.instance.load();
     }
+    EntitlementService.instance.load();
   }
 
   Future<void> _pickAvatar() async {
@@ -262,6 +263,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               children: [
                                 _nameField(profile),
                                 _emailField(profile),
+                                _subscriptionSection(),
                                 Padding(
                                   padding: const EdgeInsets.only(top: 6),
                                   child: Row(
@@ -295,6 +297,68 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ],
                     ),
                   ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _subscriptionSection() {
+    final isPrem = EntitlementService.instance.isPremium;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: isPrem ? PTColors.primary.withValues(alpha: 0.12) : PTColors.white(0.04),
+        border: Border.all(
+          color: isPrem
+              ? const Color(0xFFA78BFA).withValues(alpha: 0.35)
+              : PTColors.white(0.08),
+        ),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        spacing: 12,
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              gradient: isPrem ? PTColors.brandGradient : null,
+              color: isPrem ? null : PTColors.white(0.08),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(
+              isPrem ? Symbols.crown_rounded : Symbols.workspace_premium_rounded,
+              size: 20,
+              fill: 1,
+              color: Colors.white,
+            ),
+          ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: .start,
+              spacing: 2,
+              children: [
+                Text(
+                  isPrem ? 'Premium Plan' : 'Free Tier',
+                  style: PTText.body.copyWith(fontWeight: .w600, color: Colors.white),
+                ),
+                Text(
+                  isPrem
+                      ? 'Video facecams, 24h rooms & more'
+                      : 'Upgrade for video facecams & persistent rooms',
+                  style: PTText.finePrint.copyWith(color: PTColors.white(0.55)),
+                ),
+              ],
+            ),
+          ),
+          PTButton(
+            label: isPrem ? 'Manage' : 'Go Premium',
+            variant: isPrem ? .secondary : .primary,
+            icon: isPrem ? Symbols.arrow_forward_rounded : Symbols.crown_rounded,
+            height: 38,
+            expand: false,
+            onPressed: () => context.go('/lobby/subscribe?source=profile'),
           ),
         ],
       ),
@@ -343,6 +407,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       spacing: 24,
       children: [
         _identityHeader(profile, vertical: header == .column),
+        _subscriptionSection(),
         _nameField(profile),
         _emailField(profile),
         const Divider(),
@@ -458,6 +523,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ],
           ),
         ),
+        _subscriptionSection(),
         const Divider(),
         _privacySection(),
         PTButton(

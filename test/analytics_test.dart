@@ -301,6 +301,30 @@ void main() {
       expect(analytics.isEnabled, isFalse);
     });
   });
+
+  group('subscription funnel events', () {
+    test('tracks subscription_screen_viewed and checkout_opened with sources', () {
+      fakeAsync((async) {
+        final transport = _RecordingTransport();
+        final analytics = _configured(transport);
+
+        analytics.track('subscription_screen_viewed', {'source': 'profile'});
+        analytics.track('checkout_opened', {'source': 'profile'});
+        analytics.track('purchase_confirmed');
+        analytics.track('debug_premium_granted');
+
+        async.elapse(const Duration(seconds: 31));
+
+        expect(transport.eventNames, [
+          'subscription_screen_viewed',
+          'checkout_opened',
+          'purchase_confirmed',
+          'debug_premium_granted',
+        ]);
+        expect(transport.calls.single.first['properties']['source'], 'profile');
+      });
+    });
+  });
 }
 
 class SocketExceptionStub implements Exception {

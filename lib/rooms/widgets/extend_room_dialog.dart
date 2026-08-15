@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import 'package:playtogether/platform.dart';
 import 'package:playtogether/ui/buttons.dart';
 import 'package:playtogether/ui/pt_motion.dart';
 import 'package:playtogether/ui/pt_theme.dart';
@@ -150,14 +151,20 @@ class PremiumTeaseDialog extends StatelessWidget {
     required this.body,
     required this.perks,
     this.onNotify,
+    this.onUpgrade,
     this.onSignIn,
+    this.desktopOverride,
   });
 
   final String headline;
   final String body;
   final List<String> perks;
   final VoidCallback? onNotify;
+  final VoidCallback? onUpgrade;
   final VoidCallback? onSignIn;
+  final bool? desktopOverride;
+
+  bool get _isDesktop => desktopOverride ?? isDesktop;
 
   @override
   Widget build(BuildContext context) {
@@ -223,26 +230,56 @@ class PremiumTeaseDialog extends StatelessWidget {
   }
 
   Widget _teaseActions(BuildContext context) {
-    return Row(
+    if (_isDesktop) {
+      return Row(
+        spacing: 11,
+        children: [
+          Expanded(
+            child: PTButton(
+              label: 'Maybe later',
+              variant: .secondary,
+              height: 48,
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+          ),
+          Expanded(
+            child: PTButton(
+              label: 'Go Premium',
+              icon: Symbols.crown_rounded,
+              height: 48,
+              onPressed: () {
+                Navigator.of(context).pop();
+                (onUpgrade ?? onNotify)?.call();
+              },
+            ),
+          ),
+        ],
+      );
+    }
+
+    return Column(
+      mainAxisSize: .min,
+      crossAxisAlignment: .stretch,
       spacing: 11,
       children: [
-        Expanded(
-          child: PTButton(
-            label: 'Maybe later',
-            variant: .secondary,
-            height: 48,
-            onPressed: () => Navigator.of(context).pop(),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: PTColors.white(0.04),
+            border: Border.all(color: PTColors.white(0.08)),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(
+            'Subscriptions are managed on our website.',
+            textAlign: TextAlign.center,
+            style: PTText.body.copyWith(fontSize: 13, color: PTColors.white(0.7)),
           ),
         ),
-        Expanded(
-          child: PTButton(
-            label: 'Keep me posted',
-            height: 48,
-            onPressed: () {
-              onNotify?.call();
-              Navigator.of(context).pop();
-            },
-          ),
+        PTButton(
+          label: 'Close',
+          variant: .secondary,
+          height: 48,
+          onPressed: () => Navigator.of(context).pop(),
         ),
       ],
     );

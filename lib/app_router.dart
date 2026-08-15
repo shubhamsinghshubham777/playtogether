@@ -10,12 +10,13 @@ import 'auth/login_screen.dart';
 import 'profile/entitlement_service.dart';
 import 'profile/profile_screen.dart';
 import 'profile/profile_service.dart';
+import 'profile/subscription_screen.dart';
 import 'rooms/lobby_screen.dart';
 import 'rooms/room_screen.dart';
 import 'rooms/room_service.dart';
 import 'ui/pt_motion.dart';
 
-/// Profile and rooms are *sub-routes* of the lobby, so the lobby is always the
+/// Profile, subscribe and rooms are *sub-routes* of the lobby, so the lobby is always the
 /// page beneath them in the navigator stack. That is what makes `go('/lobby')`
 /// — every back button, leave, eviction and end-room exit — shrink the stack
 /// and play the reverse (pop) transition. As sibling top-level routes, `go`
@@ -51,6 +52,13 @@ GoRouter buildRouter(Player player) {
           GoRoute(
             path: 'profile',
             pageBuilder: (context, state) => _sharedAxis(state, const ProfileScreen()),
+          ),
+          GoRoute(
+            path: 'subscribe',
+            pageBuilder: (context, state) => _sharedAxis(
+              state,
+              SubscriptionScreen(source: state.uri.queryParameters['source']),
+            ),
           ),
           GoRoute(
             path: 'room/:id',

@@ -259,13 +259,16 @@ class _LobbyScreenState extends State<LobbyScreen> {
         headline: "That's all your rooms",
         body:
             "You're holding as many rooms as your account allows. Delete one you're done "
-            'with, or hang on — premium is nearly here.',
+            'with, or upgrade to Premium for more.',
         perks: const [
           'Room for a lot more of them at once',
           'Rooms that stay put until you delete them',
           'Up to 16 watchers, with video facecams',
         ],
-        onNotify: () => Analytics.instance.track('upgrade_cta_clicked', {'surface': 'room_limit'}),
+        onUpgrade: () {
+          Analytics.instance.track('upgrade_cta_clicked', {'surface': 'room_limit', 'action': 'subscribe'});
+          context.go('/lobby/subscribe?source=room_limit');
+        },
       ),
     );
   }
@@ -368,6 +371,10 @@ class _LobbyScreenState extends State<LobbyScreen> {
             children: [
               const _Wordmark(),
               const Spacer(),
+              if (_showPremiumChip) ...[
+                _premiumChip(),
+                const SizedBox(width: 12),
+              ],
               _profilePill(),
               const SizedBox(width: 12),
               PTIconButton(
@@ -452,7 +459,17 @@ class _LobbyScreenState extends State<LobbyScreen> {
             crossAxisAlignment: .start,
             spacing: 18,
             children: [
-              Row(children: [const _Wordmark(compact: true), const Spacer(), _avatarButton()]),
+              Row(
+                children: [
+                  const _Wordmark(compact: true),
+                  const Spacer(),
+                  if (_showPremiumChip) ...[
+                    _premiumChip(),
+                    const SizedBox(width: 10),
+                  ],
+                  _avatarButton(),
+                ],
+              ),
               if (UpdateService.instance.hasUpdate) _updateBanner(),
               Padding(
                 padding: const EdgeInsets.only(top: 8),
@@ -494,6 +511,10 @@ class _LobbyScreenState extends State<LobbyScreen> {
                 const SizedBox(width: 10),
                 const _Greeting(style: PTText.panelHeading, align: .centerLeft),
                 const Spacer(),
+                if (_showPremiumChip) ...[
+                  _premiumChip(),
+                  const SizedBox(width: 10),
+                ],
                 _avatarButton(size: 36),
               ],
             ),
@@ -566,6 +587,38 @@ class _LobbyScreenState extends State<LobbyScreen> {
     if (!started && mounted) {
       _snack("Hmm, the updater wouldn't start. You can grab the new version from GitHub instead.");
     }
+  }
+
+  bool get _showPremiumChip {
+    final profile = ProfileService.instance.profile;
+    return profile != null && !profile.isGuest && !EntitlementService.instance.isPremium;
+  }
+
+  Widget _premiumChip() {
+    return GlassPill(
+      onTap: () => context.go('/lobby/subscribe?source=lobby_chip'),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      child: Row(
+        mainAxisSize: .min,
+        spacing: 6,
+        children: [
+          const Icon(
+            Symbols.crown_rounded,
+            size: 16,
+            fill: 1,
+            color: PTColors.textAccent,
+          ),
+          Text(
+            'Go Premium',
+            style: PTText.body.copyWith(
+              fontSize: 13,
+              fontWeight: .w600,
+              color: PTColors.textAccent,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _profilePill() {
@@ -974,14 +1027,27 @@ class _Wordmark extends StatelessWidget {
                 color: Colors.white,
               ),
             ),
-            if (AppVersion.label case final version?)
-              Text(
-                Env.usingLocalStack ? '$version · local' : version,
-                style: PTText.mono.copyWith(
-                  fontSize: compact ? 10 : 11,
-                  color: Env.usingLocalStack ? PTColors.warning : PTColors.white(0.4),
+            Row(
+              mainAxisSize: .min,
+              spacing: 6,
+              children: [
+                if (AppVersion.label case final version?)
+                  Text(
+                    Env.usingLocalStack ? '$version · local' : version,
+                    style: PTText.mono.copyWith(
+                      fontSize: compact ? 10 : 11,
+                      color: Env.usingLocalStack ? PTColors.warning : PTColors.white(0.4),
+                    ),
+                  ),
+                Text(
+                  AppVersion.label != null ? '· playtogether.app' : 'playtogether.app',
+                  style: PTText.caption.copyWith(
+                    fontSize: compact ? 10 : 11,
+                    color: PTColors.white(0.35),
+                  ),
                 ),
-              ),
+              ],
+            ),
           ],
         ),
       ],

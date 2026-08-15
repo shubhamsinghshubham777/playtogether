@@ -5,11 +5,11 @@ import { RefreshCcw } from "lucide-react";
 
 export const metadata: Metadata = {
   title: "Refund Policy (14-Day Money-Back Guarantee)",
-  description: "PlayTogether 14-day no-questions-asked refund policy for Paddle and Razorpay purchases.",
+  description: "PlayTogether 14-day no-questions-asked refund policy for Paddle subscriptions.",
 };
 
 export default function RefundPage() {
-  const lastUpdated = "August 11, 2026";
+  const lastUpdated = "August 15, 2026";
 
   return (
     <div className="relative py-12 md:py-20 px-4 sm:px-6 lg:px-8 max-w-4xl mx-auto space-y-12">
@@ -40,27 +40,14 @@ export default function RefundPage() {
 
         <section className="space-y-3">
           <h2 className="text-xl font-bold text-white font-[family-name:var(--font-space-grotesk)]">
-            1. International Subscriptions (Paddle)
+            1. Requesting a Refund
           </h2>
           <p>
-            For recurring subscriptions purchased via Paddle, Paddle acts as the Merchant of Record.
+            All subscriptions are processed securely via Paddle (our Merchant of Record).
           </p>
           <ul className="space-y-1.5 text-xs text-gray-400 list-disc list-inside">
             <li>To request a refund, email <a href={`mailto:${SITE_CONFIG.supportEmail}`} className="text-purple-300 underline">{SITE_CONFIG.supportEmail}</a> with your account email address.</li>
-            <li>Refunds are processed directly back to your original payment method (Credit Card, PayPal, etc.).</li>
-          </ul>
-        </section>
-
-        <section className="space-y-3">
-          <h2 className="text-xl font-bold text-white font-[family-name:var(--font-space-grotesk)]">
-            2. Indian Prepaid Passes (Razorpay)
-          </h2>
-          <p>
-            For prepaid term passes purchased via Razorpay:
-          </p>
-          <ul className="space-y-1.5 text-xs text-gray-400 list-disc list-inside">
-            <li>Email <a href={`mailto:${SITE_CONFIG.supportEmail}`} className="text-purple-300 underline">{SITE_CONFIG.supportEmail}</a> within 14 days of purchase.</li>
-            <li>Refunds will be credited to the original bank account, UPI ID, or card within 5–7 business days.</li>
+            <li>Refunds are processed directly back to your original payment method (Credit/Debit Card, PayPal, Apple Pay, Google Pay, UPI, etc.) within 5–7 business days.</li>
           </ul>
         </section>
 

@@ -2511,6 +2511,13 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
         headline: headline,
         body: body,
         perks: perks,
+        onUpgrade: () {
+          Analytics.instance.track('upgrade_cta_clicked', {
+            'surface': surface,
+            'action': 'subscribe',
+          });
+          context.push('/lobby/subscribe?source=$surface');
+        },
         onNotify: () => Analytics.instance.track('upgrade_cta_clicked', {
           'surface': surface,
           'action': 'notify',
@@ -2563,6 +2570,9 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
     onSkip: _skip,
     onMicToggle: (v) => _toggleFacecam('mic', v),
     onCamToggle: (v) => _toggleFacecam('cam', v),
+    onCamLocked: (_av?.canPublishCamera == false && !EntitlementService.instance.isPremium)
+        ? () => context.push('/lobby/subscribe?source=camera_lock')
+        : null,
     onAudioTracks: _mode == .local ? () => _showTrackChooser(subtitles: false) : null,
     onSubtitles: _mode == .local ? () => _showTrackChooser(subtitles: true) : null,
     // D1: only the host chooses what the room watches. Members keep a picker
@@ -3172,6 +3182,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
 
   Widget _reactionStrip({bool compact = false}) {
     final available = reactionsForTier(EntitlementService.instance.tier);
+    final isPremium = EntitlementService.instance.isPremium;
     return ReactionStrip(
       open: _reactOpen,
       assets: _reactionAssets,
@@ -3179,6 +3190,11 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
       reactions: available.take(kBaseReactionCount).toList(growable: false),
       hasMore: available.length > kBaseReactionCount,
       onMore: _showReactionPicker,
+      showLockedMore: !isPremium,
+      onLockedMore: () {
+        setState(() => _reactOpen = false);
+        context.push('/lobby/subscribe?source=reaction_lock');
+      },
       onPick: _sendReaction,
     );
   }

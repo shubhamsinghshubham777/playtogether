@@ -2,7 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:playtogether/rooms/widgets/extend_room_dialog.dart';
 
-Future<void> _open(WidgetTester tester, {VoidCallback? onSignIn, VoidCallback? onNotify}) async {
+Future<void> _open(
+  WidgetTester tester, {
+  VoidCallback? onSignIn,
+  VoidCallback? onUpgrade,
+  VoidCallback? onNotify,
+  bool? desktopOverride,
+}) async {
   await tester.pumpWidget(
     MaterialApp(
       home: Scaffold(
@@ -18,7 +24,9 @@ Future<void> _open(WidgetTester tester, {VoidCallback? onSignIn, VoidCallback? o
                     body: 'Guest rooms run for an hour and stop there.',
                     perks: const ['Rooms that run for four hours, not one'],
                     onNotify: onNotify,
+                    onUpgrade: onUpgrade,
                     onSignIn: onSignIn,
+                    desktopOverride: desktopOverride,
                   ),
                 ),
               ),
@@ -39,7 +47,7 @@ void main() {
       await _open(tester, onSignIn: () {});
 
       expect(find.text('Sign in with Google'), findsOneWidget);
-      expect(find.text('Keep me posted'), findsNothing);
+      expect(find.text('Go Premium'), findsNothing);
       expect(find.text('Maybe later'), findsOneWidget);
     });
 
@@ -54,15 +62,31 @@ void main() {
       expect(find.byType(PremiumTeaseDialog), findsNothing);
     });
 
-    testWidgets('falls back to the waitlist when there is nothing to act on', (tester) async {
-      var notified = 0;
-      await _open(tester, onNotify: () => notified++);
+    testWidgets('offers Go Premium on desktop', (tester) async {
+      var upgraded = 0;
+      await _open(tester, desktopOverride: true, onUpgrade: () => upgraded++);
 
       expect(find.text('Sign in with Google'), findsNothing);
-      await tester.tap(find.text('Keep me posted'));
+      expect(find.text('Go Premium'), findsOneWidget);
+      expect(find.text('Maybe later'), findsOneWidget);
+
+      await tester.tap(find.text('Go Premium'));
       await tester.pumpAndSettle();
 
-      expect(notified, 1);
+      expect(upgraded, 1);
+      expect(find.byType(PremiumTeaseDialog), findsNothing);
+    });
+
+    testWidgets('renders plain text on mobile', (tester) async {
+      await _open(tester, desktopOverride: false);
+
+      expect(find.text('Sign in with Google'), findsNothing);
+      expect(find.text('Go Premium'), findsNothing);
+      expect(find.text('Subscriptions are managed on our website.'), findsOneWidget);
+      expect(find.text('Close'), findsOneWidget);
+
+      await tester.tap(find.text('Close'));
+      await tester.pumpAndSettle();
       expect(find.byType(PremiumTeaseDialog), findsNothing);
     });
   });

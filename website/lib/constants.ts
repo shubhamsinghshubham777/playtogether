@@ -163,7 +163,7 @@ export const FAQ_ITEMS = [
       },
       {
         q: "How do I subscribe?",
-        a: "Sign in with your Google account on our website (/auth), visit the Pricing page (/pricing), and select either Monthly or Annual billing. International users are billed securely via Paddle; Indian users can purchase prepaid passes via Razorpay (Cards, UPI, Netbanking)."
+        a: "Sign in with your Google account on our website (/auth), visit the Pricing page (/pricing), and select either Monthly or Annual billing. Payments are processed securely via Paddle (Credit/Debit Cards, PayPal, Apple Pay, Google Pay, and UPI in India)."
       },
       {
         q: "Can I cancel anytime?",

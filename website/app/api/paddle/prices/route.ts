@@ -2,8 +2,12 @@ import { NextResponse } from "next/server";
 
 export async function GET() {
   try {
-    const monthlyPriceId = process.env.PADDLE_MONTHLY_PRICE_ID;
-    const annualPriceId = process.env.PADDLE_ANNUAL_PRICE_ID;
+    const monthlyPriceId =
+      process.env.NEXT_PUBLIC_PADDLE_MONTHLY_PRICE_ID ||
+      process.env.PADDLE_MONTHLY_PRICE_ID;
+    const annualPriceId =
+      process.env.NEXT_PUBLIC_PADDLE_ANNUAL_PRICE_ID ||
+      process.env.PADDLE_ANNUAL_PRICE_ID;
     const apiKey = process.env.PADDLE_API_KEY;
 
     if (

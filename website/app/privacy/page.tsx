@@ -59,7 +59,7 @@ export default function PrivacyPage() {
               <strong className="text-white">Room Chat &amp; Reactions:</strong> Temporary messages and emoji reactions are stored strictly for the duration of the room and purged automatically upon room expiry.
             </li>
             <li>
-              <strong className="text-white">Payment Information:</strong> Handled entirely by Paddle (international) or Razorpay (India). We never see or store your full credit card numbers.
+              <strong className="text-white">Payment Information:</strong> Handled entirely by Paddle (Merchant of Record). We never see or store your credit card or UPI details.
             </li>
           </ul>
         </section>
@@ -86,7 +86,7 @@ export default function PrivacyPage() {
           <ul className="space-y-1 text-xs text-gray-400 list-disc list-inside">
             <li><strong>Supabase:</strong> Authentication and Realtime sync message channels.</li>
             <li><strong>LiveKit:</strong> Low-latency WebRTC facecam and voice relay.</li>
-            <li><strong>Paddle &amp; Razorpay:</strong> Payment processing and subscription lifecycle.</li>
+            <li><strong>Paddle:</strong> Payment processing, billing, and subscription lifecycle.</li>
             <li><strong>Sentry:</strong> Application performance and crash diagnostics.</li>
             <li><strong>PostHog:</strong> Privacy-conscious product telemetry (opt-out available).</li>
           </ul>

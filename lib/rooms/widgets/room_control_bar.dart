@@ -13,6 +13,7 @@ class RoomControlBarActions {
     required this.onSkip,
     required this.onMicToggle,
     required this.onCamToggle,
+    this.onCamLocked,
     required this.onAudioTracks,
     required this.onSubtitles,
     required this.onSwitchSource,
@@ -28,6 +29,7 @@ class RoomControlBarActions {
   final ValueChanged<Duration> onSkip;
   final ValueChanged<bool> onMicToggle;
   final ValueChanged<bool> onCamToggle;
+  final VoidCallback? onCamLocked;
   final VoidCallback? onAudioTracks;
   final VoidCallback? onSubtitles;
 
@@ -268,6 +270,45 @@ class _RoomControlBarState extends State<RoomControlBar> {
                   size: 42,
                   tooltip: widget.camOn ? 'Camera off' : 'Camera on',
                   onPressed: () => actions.onCamToggle(!widget.camOn),
+                )
+              else if (actions.onCamLocked != null)
+                Tooltip(
+                  message: 'Video facecams (Premium)',
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      PTIconButton(
+                        icon: Symbols.videocam_off_rounded,
+                        active: false,
+                        glass: false,
+                        borderRadius: BorderRadius.circular(12),
+                        size: 42,
+                        iconSize: 20,
+                        onPressed: actions.onCamLocked,
+                      ),
+                      Positioned(
+                        bottom: 4,
+                        right: 4,
+                        child: Container(
+                          padding: const EdgeInsets.all(2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xE61E1834),
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: const Color(0xFFA78BFA).withValues(alpha: 0.5),
+                              width: 1,
+                            ),
+                          ),
+                          child: const Icon(
+                            Symbols.lock_rounded,
+                            size: 9,
+                            fill: 1,
+                            color: PTColors.textAccent,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
             ],
             if (actions.onReact != null)
@@ -421,6 +462,44 @@ class _RoomControlBarState extends State<RoomControlBar> {
                   borderRadius: BorderRadius.circular(12),
                   iconSize: 20,
                   onPressed: () => actions.onCamToggle(!widget.camOn),
+                )
+              else if (actions.onCamLocked != null)
+                Tooltip(
+                  message: 'Video facecams (Premium)',
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      PTIconButton(
+                        icon: Symbols.videocam_off_rounded,
+                        active: false,
+                        glass: false,
+                        borderRadius: BorderRadius.circular(12),
+                        iconSize: 18,
+                        onPressed: actions.onCamLocked,
+                      ),
+                      Positioned(
+                        bottom: 2,
+                        right: 2,
+                        child: Container(
+                          padding: const EdgeInsets.all(2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xE61E1834),
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: const Color(0xFFA78BFA).withValues(alpha: 0.5),
+                              width: 1,
+                            ),
+                          ),
+                          child: const Icon(
+                            Symbols.lock_rounded,
+                            size: 8,
+                            fill: 1,
+                            color: PTColors.textAccent,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
             ],
           ),

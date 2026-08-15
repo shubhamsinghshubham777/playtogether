@@ -16,6 +16,8 @@ class ReactionStrip extends StatefulWidget {
     this.reactions = kReactions,
     this.hasMore = false,
     this.onMore,
+    this.showLockedMore = false,
+    this.onLockedMore,
     this.compact = false,
   });
 
@@ -29,6 +31,8 @@ class ReactionStrip extends StatefulWidget {
   /// FittedBox would shrink every cell to fit.
   final bool hasMore;
   final VoidCallback? onMore;
+  final bool showLockedMore;
+  final VoidCallback? onLockedMore;
   final bool compact;
 
   @override
@@ -120,7 +124,9 @@ class _ReactionStripState extends State<ReactionStrip> with SingleTickerProvider
                     onTap: () => widget.onPick(reaction),
                   ),
                 if (widget.hasMore && widget.onMore != null)
-                  _MoreCell(size: size, onTap: widget.onMore!),
+                  _MoreCell(size: size, onTap: widget.onMore!)
+                else if (widget.showLockedMore && widget.onLockedMore != null)
+                  _LockedMoreCell(size: size, onTap: widget.onLockedMore!),
               ],
             ),
           ),
@@ -258,6 +264,78 @@ class _MoreCellState extends State<_MoreCell> {
               Symbols.add_rounded,
               size: widget.size * 0.62,
               color: PTColors.white(_hovered ? 0.9 : 0.65),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LockedMoreCell extends StatefulWidget {
+  const _LockedMoreCell({required this.size, required this.onTap});
+
+  final double size;
+  final VoidCallback onTap;
+
+  @override
+  State<_LockedMoreCell> createState() => _LockedMoreCellState();
+}
+
+class _LockedMoreCellState extends State<_LockedMoreCell> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final padded = widget.size + (widget.size < 40 ? 8 : 10);
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: Tooltip(
+        message: 'More reactions (Premium)',
+        waitDuration: const Duration(milliseconds: 400),
+        child: PTPressable(
+          onTap: widget.onTap,
+          child: AnimatedContainer(
+            duration: PTMotion.hover,
+            curve: PTMotion.enter,
+            width: padded,
+            height: padded,
+            decoration: BoxDecoration(
+              color: _hovered ? PTColors.white(0.12) : PTColors.white(0.04),
+              borderRadius: BorderRadius.circular(padded / 2),
+            ),
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Icon(
+                  Symbols.add_rounded,
+                  size: widget.size * 0.55,
+                  color: PTColors.white(_hovered ? 0.6 : 0.4),
+                ),
+                Positioned(
+                  bottom: 2,
+                  right: 2,
+                  child: Container(
+                    padding: const EdgeInsets.all(2),
+                    decoration: BoxDecoration(
+                      color: const Color(0xE61E1834),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: const Color(0xFFA78BFA).withValues(alpha: 0.5),
+                        width: 1,
+                      ),
+                    ),
+                    child: const Icon(
+                      Symbols.lock_rounded,
+                      size: 9,
+                      fill: 1,
+                      color: PTColors.textAccent,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ),

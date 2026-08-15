@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { GlassPanel } from "@/components/GlassPanel";
@@ -15,7 +15,6 @@ import {
   Users,
   Video,
   Clock,
-  ExternalLink,
   LogOut,
   Download,
   CheckCircle2,
@@ -47,8 +46,8 @@ function AccountDashboard() {
   const [subscription, setSubscription] = useState<SubscriptionData | null>(null);
   const [loading, setLoading] = useState(true);
   const [verifying, setVerifying] = useState(false);
-  const [pollCount, setPollCount] = useState(0);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const celebratedRef = useRef(false);
 
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -117,9 +116,10 @@ function AccountDashboard() {
     };
   }, [router, supabase]);
 
-  // Handle post-purchase verification & celebration
+  // Handle post-purchase celebration (fires strictly once)
   useEffect(() => {
-    if (!isSubscribedRedirect) return;
+    if (!isSubscribedRedirect || celebratedRef.current) return;
+    celebratedRef.current = true;
 
     try {
       confetti({
@@ -131,23 +131,43 @@ function AccountDashboard() {
     } catch {
       // ignore confetti errors
     }
+  }, [isSubscribedRedirect]);
 
-    if (entitlement && entitlement.tier !== "premium" && pollCount < 5) {
-      const timer = setTimeout(async () => {
-        setVerifying(true);
-        const { data: entData } = await supabase.rpc("my_entitlement");
-        if (entData) {
-          const ent = Array.isArray(entData) ? entData[0] : entData;
-          setEntitlement(ent);
-          if (ent?.tier === "premium") {
-            setVerifying(false);
+  // Handle post-purchase verification & fulfillment
+  useEffect(() => {
+    if (!isSubscribedRedirect) return;
+
+    let ignore = false;
+    async function fulfill() {
+      setVerifying(true);
+      try {
+        const res = await fetch("/api/paddle/fulfill", { method: "POST" });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.subscription && !ignore) {
+            setSubscription(data.subscription);
           }
         }
-        setPollCount((prev) => prev + 1);
-      }, 3000);
-      return () => clearTimeout(timer);
+        const { data: entData } = await supabase.rpc("my_entitlement");
+        if (entData && !ignore) {
+          const ent = Array.isArray(entData) ? entData[0] : entData;
+          setEntitlement(ent);
+        }
+      } catch (err) {
+        console.error("Fulfillment check failed:", err);
+      } finally {
+        if (!ignore) {
+          setVerifying(false);
+        }
+      }
     }
-  }, [isSubscribedRedirect, entitlement, pollCount, supabase]);
+
+    fulfill();
+
+    return () => {
+      ignore = true;
+    };
+  }, [isSubscribedRedirect, supabase]);
 
   const handleSignOut = async () => {
     setIsLoggingOut(true);
@@ -299,7 +319,7 @@ function AccountDashboard() {
               <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-400/20 space-y-2 text-xs text-amber-200">
                 <p className="font-semibold text-white flex items-center gap-1.5">
                   <ShieldCheck className="w-4 h-4 text-amber-400" />
-                  <span>Subscription Active ({subscription?.source || "Paddle / Razorpay"})</span>
+                  <span>Active Subscription</span>
                 </p>
                 {subscription?.current_period_end && (
                   <p className="text-gray-300">
@@ -315,11 +335,9 @@ function AccountDashboard() {
                     </strong>
                   </p>
                 )}
-                {subscription?.source === "razorpay" && (
-                  <p className="text-[11px] text-gray-400">
-                    Indian prepaid pass. To extend or renew your pass, purchase a new term from the pricing page.
-                  </p>
-                )}
+                <p className="text-[11px] text-gray-400">
+                  To update your payment method or cancel renewal, use the link in your email receipt or contact support.
+                </p>
               </div>
             ) : (
               <div className="p-4 rounded-xl bg-purple-500/10 border border-purple-400/20 space-y-2 text-xs text-purple-200">
@@ -332,17 +350,12 @@ function AccountDashboard() {
 
           <div className="pt-4 flex flex-wrap items-center gap-4">
             {isPremium ? (
-              subscription?.source === "paddle" ? (
-                <a
-                  href="https://checkout.paddle.com"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-400/20 hover:bg-amber-400/30 text-amber-300 text-xs font-semibold border border-amber-400/40 transition-colors"
-                >
-                  <span>Manage in Paddle Portal</span>
-                  <ExternalLink className="w-3.5 h-3.5" />
-                </a>
-              ) : null
+              <a
+                href="mailto:support@playtogether.app?subject=Subscription%20Support"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white text-xs font-semibold border border-white/10 transition-colors"
+              >
+                <span>Manage Subscription</span>
+              </a>
             ) : (
               <PTButton
                 href="/pricing"

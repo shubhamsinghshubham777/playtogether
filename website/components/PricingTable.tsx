@@ -6,18 +6,12 @@ import { PRICING_TIERS } from "@/lib/constants";
 import { PlanCard } from "./PlanCard";
 import { GlassPanel } from "./GlassPanel";
 import { openPaddleCheckout } from "./PaddleCheckout";
-import { openRazorpayCheckout } from "./RazorpayCheckout";
 import { createClient } from "@/lib/supabase/client";
-import { Globe, Check, Minus } from "lucide-react";
+import { Check, Minus } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 
-interface PricingTableProps {
-  initialRegion?: "IN" | "INTL";
-}
-
-export function PricingTable({ initialRegion = "INTL" }: PricingTableProps) {
+export function PricingTable() {
   const [billingCycle, setBillingCycle] = useState<"monthly" | "annual">("annual");
-  const [region, setRegion] = useState<"IN" | "INTL">(initialRegion);
   const [user, setUser] = useState<User | null>(null);
   const [isLoadingCheckout, setIsLoadingCheckout] = useState(false);
   const router = useRouter();
@@ -47,52 +41,36 @@ export function PricingTable({ initialRegion = "INTL" }: PricingTableProps) {
 
       setIsLoadingCheckout(true);
       try {
-        if (region === "IN") {
-          await openRazorpayCheckout({
-            plan: billingCycle === "annual" ? "12mo" : "1mo",
-            userId: user.id,
-            userEmail: user.email,
-            userName: user.user_metadata?.full_name,
-          });
-        } else {
-          const priceId =
-            billingCycle === "annual"
-              ? process.env.PADDLE_ANNUAL_PRICE_ID || "pri_annual_default"
-              : process.env.PADDLE_MONTHLY_PRICE_ID || "pri_monthly_default";
+        const priceId =
+          billingCycle === "annual"
+            ? process.env.NEXT_PUBLIC_PADDLE_ANNUAL_PRICE_ID ||
+              process.env.PADDLE_ANNUAL_PRICE_ID ||
+              "pri_annual_default"
+            : process.env.NEXT_PUBLIC_PADDLE_MONTHLY_PRICE_ID ||
+              process.env.PADDLE_MONTHLY_PRICE_ID ||
+              "pri_monthly_default";
 
-          await openPaddleCheckout({
-            priceId,
-            userId: user.id,
-            userEmail: user.email,
-          });
-        }
+        await openPaddleCheckout({
+          priceId,
+          userId: user.id,
+          userEmail: user.email,
+        });
       } finally {
         setIsLoadingCheckout(false);
       }
     }
   };
 
-  const isIndia = region === "IN";
-  const premiumPrice = isIndia
-    ? billingCycle === "annual"
-      ? "₹999"
-      : "₹149"
-    : billingCycle === "annual"
-    ? "$29.99"
-    : "$3.99";
-
-  const premiumSubPrice = isIndia
-    ? billingCycle === "annual"
-      ? "₹83 / mo (Billed annually — Save ₹789)"
-      : "Prepaid 1-Month Pass"
-    : billingCycle === "annual"
-    ? "$2.49 / mo (Billed annually — Save 37%)"
-    : "Billed monthly. Cancel anytime.";
+  const premiumPrice = billingCycle === "annual" ? "$29.99" : "$3.99";
+  const premiumSubPrice =
+    billingCycle === "annual"
+      ? "$2.49 / mo (Billed annually — Save 37%)"
+      : "Billed monthly. Cancel anytime.";
 
   return (
     <div className="space-y-12">
-      {/* Controls Bar: Billing Toggle & Region Switch */}
-      <div className="flex flex-col sm:flex-row items-center justify-center gap-6">
+      {/* Controls Bar: Billing Toggle */}
+      <div className="flex items-center justify-center">
         {/* Monthly / Annual Toggle */}
         <div className="p-1 rounded-2xl bg-[#141024] border border-purple-500/20 flex items-center shadow-inner">
           <button
@@ -115,27 +93,9 @@ export function PricingTable({ initialRegion = "INTL" }: PricingTableProps) {
           >
             <span>Annual Billing</span>
             <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30">
-              Save {isIndia ? "44%" : "37%"}
+              Save 37%
             </span>
           </button>
-        </div>
-
-        {/* Currency / Region Selector */}
-        <div className="flex items-center gap-2 bg-[#141024] px-3.5 py-1.5 rounded-xl border border-purple-500/20 text-xs text-gray-300">
-          <Globe className="w-4 h-4 text-purple-400" />
-          <span className="text-gray-400">Region:</span>
-          <select
-            value={region}
-            onChange={(e) => setRegion(e.target.value as "IN" | "INTL")}
-            className="bg-transparent text-purple-200 font-semibold focus:outline-hidden cursor-pointer"
-          >
-            <option value="INTL" className="bg-[#161226] text-white">
-              International (USD - Paddle)
-            </option>
-            <option value="IN" className="bg-[#161226] text-white">
-              India (INR - Razorpay)
-            </option>
-          </select>
         </div>
       </div>
 

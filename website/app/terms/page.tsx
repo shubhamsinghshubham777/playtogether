@@ -63,10 +63,10 @@ export default function TermsPage() {
             4. Premium Subscriptions &amp; Billing
           </h2>
           <p>
-            Paid subscriptions provide enhanced features including persistent rooms, 16-member limits, and video facecams. International subscriptions are processed by Paddle (Merchant of Record). Indian prepaid passes are processed via Razorpay.
+            Paid subscriptions provide enhanced features including persistent rooms, 16-member limits, and video facecams. All subscriptions are processed securely by Paddle (our Merchant of Record).
           </p>
           <p>
-            Subscriptions are billed on a recurring monthly or annual basis (or as prepaid term passes). We reserve the right to modify subscription pricing with at least 30 days prior notice.
+            Subscriptions are billed on a recurring monthly or annual basis. We reserve the right to modify subscription pricing with at least 30 days prior notice.
           </p>
         </section>
 

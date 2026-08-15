@@ -104,6 +104,20 @@ class EntitlementService extends ChangeNotifier {
     }
   }
 
+  /// Forces a reload of the entitlement and returns the updated limits.
+  Future<TierLimits?> refresh() => load();
+
+  /// Grants premium for [months] via debug RPC on the local stack.
+  Future<void> debugGrantPremium({int months = 1}) async {
+    try {
+      await _client.rpc('debug_grant_premium', params: {'p_months': months});
+      await refresh();
+    } catch (e, s) {
+      reportNonFatal(e, s, during: 'granting debug premium');
+      rethrow;
+    }
+  }
+
   void clear() {
     if (_limits == null) return;
     _limits = null;

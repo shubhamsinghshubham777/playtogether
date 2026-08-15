@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
-import { headers } from "next/headers";
 import { PricingTable } from "@/components/PricingTable";
 import { FAQAccordion } from "@/components/FAQAccordion";
-import { getRegionFromCountry } from "@/lib/geo";
 
 export const metadata: Metadata = {
   title: "Pricing & Plans — PlayTogether Premium",
@@ -10,11 +8,7 @@ export const metadata: Metadata = {
     "Upgrade to PlayTogether Premium for 20 persistent rooms, 16 members, 24-hour sessions, HD video facecams, and extended emoji reactions.",
 };
 
-export default async function PricingPage() {
-  const headerList = await headers();
-  const countryCode = headerList.get("x-vercel-ip-country");
-  const initialRegion = getRegionFromCountry(countryCode);
-
+export default function PricingPage() {
   const pricingFaqs = [
     {
       q: "Can I try PlayTogether before paying?",
@@ -22,7 +16,7 @@ export default async function PricingPage() {
     },
     {
       q: "What payment methods do you accept?",
-      a: "For international users, we process payments securely via Paddle (Credit Cards, PayPal, Apple Pay, Google Pay). In India, we accept UPI, Credit/Debit Cards, and Netbanking via Razorpay prepaid passes."
+      a: "We process payments securely via Paddle (Credit/Debit Cards, PayPal, Apple Pay, Google Pay, and UPI in India)."
     },
     {
       q: "Can I cancel my subscription anytime?",
@@ -54,7 +48,7 @@ export default async function PricingPage() {
       </div>
 
       {/* Pricing Table (Interactive Component) */}
-      <PricingTable initialRegion={initialRegion} />
+      <PricingTable />
 
       {/* Pricing FAQ Section */}
       <div className="max-w-4xl mx-auto pt-12 space-y-8">
