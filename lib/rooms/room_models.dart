@@ -68,6 +68,11 @@ class Room {
     this.maxMembers = 8,
     this.mediaPosition,
     this.mediaPositionAt,
+    this.mediaFileSize,
+    this.mediaR2Key,
+    this.mediaUploadId,
+    this.mediaUploadState = 'none',
+    this.mediaSharingLevel = 'none',
   });
 
   final String id;
@@ -107,9 +112,73 @@ class Room {
   final Duration? mediaPosition;
   final DateTime? mediaPositionAt;
 
+  final int? mediaFileSize;
+  final String? mediaR2Key;
+  final String? mediaUploadId;
+  final String mediaUploadState;
+  final String mediaSharingLevel;
+
   bool get hasMedia => mediaKind != .none;
 
   bool get goesDormant => persistent || dormantHours > 0;
+
+  Room copyWith({
+    String? id,
+    String? code,
+    String? name,
+    String? createdBy,
+    DateTime? createdAt,
+    int? durationMinutes,
+    DateTime? expiresAt,
+    DateTime? endedAt,
+    RoomMediaKind? mediaKind,
+    String? mediaName,
+    Duration? mediaDuration,
+    String? mediaUrl,
+    DateTime? mediaUpdatedAt,
+    bool? transportLock,
+    bool? persistent,
+    DateTime? resumableUntil,
+    int? dormantHours,
+    AvLevel? avLevel,
+    int? maxMembers,
+    Duration? mediaPosition,
+    DateTime? mediaPositionAt,
+    int? mediaFileSize,
+    String? mediaR2Key,
+    String? mediaUploadId,
+    String? mediaUploadState,
+    String? mediaSharingLevel,
+  }) {
+    return Room(
+      id: id ?? this.id,
+      code: code ?? this.code,
+      name: name ?? this.name,
+      createdBy: createdBy ?? this.createdBy,
+      createdAt: createdAt ?? this.createdAt,
+      durationMinutes: durationMinutes ?? this.durationMinutes,
+      expiresAt: expiresAt ?? this.expiresAt,
+      endedAt: endedAt ?? this.endedAt,
+      mediaKind: mediaKind ?? this.mediaKind,
+      mediaName: mediaName ?? this.mediaName,
+      mediaDuration: mediaDuration ?? this.mediaDuration,
+      mediaUrl: mediaUrl ?? this.mediaUrl,
+      mediaUpdatedAt: mediaUpdatedAt ?? this.mediaUpdatedAt,
+      transportLock: transportLock ?? this.transportLock,
+      persistent: persistent ?? this.persistent,
+      resumableUntil: resumableUntil ?? this.resumableUntil,
+      dormantHours: dormantHours ?? this.dormantHours,
+      avLevel: avLevel ?? this.avLevel,
+      maxMembers: maxMembers ?? this.maxMembers,
+      mediaPosition: mediaPosition ?? this.mediaPosition,
+      mediaPositionAt: mediaPositionAt ?? this.mediaPositionAt,
+      mediaFileSize: mediaFileSize ?? this.mediaFileSize,
+      mediaR2Key: mediaR2Key ?? this.mediaR2Key,
+      mediaUploadId: mediaUploadId ?? this.mediaUploadId,
+      mediaUploadState: mediaUploadState ?? this.mediaUploadState,
+      mediaSharingLevel: mediaSharingLevel ?? this.mediaSharingLevel,
+    );
+  }
 
   factory Room.fromJson(Map<String, dynamic> json) {
     return Room(
@@ -144,6 +213,11 @@ class Room {
       mediaPositionAt: json['media_position_at'] != null
           ? DateTime.parse(json['media_position_at'] as String)
           : null,
+      mediaFileSize: (json['media_file_size'] as num?)?.toInt(),
+      mediaR2Key: json['media_r2_key'] as String?,
+      mediaUploadId: json['media_upload_id'] as String?,
+      mediaUploadState: json['media_upload_state'] as String? ?? 'none',
+      mediaSharingLevel: json['media_sharing_level'] as String? ?? 'none',
     );
   }
 
@@ -286,6 +360,10 @@ enum RoomErrorCode {
   cannotKickSelf('cannot_kick_self', "You can't remove yourself — leave the room instead."),
   invalidDuration('invalid_duration', 'Pick a duration between 5 minutes and 4 hours.'),
   invalidMedia('invalid_media', "Hmm, we couldn't set that as the room's video."),
+  activeUploadInProgress('active_upload_in_progress', 'You already have another file upload in progress.'),
+  uploadQuotaExceeded('upload_quota_exceeded', "You've reached your weekly sharing quota (2.5 GB). Upgrade to Premium for unlimited sharing."),
+  uploadCooldownActive('upload_cooldown_active', 'Uploads are temporarily cooling down. Please try again in a few minutes.'),
+  mediaSharingDisabled('media_sharing_disabled', 'Media sharing is temporarily undergoing maintenance.'),
   unknown('unknown', "Something went sideways. Give it another try.");
 
   const RoomErrorCode(this.code, this.message);

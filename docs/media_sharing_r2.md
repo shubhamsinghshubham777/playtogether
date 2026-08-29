@@ -57,7 +57,7 @@ Host-initiated, per-room file sharing that lets a premium or quota-eligible host
 > - **Emergency Kill-Switch:** Database-level configuration flag (`app_settings.media_sharing.enabled`) to instantly disable media sharing platform-wide if an anomaly is detected.
 
 > [!IMPORTANT]
-> **Quota Committed on Upload Completion, Not Initiation.** The free-tier weekly bandwidth limit (4 GB / 7 days) is tracked server-side in `profiles.r2_upload_bytes_7d`. Quota is only debited when an upload completes successfully (`media_upload_state == 'ready'`). If an upload fails, cancels, or is interrupted mid-stream, the user's weekly quota is preserved. Row-level `FOR UPDATE` locks prevent double-spending races.
+> **Quota Committed on Upload Completion, Not Initiation.** The free-tier weekly bandwidth limit (2.5 GB / 7 days) is tracked server-side in `profiles.r2_upload_bytes_7d`. Quota is only debited when an upload completes successfully (`media_upload_state == 'ready'`). If an upload fails, cancels, or is interrupted mid-stream, the user's weekly quota is preserved. Row-level `FOR UPDATE` locks prevent double-spending races.
 
 > [!WARNING]
 > **Storage, Mobile Backup Hygiene & Non-Disruptive Caching.**
@@ -91,7 +91,7 @@ Host-initiated, per-room file sharing that lets a premium or quota-eligible host
 | **Download URL delivery** | Ephemeral presigned GET URLs minted on-demand via `media-share/download-url` with TTL matching room session duration (up to 24h), RFC 5987 Unicode filename encoding, native `Media(start: heldPosition)` demuxing, and broadcast-suppressed 403 recovery with subtitle/audio track preservation. |
 | **Late joiner experience** | Auto-streams directly upon joining an active session with automatic temporary gate waiver until ready, eliminating blocking dialogs and preventing room-wide pause glitches. |
 | **Canonical media reuse** | Reuses existing `rooms.media_name` column — eliminates duplicate `media_file_name` column to prevent desynchronization bugs. |
-| **Free-tier bandwidth tracking** | Server-side in database with weekly tumbling window (4 GB / 7 days), committed strictly on upload completion with `FOR UPDATE` row lock. |
+| **Free-tier bandwidth tracking** | Server-side in database with weekly tumbling window (2.5 GB / 7 days), committed strictly on upload completion with `FOR UPDATE` row lock. |
 | **Anti-Abuse & Concurrency** | 1 global active upload cap with multi-factor stale-lock auto-clearing, same-room re-upload orphan cleanup, grace window for quick cancels, exponential backoff on heavy aborts, Edge Function rate limiting. |
 | **Readiness gate integration** | Room-level gate closure in `evaluateGateState` while uploading; members remain non-blocking until media is ready; watchdog extended to 45s for network streams. |
 | **Postgres Constraints & Listings** | Recreates `list_my_rooms()` with new columns + re-grants to `authenticated`; updates `rooms_media_shape_chk` constraint with strict local state checks (`media_upload_id is null` on `ready`). |
@@ -231,7 +231,7 @@ Cloudflare R2 is a **separate service** from Supabase Storage. Supabase's free-t
 2. **File Size / Payload Spoofing (Declaring 10 MB but uploading 10 GB):**
    - **Mitigation:**
      - The S3 Multipart completion step verifies the sum of uploaded parts against declared limits.
-     - Edge Function refuses to mint part URLs beyond the declared file size and user tier ceiling (4 GB for free, 10 GB for premium).
+     - Edge Function refuses to mint part URLs beyond the declared file size and user tier ceiling (2.0 GB for free, 10 GB for premium).
 
 3. **Edge Function Compute Flooding:**
    - **Mitigation:**
@@ -267,7 +267,7 @@ create table if not exists public.app_settings (
 
 -- Seed media sharing master switch (enabled by default)
 insert into public.app_settings (key, value)
-values ('media_sharing', '{"enabled": true, "free_tier_max_file_bytes": 4294967296, "premium_max_file_bytes": 10737418240}'::jsonb)
+values ('media_sharing', '{"enabled": true, "free_tier_max_file_bytes": 2147483648, "premium_max_file_bytes": 10737418240}'::jsonb)
 on conflict (key) do nothing;
 ```
 
@@ -330,7 +330,7 @@ alter table public.tier_limits
   add column media_sharing_weekly_bytes bigint not null default 0;
 
 update public.tier_limits set media_sharing = 'none', media_sharing_weekly_bytes = 0 where tier = 'guest';
-update public.tier_limits set media_sharing = 'limited', media_sharing_weekly_bytes = 4294967296 where tier = 'free';
+update public.tier_limits set media_sharing = 'limited', media_sharing_weekly_bytes = 2684354560 where tier = 'free';
 update public.tier_limits set media_sharing = 'full', media_sharing_weekly_bytes = 0 where tier = 'premium';
 ```
 
@@ -860,7 +860,7 @@ final String mediaSharingLevel;      // 'none', 'limited', 'full'
 Add to `RoomErrorCode`:
 ```dart
 activeUploadInProgress('active_upload_in_progress', "You already have another file upload in progress."),
-uploadQuotaExceeded('upload_quota_exceeded', "You've reached your weekly sharing quota (4 GB). Upgrade to Premium for unlimited sharing."),
+uploadQuotaExceeded('upload_quota_exceeded', "You've reached your weekly sharing quota (2.5 GB). Upgrade to Premium for unlimited sharing."),
 uploadCooldownActive('upload_cooldown_active', "Uploads are temporarily cooling down. Please try again in a few minutes."),
 mediaSharingDisabled('media_sharing_disabled', "Media sharing is temporarily undergoing maintenance.");
 ```

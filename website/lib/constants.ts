@@ -32,6 +32,7 @@ export const PRICING_TIERS = {
       reactions: "Standard (8 emoji)",
       dormantHours: 0,
       persistent: false,
+      mediaSharing: "None (Local files only)",
     },
     features: [
       "1 active room at a time",
@@ -63,11 +64,13 @@ export const PRICING_TIERS = {
       reactions: "Standard (8 emoji)",
       dormantHours: 24,
       persistent: false,
+      mediaSharing: "2.5 GB/week (up to 2.0 GB file)",
     },
     features: [
       "4 active rooms per host",
       "Up to 8 participants per room",
       "4-hour session duration",
+      "2.5 GB weekly media streaming quota (up to 2.0 GB file)",
       "Low-latency Voice facecams",
       "1 free 60-min extension per session",
       "Rooms nap for 24h (resumes where you left off)",
@@ -98,11 +101,13 @@ export const PRICING_TIERS = {
       reactions: "Extended (24 animated emoji)",
       dormantHours: 24,
       persistent: true,
+      mediaSharing: "Unlimited (up to 10.0 GB file)",
     },
     features: [
       "20 persistent rooms with custom names",
       "Up to 16 participants per room",
       "Up to 24-hour continuous sessions",
+      "Unlimited media streaming quota (up to 10.0 GB file)",
       "HD Video + Voice facecams",
       "24 animated Lottie reaction emoji",
       "Persistent rooms (never expire or delete)",
@@ -126,7 +131,7 @@ export const FAQ_ITEMS = [
       },
       {
         q: "Do I need an account to use PlayTogether?",
-        a: "No! You can use PlayTogether as a Guest without creating an account. Guests can create 60-minute rooms with up to 4 members. To get 4-hour rooms, voice chat, and room memory, simply sign in with your Google account for free."
+        a: "No! You can use PlayTogether as a Guest without creating an account. Guests can create 60-minute rooms with up to 4 members. To get 4-hour rooms, voice chat, cloud media sharing, and room memory, simply sign in with your Google account for free."
       },
       {
         q: "Is PlayTogether free?",
@@ -147,7 +152,7 @@ export const FAQ_ITEMS = [
       },
       {
         q: "Does PlayTogether stream or upload my video files to other people?",
-        a: "No! PlayTogether does not upload, stream, or re-encode your files. Each participant plays their own local copy of the file on their machine. PlayTogether synchronizes only the playback state (timestamps, play/pause, seeks) and chat over private, encrypted real-time channels."
+        a: "PlayTogether gives you two seamless options: (1) Local File Sync: If everyone already has the video file on their device, playback is 100% local and peer-synced with zero uploads. (2) Cloud Media Sharing: Room hosts can optionally upload and stream their video file directly to room guests (2.5 GB weekly quota / up to 2.0 GB per video on Free; unlimited uploads / up to 10.0 GB per video on Premium)."
       },
       {
         q: "What happens when a room expires?",

@@ -57,6 +57,7 @@ class ReadinessOverlay extends StatelessWidget {
     this.compact = false,
     this.reveal = 1,
     this.premiumMembers = const {},
+    this.uploadProgressWidget,
   });
 
   final String headline;
@@ -64,6 +65,7 @@ class ReadinessOverlay extends StatelessWidget {
   final RoomMedia media;
   final String selfId;
   final bool selfIsHost;
+  final Widget? uploadProgressWidget;
 
   /// Null unless *we* are the one who needs to find their copy.
   final VoidCallback? onLocateFile;
@@ -135,6 +137,7 @@ class ReadinessOverlay extends StatelessWidget {
                         ),
                       ],
                     ),
+                    if (uploadProgressWidget != null) uploadProgressWidget!,
                     if (members.isNotEmpty)
                       Column(
                         mainAxisSize: .min,

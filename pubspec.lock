@@ -130,7 +130,7 @@ packages:
     source: hosted
     version: "0.4.2"
   clock:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: clock
       sha256: fddb70d9b5277016c77a80201021d40a2247104d9f4aa7bab7157b7e3f05b84b
@@ -713,7 +713,7 @@ packages:
     source: hosted
     version: "1.18.0"
   mime:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: mime
       sha256: "41a20518f0cb1256669420fdba0cd90d21561e560ac240f26ef8322e45bb7ed6"
@@ -769,7 +769,7 @@ packages:
     source: hosted
     version: "2.9.0"
   path:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: path
       sha256: "75cca69d1490965be98c73ceaea117e8a04dd21217b37b292c9ddbec0d955bc5"
@@ -777,7 +777,7 @@ packages:
     source: hosted
     version: "1.9.1"
   path_provider:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: path_provider
       sha256: "50c5dd5b6e1aaf6fb3a78b33f6aa3afca52bf903a8a5298f53101fdaee55bbcd"
@@ -1077,6 +1077,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.6.0"
+  storage_space:
+    dependency: "direct main"
+    description:
+      name: storage_space
+      sha256: "8a3fbc61c20ce3b926b663b4ae77064e2bc5351a49756a41fa415e302f4063cd"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.2.0"
   stream_channel:
     dependency: transitive
     description:
@@ -1246,7 +1254,7 @@ packages:
     source: hosted
     version: "15.0.2"
   wakelock_plus:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: wakelock_plus
       sha256: "9296d40c9adbedaba95d1e704f4e0b434be446e2792948d0e4aa977048104228"

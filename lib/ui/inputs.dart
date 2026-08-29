@@ -305,6 +305,7 @@ class PTSlider extends StatefulWidget {
   const PTSlider({
     super.key,
     required this.value,
+    this.bufferedValue,
     required this.onChanged,
     this.onChangeEnd,
     this.onHover,
@@ -315,6 +316,10 @@ class PTSlider extends StatefulWidget {
 
   /// Normalized 0–1.
   final double value;
+
+  /// Optional normalized 0–1 buffer progress (for streaming media).
+  final double? bufferedValue;
+
   final ValueChanged<double> onChanged;
   final ValueChanged<double>? onChangeEnd;
 
@@ -345,6 +350,7 @@ class _PTSliderState extends State<PTSlider> {
     final enabled = widget.enabled;
     final onHover = widget.onHover;
     final clamped = widget.value.clamp(0.0, 1.0);
+    final clampedBuffered = widget.bufferedValue?.clamp(0.0, 1.0);
     // No LayoutBuilder here: it can't answer intrinsic-size queries, so it
     // would crash inside IntrinsicHeight (e.g. the lobby's equal-height cards).
     void update(Offset local, {bool end = false}) {
@@ -398,6 +404,7 @@ class _PTSliderState extends State<PTSlider> {
               builder: (context, grow, _) => CustomPaint(
                 painter: _PTSliderPainter(
                   value: clamped,
+                  bufferedValue: clampedBuffered,
                   trackHeight: widget.trackHeight,
                   thumbRadius: widget.thumbRadius + 2 * grow,
                 ),
@@ -413,11 +420,13 @@ class _PTSliderState extends State<PTSlider> {
 class _PTSliderPainter extends CustomPainter {
   const _PTSliderPainter({
     required this.value,
+    this.bufferedValue,
     required this.trackHeight,
     required this.thumbRadius,
   });
 
   final double value;
+  final double? bufferedValue;
   final double trackHeight;
   final double thumbRadius;
 
@@ -431,6 +440,17 @@ class _PTSliderPainter extends CustomPainter {
       RRect.fromRectAndRadius(trackRect, radius),
       Paint()..color = PTColors.white(0.13),
     );
+
+    if (bufferedValue != null && bufferedValue! > 0) {
+      final bufferedWidth = size.width * bufferedValue!.clamp(0.0, 1.0);
+      if (bufferedWidth > 0) {
+        final bufferedRect = Rect.fromLTWH(0, trackTop, bufferedWidth, trackHeight);
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(bufferedRect, radius),
+          Paint()..color = PTColors.white(0.26),
+        );
+      }
+    }
 
     if (value > 0) {
       final fillRect = Rect.fromLTWH(0, trackTop, size.width * value, trackHeight);
@@ -457,6 +477,7 @@ class _PTSliderPainter extends CustomPainter {
   @override
   bool shouldRepaint(_PTSliderPainter oldDelegate) =>
       oldDelegate.value != value ||
+      oldDelegate.bufferedValue != bufferedValue ||
       oldDelegate.trackHeight != trackHeight ||
       oldDelegate.thumbRadius != thumbRadius;
 }

@@ -64,6 +64,7 @@ Future<void> showRoomOverflowMenu({
   required VoidCallback onCopyInvite,
   required VoidCallback onLeave,
   required VoidCallback onEndRoom,
+  VoidCallback? onExtendRoom,
   required ValueChanged<bool> onTransportLockChanged,
   required void Function(RoomMember member) onKick,
 }) {
@@ -88,6 +89,7 @@ Future<void> showRoomOverflowMenu({
                   onCopyInvite: onCopyInvite,
                   onLeave: onLeave,
                   onEndRoom: onEndRoom,
+                  onExtendRoom: onExtendRoom,
                   onTransportLockChanged: onTransportLockChanged,
                   onKick: onKick,
                 ),
@@ -116,6 +118,7 @@ class _OverflowMenuPanel extends StatefulWidget {
     required this.onCopyInvite,
     required this.onLeave,
     required this.onEndRoom,
+    this.onExtendRoom,
     required this.onTransportLockChanged,
     required this.onKick,
   });
@@ -124,6 +127,7 @@ class _OverflowMenuPanel extends StatefulWidget {
   final VoidCallback onCopyInvite;
   final VoidCallback onLeave;
   final VoidCallback onEndRoom;
+  final VoidCallback? onExtendRoom;
   final ValueChanged<bool> onTransportLockChanged;
   final void Function(RoomMember member) onKick;
 
@@ -234,6 +238,13 @@ class _OverflowMenuPanelState extends State<_OverflowMenuPanel> {
                     label: 'Copy invite link',
                     onTap: () => _dismiss(widget.onCopyInvite),
                   ),
+                  if (data.selfIsHost && widget.onExtendRoom != null)
+                    _ActionRow(
+                      icon: Symbols.more_time_rounded,
+                      iconColor: PTColors.textAccent,
+                      label: 'Extend room duration',
+                      onTap: () => _dismiss(widget.onExtendRoom!),
+                    ),
                   _ActionRow(
                     icon: Symbols.logout_rounded,
                     iconColor: PTColors.white(0.7),
@@ -423,9 +434,12 @@ class _ActionRowState extends State<_ActionRow> {
             spacing: 12,
             children: [
               Icon(widget.icon, size: 19, fill: 1, color: widget.iconColor),
-              Text(
-                widget.label,
-                style: PTText.body.copyWith(fontSize: 14, color: widget.labelColor),
+              Expanded(
+                child: Text(
+                  widget.label,
+                  overflow: TextOverflow.ellipsis,
+                  style: PTText.body.copyWith(fontSize: 14, color: widget.labelColor),
+                ),
               ),
             ],
           ),

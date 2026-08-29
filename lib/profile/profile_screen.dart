@@ -9,6 +9,7 @@ import 'package:playtogether/analytics_consent.dart';
 import 'package:playtogether/auth/auth_service.dart';
 import 'package:playtogether/diagnostics.dart';
 import 'package:playtogether/profile/entitlement_service.dart';
+import 'package:playtogether/profile/media_quota_dialog.dart';
 import 'package:playtogether/profile/profile_models.dart';
 import 'package:playtogether/profile/profile_service.dart';
 import 'package:playtogether/ui/banners.dart';
@@ -264,6 +265,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 _nameField(profile),
                                 _emailField(profile),
                                 _subscriptionSection(),
+                                _mediaQuotaSection(),
                                 Padding(
                                   padding: const EdgeInsets.only(top: 6),
                                   child: Row(
@@ -400,6 +402,91 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  Widget _mediaQuotaSection() {
+    final profile = ProfileService.instance.profile;
+    final limits = EntitlementService.instance.limitsOrFallback;
+    final isPrem = EntitlementService.instance.isPremium;
+    final isGuest = profile?.isGuest ?? true;
+
+    final weeklyLimit = limits.mediaSharingWeeklyBytes;
+    final usedBytes = profile?.r2UploadBytes7d ?? 0;
+    final remainingBytes = profile?.remainingWeeklyBytes(weeklyLimit) ?? weeklyLimit;
+    final fractionUsed = weeklyLimit > 0 ? (usedBytes / weeklyLimit).clamp(0.0, 1.0) : 0.0;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: PTColors.white(0.04),
+        border: Border.all(color: PTColors.white(0.08)),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        spacing: 8,
+        children: [
+          Row(
+            children: [
+              const Icon(Symbols.cloud_queue_rounded, size: 20, color: PTColors.textAccent),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Media Sharing Bandwidth',
+                  style: PTText.body.copyWith(fontWeight: FontWeight.w600, color: Colors.white),
+                ),
+              ),
+              GestureDetector(
+                onTap: () => showMediaQuotaDialog(context),
+                child: Text(
+                  'Details',
+                  style: PTText.caption.copyWith(
+                    color: PTColors.textAccent,
+                    decoration: TextDecoration.underline,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (isPrem)
+            Text(
+              'Unlimited weekly uploads active with your Premium subscription.',
+              style: PTText.finePrint.copyWith(color: PTColors.white(0.6)),
+            )
+          else if (!isGuest) ...[
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  '${Profile.formatBytes(remainingBytes)} available of ${Profile.formatBytes(weeklyLimit)}',
+                  style: PTText.finePrint.copyWith(color: PTColors.white(0.6)),
+                ),
+                Text(
+                  '${Profile.formatBytes(usedBytes)} used',
+                  style: PTText.mono.copyWith(color: PTColors.textAccent, fontSize: 11),
+                ),
+              ],
+            ),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(3),
+              child: LinearProgressIndicator(
+                value: fractionUsed,
+                backgroundColor: PTColors.white(0.1),
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  fractionUsed > 0.85 ? PTColors.warning : PTColors.textAccent,
+                ),
+                minHeight: 4,
+              ),
+            ),
+          ] else
+            Text(
+              'Sign in for a free 2.5 GB weekly streaming quota.',
+              style: PTText.finePrint.copyWith(color: PTColors.white(0.5)),
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _accountBody(Profile profile, {required _HeaderStyle header}) {
     return Column(
       mainAxisSize: .min,
@@ -408,6 +495,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       children: [
         _identityHeader(profile, vertical: header == .column),
         _subscriptionSection(),
+        _mediaQuotaSection(),
         _nameField(profile),
         _emailField(profile),
         const Divider(),
@@ -524,6 +612,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         ),
         _subscriptionSection(),
+        _mediaQuotaSection(),
         const Divider(),
         _privacySection(),
         PTButton(

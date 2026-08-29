@@ -20,6 +20,8 @@ class TierLimits {
     required this.persistentRoomCap,
     required this.dormantHours,
     required this.freeExtensionMinutes,
+    this.mediaSharing = 'none',
+    this.mediaSharingWeeklyBytes = 0,
   });
 
   static const fallback = TierLimits(
@@ -32,6 +34,8 @@ class TierLimits {
     persistentRoomCap: 0,
     dormantHours: 24,
     freeExtensionMinutes: 60,
+    mediaSharing: 'limited',
+    mediaSharingWeeklyBytes: 2684354560,
   );
 
   final String tier;
@@ -43,6 +47,8 @@ class TierLimits {
   final int persistentRoomCap;
   final int dormantHours;
   final int freeExtensionMinutes;
+  final String mediaSharing;
+  final int mediaSharingWeeklyBytes;
 
   bool get isPremium => tier == kPremiumTier;
   bool get isGuest => tier == kGuestTier;
@@ -50,6 +56,10 @@ class TierLimits {
   bool get picksExtensionLength => maxTotalSessionMinutes > maxSessionMinutes;
 
   bool get hasFreeExtension => !picksExtensionLength && freeExtensionMinutes > 0;
+
+  bool get canShareMedia => mediaSharing != 'none';
+  bool get hasUnlimitedSharing => mediaSharing == 'full';
+  int get mediaSharingMaxSizeBytes => isPremium ? 10737418240 : 2147483648; // 10 GB for Premium, 2 GB for Free
 
   factory TierLimits.fromJson(Map<String, dynamic> json) => TierLimits(
     tier: json['tier'] as String,
@@ -61,6 +71,8 @@ class TierLimits {
     persistentRoomCap: (json['persistent_room_cap'] as num?)?.toInt() ?? 0,
     dormantHours: (json['dormant_hours'] as num?)?.toInt() ?? 0,
     freeExtensionMinutes: (json['free_extension_minutes'] as num?)?.toInt() ?? 0,
+    mediaSharing: json['media_sharing'] as String? ?? 'none',
+    mediaSharingWeeklyBytes: (json['media_sharing_weekly_bytes'] as num?)?.toInt() ?? 0,
   );
 }
 

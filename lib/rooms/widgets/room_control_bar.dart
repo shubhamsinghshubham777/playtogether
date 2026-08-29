@@ -52,6 +52,7 @@ class RoomControlBar extends StatefulWidget {
     required this.playing,
     required this.position,
     required this.duration,
+    this.bufferedPosition,
     required this.volume,
     required this.micOn,
     required this.camOn,
@@ -67,6 +68,7 @@ class RoomControlBar extends StatefulWidget {
   final bool playing;
   final Duration position;
   final Duration duration;
+  final Duration? bufferedPosition;
   final double volume;
   final bool micOn;
   final bool camOn;
@@ -108,6 +110,12 @@ class _RoomControlBarState extends State<RoomControlBar> {
     widget.actions.onSeek(Duration(milliseconds: (v * widget.duration.inMilliseconds).round()));
   }
 
+  double? get _bufferedProgress {
+    final pos = widget.bufferedPosition;
+    if (pos == null || widget.duration.inMilliseconds <= 0) return null;
+    return (pos.inMilliseconds / widget.duration.inMilliseconds).clamp(0.0, 1.0);
+  }
+
   @override
   Widget build(BuildContext context) {
     final compact = widget.compact;
@@ -142,6 +150,7 @@ class _RoomControlBarState extends State<RoomControlBar> {
                       link: _sliderLink,
                       child: PTSlider(
                         value: drag ?? _progress,
+                        bufferedValue: _bufferedProgress,
                         trackHeight: compact ? 4 : 5,
                         thumbRadius: compact ? 6 : 7,
                         enabled: widget.transportEnabled,

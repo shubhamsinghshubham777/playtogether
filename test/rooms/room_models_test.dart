@@ -381,4 +381,51 @@ void main() {
       expect(fired, 1);
     });
   });
+
+  group('Media Sharing Room Models & Errors', () {
+    test('Room.fromJson parses media sharing fields', () {
+      final room = Room.fromJson({
+        ..._minimalRow(),
+        'media_file_size': 524288000,
+        'media_r2_key': 'rooms/r1/abc-movie.mp4',
+        'media_upload_id': 'upload_123',
+        'media_upload_state': 'uploading',
+        'media_sharing_level': 'limited',
+      });
+
+      expect(room.mediaFileSize, 524288000);
+      expect(room.mediaR2Key, 'rooms/r1/abc-movie.mp4');
+      expect(room.mediaUploadId, 'upload_123');
+      expect(room.mediaUploadState, 'uploading');
+      expect(room.mediaSharingLevel, 'limited');
+    });
+
+    test('Room.fromJson defaults media sharing state and level to none', () {
+      final room = Room.fromJson(_minimalRow());
+      expect(room.mediaFileSize, isNull);
+      expect(room.mediaR2Key, isNull);
+      expect(room.mediaUploadId, isNull);
+      expect(room.mediaUploadState, 'none');
+      expect(room.mediaSharingLevel, 'none');
+    });
+
+    test('RoomErrorCode maps media sharing errors correctly', () {
+      expect(
+        RoomErrorCode.fromError('error: active_upload_in_progress'),
+        RoomErrorCode.activeUploadInProgress,
+      );
+      expect(
+        RoomErrorCode.fromError('error: upload_quota_exceeded'),
+        RoomErrorCode.uploadQuotaExceeded,
+      );
+      expect(
+        RoomErrorCode.fromError('error: upload_cooldown_active'),
+        RoomErrorCode.uploadCooldownActive,
+      );
+      expect(
+        RoomErrorCode.fromError('error: media_sharing_disabled'),
+        RoomErrorCode.mediaSharingDisabled,
+      );
+    });
+  });
 }

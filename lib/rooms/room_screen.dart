@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import 'package:path/path.dart' as p;
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:playtogether/analytics.dart';
@@ -21,14 +22,18 @@ import 'package:playtogether/player/youtube/pt_youtube_embed.dart';
 import 'package:playtogether/player/youtube/youtube_links.dart';
 import 'package:playtogether/player/youtube_url_dialog.dart';
 import 'package:playtogether/profile/entitlement_service.dart';
+import 'package:playtogether/profile/media_quota_dialog.dart';
+import 'package:playtogether/profile/profile_models.dart';
 import 'package:playtogether/profile/profile_service.dart';
 import 'package:playtogether/rooms/local_media_store.dart';
+import 'package:playtogether/rooms/media_sharing_service.dart';
 import 'package:playtogether/rooms/reactions.dart';
 import 'package:playtogether/rooms/room_models.dart';
 import 'package:playtogether/rooms/room_service.dart';
 import 'package:playtogether/rooms/widgets/extend_room_dialog.dart';
 import 'package:playtogether/rooms/widgets/facecam_rail.dart';
 import 'package:playtogether/rooms/widgets/kick_member_dialog.dart';
+import 'package:playtogether/rooms/widgets/media_sharing_prompt_dialog.dart';
 import 'package:playtogether/rooms/widgets/play_shared_video_dialog.dart';
 import 'package:playtogether/rooms/widgets/reaction_overlay.dart';
 import 'package:playtogether/rooms/widgets/reaction_strip.dart';
@@ -36,9 +41,11 @@ import 'package:playtogether/rooms/widgets/readiness_overlay.dart';
 import 'package:playtogether/rooms/widgets/room_chat_panel.dart';
 import 'package:playtogether/rooms/widgets/room_control_bar.dart';
 import 'package:playtogether/rooms/widgets/room_overflow_menu.dart';
+import 'package:playtogether/rooms/widgets/sharing_progress_indicator.dart';
 import 'package:playtogether/rooms/widgets/shortcuts_dialog.dart';
 import 'package:playtogether/sync/sync_events.dart';
 import 'package:playtogether/sync/sync_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:playtogether/ui/banners.dart';
 import 'package:playtogether/ui/buttons.dart';
 import 'package:playtogether/ui/glass.dart';
@@ -203,6 +210,19 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
   bool _localLoadStalled = false;
 
   int? _ytErrorShownFor;
+
+  // Media Sharing state
+  final _mediaSharingService = MediaSharingService();
+  bool _isStreamingRemoteSharedMedia = false;
+  bool _isUploadingSharedMedia = false;
+  double _uploadFraction = 0.0;
+  double _uploadSpeedBps = 0.0;
+  int _uploadEtaSeconds = 0;
+  String _uploadState = 'none';
+  bool _recoveringStream403 = false;
+  File? _currentLocalHostFile;
+  bool _localReadyPromptDismissed = false;
+  Duration? _bufferPosition;
 
   GateState _gateState = GateState.indeterminate;
 
@@ -407,6 +427,10 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
     );
     await sync.loadMembership();
 
+    setState(() {
+      _uploadState = room?.mediaUploadState ?? 'none';
+    });
+
     sync.onRemotePlay = _remotePlay;
     sync.onRemotePause = _remotePause;
     sync.onRemoteSeek = _remoteSeek;
@@ -428,6 +452,44 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
       sync.remoteActions.listen(_onRemoteAction),
       sync.modeSwitchStream.listen(_onRemoteModeSwitch),
       sync.canonicalMediaStream.listen(_onCanonicalMedia),
+      sync.uploadProgressStream.listen((event) {
+        if (!mounted) return;
+        setState(() {
+          _uploadFraction = event.fraction;
+          _uploadSpeedBps = event.speedBps;
+          _uploadEtaSeconds = event.etaSeconds;
+          _uploadState = event.state;
+        });
+      }),
+      sync.sharingToggledStream.listen((event) {
+        if (!mounted) return;
+        if (event.uploadState != null) {
+          setState(() => _uploadState = event.uploadState!);
+        }
+        if (!(_sync?.isHost ?? false) && (event.uploadState == 'ready' || _sync?.mediaUploadState == 'ready')) {
+          final targetFileName = event.fileName ?? _canonicalMedia.name;
+          if (targetFileName != null && _localFileName != targetFileName) {
+            unawaited(_startStreamingSharedMedia(targetFileName));
+          }
+        }
+      }),
+      sync.roomExtendedStream.listen((event) {
+        if (!mounted) return;
+        final parsed = DateTime.tryParse(event.expiresAt);
+        if (parsed != null) {
+          setState(() {
+            if (_room != null) {
+              _room = _room!.copyWith(
+                expiresAt: parsed,
+                durationMinutes: event.durationMinutes,
+              );
+            }
+            _warningDismissed = false;
+          });
+          _tickCountdown();
+          _snack('The host added more time to this room!', kind: .info);
+        }
+      }),
       sync.gateStream.listen((state) {
         setState(() => _gateState = state);
         _syncGateReveal();
@@ -476,6 +538,11 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
       widget.player.stream.error.listen(_onPlayerError),
       widget.player.stream.buffering.listen((buffering) {
         if (_mode == .local) setState(() => _buffering = buffering);
+      }),
+      widget.player.stream.buffer.listen((buffer) {
+        if (_isStreamingRemoteSharedMedia && _mode == .local) {
+          setState(() => _bufferPosition = buffer);
+        }
       }),
       widget.player.stream.volume.listen((volume) => setState(() => _volume = volume / 100)),
     ]);
@@ -1108,7 +1175,216 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
         'normalized': _redactPaths(Media(uri).uri),
       },
     );
+    _isStreamingRemoteSharedMedia = false;
     await _adoptLocalFile(uri: uri, name: name, path: path);
+
+    // If host, handle media sharing prompt / upload
+    if (_sync?.isHost ?? false) {
+      if (path != null && File(path).existsSync()) {
+        unawaited(_handleHostMediaSharingPrompt(File(path), name));
+      }
+    }
+  }
+
+  Future<void> _handleHostMediaSharingPrompt(File file, String name) async {
+    _currentLocalHostFile = file;
+    final limits = EntitlementService.instance.limits;
+    if (!(limits?.canShareMedia ?? false)) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    final autoChoice = prefs.getBool('pt.media_sharing.remember_choice');
+    bool shouldShare = false;
+
+    if (autoChoice != null) {
+      shouldShare = autoChoice;
+    } else {
+      if (!mounted) return;
+      final size = await file.length();
+      if (!mounted) return;
+      final result = await showMediaSharingPromptDialog(
+        context: context,
+        fileName: name,
+        fileSize: size,
+      );
+      if (result != null) {
+        shouldShare = result.shouldShare;
+        if (result.rememberChoice) {
+          await prefs.setBool('pt.media_sharing.remember_choice', shouldShare);
+        }
+      }
+    }
+
+    if (shouldShare && mounted) {
+      unawaited(_startMediaSharingUpload(file, name));
+    }
+  }
+
+  Future<void> _startMediaSharingUpload(File file, String name) async {
+    final fileSize = await file.length();
+    final limits = EntitlementService.instance.limits;
+    final maxFileBytes = limits?.mediaSharingMaxSizeBytes;
+    if (maxFileBytes != null && fileSize > maxFileBytes) {
+      final fileStr = Profile.formatBytes(fileSize);
+      final maxStr = Profile.formatBytes(maxFileBytes);
+      _snack('This video ($fileStr) exceeds the maximum single file limit ($maxStr).');
+      if (mounted) showMediaQuotaDialog(context);
+      return;
+    }
+
+    final weeklyLimit = limits?.mediaSharingWeeklyBytes;
+    final profile = ProfileService.instance.profile;
+    if (weeklyLimit != null && profile != null) {
+      final remaining = profile.remainingWeeklyBytes(weeklyLimit);
+      if (fileSize > remaining) {
+        final fileStr = Profile.formatBytes(fileSize);
+        final remainingStr = Profile.formatBytes(remaining);
+        _snack('This video ($fileStr) exceeds your remaining weekly quota ($remainingStr).');
+        if (mounted) showMediaQuotaDialog(context);
+        return;
+      }
+    }
+
+    _currentLocalHostFile = file;
+    _isUploadingSharedMedia = true;
+    _uploadFraction = 0.0;
+    _uploadSpeedBps = 0.0;
+    _uploadEtaSeconds = 0;
+    _uploadState = 'uploading';
+    _localReadyPromptDismissed = false;
+    _sync?.setMediaUploadState('uploading');
+    _sync?.broadcastSharingToggled(
+      enabled: true,
+      fileName: name,
+      fileSize: fileSize,
+      uploadState: 'uploading',
+    );
+    setState(() {});
+
+    try {
+      await _mediaSharingService.uploadFile(
+        roomId: widget.roomId,
+        file: file,
+        onProgress: (p) {
+          if (!mounted) return;
+          setState(() {
+            _uploadFraction = p.fraction;
+            _uploadSpeedBps = p.speedBps;
+            _uploadEtaSeconds = p.etaSeconds;
+            _uploadState = p.state;
+          });
+        },
+        syncService: _sync,
+      );
+      if (!mounted) return;
+      _isUploadingSharedMedia = false;
+      _uploadState = 'ready';
+      _sync?.setMediaUploadState('ready');
+      _sync?.broadcastSharingToggled(
+        enabled: true,
+        fileName: name,
+        fileSize: fileSize,
+        uploadState: 'ready',
+      );
+      unawaited(ProfileService.instance.load());
+      setState(() {});
+    } catch (e, s) {
+      reportNonFatal(e, s, during: 'uploading shared media for room ${widget.roomId}');
+      if (!mounted) return;
+      _isUploadingSharedMedia = false;
+      _uploadState = 'failed';
+      _sync?.setMediaUploadState('failed');
+      _sync?.broadcastSharingToggled(
+        enabled: false,
+        fileName: name,
+        uploadState: 'failed',
+      );
+      setState(() {});
+      final error = MediaSharingException.fromError(e);
+      _snack(error.message);
+      if (error.code == 'quota_exceeded' && mounted) {
+        showMediaQuotaDialog(context);
+      }
+    }
+  }
+
+  Future<void> _retryLocalUpload() async {
+    if (!(_sync?.isHost ?? false)) return;
+
+    File? fileToUpload = _currentLocalHostFile;
+    if (fileToUpload == null || !fileToUpload.existsSync()) {
+      final entry = await LocalMediaStore.instance.lookup(widget.roomId);
+      if (entry != null && entry.fileStillExists) {
+        fileToUpload = File(entry.path);
+      }
+    }
+
+    if (fileToUpload != null && fileToUpload.existsSync()) {
+      final name = _localFileName ?? p.basename(fileToUpload.path);
+      unawaited(_startMediaSharingUpload(fileToUpload, name));
+    } else {
+      await _pickVideo();
+    }
+  }
+
+  Widget? _mediaSharingPill({bool compact = false}) {
+    if (_mode != .local) return null;
+
+    if (!(_sync?.isHost ?? false)) {
+      if (_isStreamingRemoteSharedMedia) {
+        return const PTActionPill(
+          label: 'Streaming from host',
+          icon: Symbols.cloud_done_rounded,
+        );
+      }
+      return null;
+    }
+
+    if (_localFileName == null) return null;
+    final limits = EntitlementService.instance.limits;
+    if (!(limits?.canShareMedia ?? false)) return null;
+
+    if (_uploadState == 'uploading' || _isUploadingSharedMedia) {
+      final pct = (_uploadFraction * 100).toInt();
+      return PTActionPill(
+        label: 'Uploading $pct%',
+        icon: Symbols.cloud_upload_rounded,
+        onTap: _cancelMediaSharingUpload,
+      );
+    }
+
+    if (_uploadState == 'failed') {
+      return PTActionPill(
+        label: 'Upload failed • Retry',
+        icon: Symbols.refresh_rounded,
+        onTap: _retryLocalUpload,
+      );
+    }
+
+    if (_uploadState == 'ready') {
+      return const PTActionPill(
+        label: 'Shared with room',
+        icon: Symbols.cloud_done_rounded,
+      );
+    }
+
+    if (_uploadState == 'none') {
+      return PTActionPill(
+        label: 'Share with room',
+        icon: Symbols.cloud_upload_rounded,
+        onTap: _retryLocalUpload,
+      );
+    }
+
+    return null;
+  }
+
+  Future<void> _cancelMediaSharingUpload() async {
+    _isUploadingSharedMedia = false;
+    _uploadState = 'none';
+    _sync?.setMediaUploadState('none');
+    _sync?.broadcastSharingToggled(enabled: false, uploadState: 'none');
+    setState(() {});
+    await _mediaSharingService.abortUpload(roomId: widget.roomId);
   }
 
   Future<void> _adoptLocalFile({
@@ -1119,6 +1395,8 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
   }) async {
     _localLoadWatchdog?.cancel();
     _localLoadStalled = false;
+    _isStreamingRemoteSharedMedia = false;
+    _bufferPosition = null;
     try {
       await widget.player.open(Media(uri), play: false);
     } catch (e, s) {
@@ -1137,6 +1415,25 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
     if (seekTo != null) unawaited(_seekOnceLoaded(seekTo, name));
     setState(() {});
     _updateReadiness();
+  }
+
+  Future<void> _startStreamingSharedMedia(String fileName, {Duration? seekTo}) async {
+    try {
+      final dl = await _mediaSharingService.fetchDownloadUrl(roomId: widget.roomId);
+      if (!mounted || _ended) return;
+      _isStreamingRemoteSharedMedia = true;
+      _localFileName = fileName;
+      _localLoadWatchdog?.cancel();
+      _localLoadStalled = false;
+      await widget.player.open(Media(dl.streamUrl.toString()), play: false);
+      _armLocalLoadWatchdog(fileName);
+      if (seekTo != null) unawaited(_seekOnceLoaded(seekTo, fileName));
+      setState(() {});
+      _updateReadiness();
+    } catch (e, s) {
+      reportNonFatal(e, s, during: 'streaming shared media for room ${widget.roomId}');
+      if (mounted) _snack("Failed to load shared media. You can locate your own copy.");
+    }
   }
 
   Future<void> _seekOnceLoaded(Duration position, String name) async {
@@ -1181,23 +1478,37 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
 
     final entry = await LocalMediaStore.instance.lookup(widget.roomId);
     if (!mounted || _ended) return;
-    if (!shouldAutoReopenLocalFile(
+    if (shouldAutoReopenLocalFile(
       media: media,
       storedFileName: entry?.name,
       storedFileExists: entry?.fileStillExists ?? false,
       loadedFileName: _localFileName,
       isPickerOpen: _isFilePickerOpen,
     )) {
+      trace(
+        'reopening the local file this device had for the room',
+        category: 'room',
+        data: {'room_id': widget.roomId, 'position_ms': held?.inMilliseconds},
+      );
+      _resolveFirstSource();
+      _idleSourceTimer?.cancel();
+      await _adoptLocalFile(uri: entry!.path, name: entry.name, path: entry.path, seekTo: held);
       return;
     }
-    trace(
-      'reopening the local file this device had for the room',
-      category: 'room',
-      data: {'room_id': widget.roomId, 'position_ms': held?.inMilliseconds},
-    );
-    _resolveFirstSource();
-    _idleSourceTimer?.cancel();
-    await _adoptLocalFile(uri: entry!.path, name: entry.name, path: entry.path, seekTo: held);
+
+    // Auto-stream shared media if host has shared it and local copy not found
+    if (!(_sync?.isHost ?? false) &&
+        (_sync?.mediaUploadState == 'ready' || _room?.mediaUploadState == 'ready' || _uploadState == 'ready') &&
+        _localFileName != media.name) {
+      trace(
+        'auto-streaming shared media for local mode',
+        category: 'room',
+        data: {'room_id': widget.roomId, 'file': media.name},
+      );
+      _resolveFirstSource();
+      _idleSourceTimer?.cancel();
+      unawaited(_startStreamingSharedMedia(media.name!, seekTo: held));
+    }
   }
 
   Future<void> _persistPosition() async {
@@ -1250,8 +1561,38 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
     );
   }
 
+  Future<void> _recoverFromStream403() async {
+    if (_recoveringStream403 || !mounted || _ended) return;
+    _recoveringStream403 = true;
+    try {
+      final currentPos = _position;
+      final audioTrack = widget.player.state.track.audio;
+      final subtitleTrack = widget.player.state.track.subtitle;
+
+      final dl = await _mediaSharingService.fetchDownloadUrl(roomId: widget.roomId);
+      if (!mounted || _ended) return;
+
+      await widget.player.open(Media(dl.streamUrl.toString()), play: _playing);
+      if (currentPos > Duration.zero) {
+        widget.player.seek(currentPos);
+      }
+      widget.player.setAudioTrack(audioTrack);
+      widget.player.setSubtitleTrack(subtitleTrack);
+    } catch (e, s) {
+      reportNonFatal(e, s, during: 'recovering from stream 403');
+      _surfaceLocalLoadFailure();
+    } finally {
+      _recoveringStream403 = false;
+    }
+  }
+
   void _onPlayerError(String error) {
     if (_mode != .local) return;
+    if (_isStreamingRemoteSharedMedia &&
+        (error.contains('403') || error.toLowerCase().contains('forbidden'))) {
+      unawaited(_recoverFromStream403());
+      return;
+    }
     reportNonFatal(
       StateError('mpv: ${_redactPaths(error)}'),
       StackTrace.current,
@@ -1562,6 +1903,18 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
     if (sync == null) return false;
     final self = _present.where((m) => m.userId == sync.userId).firstOrNull;
     return self != null && !sync.memberSatisfiesGate(self);
+  }
+
+  bool get _allMembersLocallyReady {
+    if (_present.length <= 1) return false;
+    final canonicalName = _canonicalMedia.name;
+    if (canonicalName == null) return false;
+    for (final member in _present) {
+      if (!member.isReady || member.loadedFileName != canonicalName) {
+        return false;
+      }
+    }
+    return true;
   }
 
   /// Plain-language "who are we waiting on, and for what".
@@ -1976,6 +2329,11 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
       _av = null;
     }
     av?.dispose();
+    if (_isUploadingSharedMedia || _uploadState == 'uploading') {
+      _isUploadingSharedMedia = false;
+      _uploadState = 'none';
+      unawaited(_mediaSharingService.abortUpload(roomId: widget.roomId));
+    }
     await _sync?.disconnect();
     await widget.player.stop();
     if (mounted) _showEndedDialog(title: title, body: body, icon: icon);
@@ -2100,9 +2458,23 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
                       variant: _canPickBackUp ? .secondary : .primary,
                       onPressed: () {
                         Navigator.of(dialogContext).pop();
+                        if (AuthService.instance.isSignedIn) {
+                          unawaited(ProfileService.instance.load());
+                          unawaited(EntitlementService.instance.refresh());
+                        }
                         context.go('/lobby');
                       },
                     ),
+                    if (!EntitlementService.instance.isPremium && AuthService.instance.isSignedIn)
+                      PTButton(
+                        label: 'Unlock 24h rooms with Premium',
+                        icon: Symbols.crown_rounded,
+                        variant: .secondary,
+                        onPressed: () {
+                          Navigator.of(dialogContext).pop();
+                          context.go('/lobby/subscribe?source=room_ended');
+                        },
+                      ),
                   ],
                 ),
               ),
@@ -2178,6 +2550,10 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
     // Safe here (unlike dispose): this path always lands on the lobby, never
     // straight into another room.
     await widget.player.stop();
+    if (AuthService.instance.isSignedIn) {
+      unawaited(ProfileService.instance.load());
+      unawaited(EntitlementService.instance.refresh());
+    }
     if (mounted) context.go('/lobby');
   }
 
@@ -2305,6 +2681,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
       onCopyInvite: _copyInvite,
       onLeave: _leaveRoom,
       onEndRoom: _endRoomForEveryone,
+      onExtendRoom: _extendRoom,
       onTransportLockChanged: _setTransportLock,
       onKick: (member) {
         final present = _present.where((p) => p.userId == member.userId).firstOrNull;
@@ -2394,7 +2771,14 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
   String get _extendLabel {
     if (_limits.picksExtensionLength) return 'Add time';
     if (_hasFreebie) return '+1 hour, on us';
-    return 'More time';
+    return 'Go Premium';
+  }
+
+  IconData? get _extendIcon {
+    if (!_limits.picksExtensionLength && !_hasFreebie) {
+      return Symbols.crown_rounded;
+    }
+    return null;
   }
 
   String get _expirySubtitle {
@@ -2428,10 +2812,10 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
       }
       await _showPremiumTease(
         surface: 'room_expiry',
-        headline: 'More time is coming',
+        headline: 'Keep the party going',
         body:
-            'Your free hour is spent, and this room wraps at $_endsAtLabel. Premium is '
-            'nearly here — longer rooms, bigger parties and rooms that keep themselves.',
+            'Your free +1 hour is spent, and this room ends at $_endsAtLabel. Upgrade to '
+            'Premium for marathon rooms, larger groups, and persistent watch spaces.',
         perks: const [
           'Rooms that run up to 24 hours',
           'Up to 16 watchers, with video facecams',
@@ -2471,6 +2855,10 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
         _warningDismissed = false;
       });
       _tickCountdown();
+      unawaited(_sync?.broadcastRoomExtended(
+        expiresAt: extended.expiresAt.toIso8601String(),
+        durationMinutes: extended.durationMinutes,
+      ));
       if (_limits.hasFreeExtension) unawaited(ProfileService.instance.load());
       _snack('More time — this room now runs until $_endsAtLabel.', kind: .success);
     } catch (e, s) {
@@ -2480,8 +2868,8 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
       if (failure == .extensionUsed || failure == .extensionCap) {
         await _showPremiumTease(
           surface: 'room_expiry',
-          headline: 'More time is coming',
-          body: '${failure.message} Premium is nearly here.',
+          headline: 'Keep the party going',
+          body: '${failure.message} Upgrade to Premium for longer sessions and persistent rooms.',
           perks: const [
             'Rooms that run up to 24 hours',
             'Up to 16 watchers, with video facecams',
@@ -2764,6 +3152,21 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
                   selfId: _sync?.userId ?? '',
                   selfIsHost: _sync?.isHost ?? false,
                   compact: MediaQuery.sizeOf(context).width < 700,
+                  uploadProgressWidget: (_uploadState == 'uploading' || _isUploadingSharedMedia)
+                      ? Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: SharingProgressIndicator(
+                            fraction: _uploadFraction,
+                            speedBps: _uploadSpeedBps,
+                            etaSeconds: _uploadEtaSeconds,
+                            state: _uploadState,
+                            label: (_sync?.isHost ?? false)
+                                ? 'Uploading shared media…'
+                                : 'Host is uploading media…',
+                            onCancel: (_sync?.isHost ?? false) ? _cancelMediaSharingUpload : null,
+                          ),
+                        )
+                      : null,
                   onLocateFile: _selfBlocksGate && _canonicalMedia.kind == .local
                       ? _pickVideo
                       : null,
@@ -2914,31 +3317,40 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
           ),
           // Urgency without layout movement — this sits right next to the
           // video, so nothing here may reflow or jitter.
-          Row(
-            mainAxisSize: .min,
-            spacing: 6,
-            children: [
-              PTPulse(
-                enabled: _timeLeft > Duration.zero && _timeLeft <= const Duration(minutes: 1),
-                low: 0.35,
-                child: Icon(
-                  Symbols.schedule_rounded,
-                  size: compact ? 13 : 16,
-                  color: PTColors.white(0.7),
+          Tooltip(
+            message: (_sync?.isHost ?? false) ? 'Extend room duration' : 'Time remaining',
+            child: MouseRegion(
+              cursor: (_sync?.isHost ?? false) ? SystemMouseCursors.click : SystemMouseCursors.basic,
+              child: GestureDetector(
+                onTap: (_sync?.isHost ?? false) && !_extending ? _extendRoom : null,
+                child: Row(
+                  mainAxisSize: .min,
+                  spacing: 6,
+                  children: [
+                    PTPulse(
+                      enabled: _timeLeft > Duration.zero && _timeLeft <= const Duration(minutes: 1),
+                      low: 0.35,
+                      child: Icon(
+                        Symbols.schedule_rounded,
+                        size: compact ? 13 : 16,
+                        color: PTColors.white(0.7),
+                      ),
+                    ),
+                    AnimatedDefaultTextStyle(
+                      duration: PTMotion.functional(context, PTMotion.state),
+                      curve: PTMotion.enter,
+                      style: PTText.mono.copyWith(
+                        fontSize: compact ? 11 : 13,
+                        color: _timeLeft > Duration.zero && _timeLeft <= const Duration(minutes: 5)
+                            ? PTColors.warning
+                            : PTColors.white(0.7),
+                      ),
+                      child: Text(_countdownLabel),
+                    ),
+                  ],
                 ),
               ),
-              AnimatedDefaultTextStyle(
-                duration: PTMotion.functional(context, PTMotion.state),
-                curve: PTMotion.enter,
-                style: PTText.mono.copyWith(
-                  fontSize: compact ? 11 : 13,
-                  color: _timeLeft > Duration.zero && _timeLeft <= const Duration(minutes: 5)
-                      ? PTColors.warning
-                      : PTColors.white(0.7),
-                ),
-                child: Text(_countdownLabel),
-              ),
-            ],
+            ),
           ),
         ],
       ),
@@ -2973,6 +3385,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
             trailing: (_sync?.isHost ?? false)
                 ? PTButton(
                     label: _extendLabel,
+                    icon: _extendIcon,
                     variant: .secondary,
                     height: 38,
                     expand: false,
@@ -3016,6 +3429,69 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
               onPressed: _pickVideo,
             ),
             onDismiss: () => setState(() => _mismatchDismissed = true),
+          ),
+        ),
+      if ((_sync?.isHost ?? false) && _mode == .local && _uploadState == 'failed')
+        PTEntrance(
+          key: const ValueKey('media-sharing-failed'),
+          offset: -8,
+          duration: PTMotion.state,
+          child: PTBanner(
+            kind: .error,
+            icon: Symbols.cloud_off_rounded,
+            title: 'Media upload failed',
+            subtitle: 'Participants without a local copy cannot watch until uploaded.',
+            trailing: PTButton(
+              label: 'Retry upload',
+              icon: Symbols.refresh_rounded,
+              variant: .primary,
+              height: 38,
+              expand: false,
+              loading: _isUploadingSharedMedia,
+              onPressed: _retryLocalUpload,
+            ),
+            onDismiss: () => setState(() => _uploadState = 'none'),
+          ),
+        ),
+      if ((_sync?.isHost ?? false) &&
+          _mode == .local &&
+          (_uploadState == 'uploading' || _isUploadingSharedMedia) &&
+          _allMembersLocallyReady &&
+          !_localReadyPromptDismissed)
+        PTEntrance(
+          key: const ValueKey('all-members-locally-ready'),
+          offset: -8,
+          duration: PTMotion.state,
+          child: PTBanner(
+            kind: .info,
+            icon: Symbols.check_circle_rounded,
+            title: 'Everyone has a local copy!',
+            subtitle: 'Playback is ready. Cancel upload to save quota, or keep uploading for late joiners.',
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              spacing: 8,
+              children: [
+                PTButton(
+                  label: 'Cancel upload',
+                  icon: Symbols.close_rounded,
+                  variant: .primary,
+                  height: 36,
+                  expand: false,
+                  onPressed: () {
+                    setState(() => _localReadyPromptDismissed = true);
+                    _cancelMediaSharingUpload();
+                  },
+                ),
+                PTButton(
+                  label: 'Keep uploading',
+                  variant: .secondary,
+                  height: 36,
+                  expand: false,
+                  onPressed: () => setState(() => _localReadyPromptDismissed = true),
+                ),
+              ],
+            ),
+            onDismiss: () => setState(() => _localReadyPromptDismissed = true),
           ),
         ),
     ];
@@ -3237,7 +3713,18 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
                 crossAxisAlignment: .start,
                 children: [
                   Expanded(
-                    child: Align(alignment: .topLeft, child: _roomPill()),
+                    child: Align(
+                      alignment: .topLeft,
+                      child: Wrap(
+                        spacing: 10,
+                        runSpacing: 8,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          _roomPill(),
+                          if (_mediaSharingPill() != null) _mediaSharingPill()!,
+                        ],
+                      ),
+                    ),
                   ),
                   const SizedBox(width: 16),
                   _chatToggleButton(),
@@ -3287,11 +3774,10 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
             Positioned(
               top: 84,
               right: 24,
-              bottom: 178,
-              width: 330,
+              bottom: 110,
+              width: 320,
               child: _chatRevealed(
-                // Panel width + its right margin: starts fully off the edge.
-                offscreen: 354,
+                offscreen: 320,
                 panel: RoomChatPanel(
                   sync: _sync!,
                   messages: _messages,
@@ -3306,36 +3792,39 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
               ),
             ),
           if (_overlayChat.isNotEmpty)
-            Positioned(left: 24, bottom: 170, width: 340, child: _chatDisplaced(_chatOverlay())),
+            Positioned(
+              left: 24,
+              bottom: 124,
+              width: 340,
+              child: _chatDisplaced(_chatOverlay()),
+            ),
           Positioned(
             bottom: 24,
-            left: 0,
-            right: 0,
+            left: 24,
+            right: 24,
             child: _overlayControls(
-              Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 920),
-                  child: Column(
-                    mainAxisSize: .min,
-                    children: [
-                      _reactionStrip(),
-                      RoomControlBar(
-                        playing: _playing,
-                        position: _position,
-                        duration: _duration,
-                        volume: _volume,
-                        micOn: _av?.micEnabled ?? false,
-                        camOn: _av?.camEnabled ?? false,
-                        avAvailable: _av != null,
-                        camAvailable: _av?.canPublishCamera ?? false,
-                        actions: _controlActions,
-                        reactOpen: _reactOpen,
-                        transportEnabled: _transportBlockedReason == null,
-                        transportHint: _transportBlockedReason,
-                      ),
-                    ],
+              fromTop: false,
+              Column(
+                mainAxisSize: .min,
+                children: [
+                  _reactionStrip(),
+                  const SizedBox(height: 12),
+                  RoomControlBar(
+                    playing: _playing,
+                    position: _position,
+                    duration: _duration,
+                    bufferedPosition: _isStreamingRemoteSharedMedia && _mode == .local ? _bufferPosition : null,
+                    volume: _volume,
+                    micOn: _av?.micEnabled ?? false,
+                    camOn: _av?.camEnabled ?? false,
+                    avAvailable: _av != null,
+                    camAvailable: _av?.canPublishCamera ?? false,
+                    actions: _controlActions,
+                    reactOpen: _reactOpen,
+                    transportEnabled: _transportBlockedReason == null,
+                    transportHint: _transportBlockedReason,
                   ),
-                ),
+                ],
               ),
             ),
           ),
@@ -3367,11 +3856,24 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
                         spacing: 8,
                         children: [
                           RoomCodeChip(code: room.code, onCopy: _copyCode, fontSize: 11),
-                          Icon(Symbols.schedule_rounded, size: 13, color: PTColors.white(0.6)),
-                          Text(
-                            _countdownLabel,
-                            style: PTText.mono.copyWith(fontSize: 11, color: PTColors.white(0.6)),
+                          GestureDetector(
+                            onTap: (_sync?.isHost ?? false) && !_extending ? _extendRoom : null,
+                            child: Row(
+                              mainAxisSize: .min,
+                              spacing: 4,
+                              children: [
+                                Icon(Symbols.schedule_rounded, size: 13, color: PTColors.white(0.6)),
+                                Text(
+                                  _countdownLabel,
+                                  style: PTText.mono.copyWith(fontSize: 11, color: PTColors.white(0.6)),
+                                ),
+                              ],
+                            ),
                           ),
+                          if (_mediaSharingPill(compact: true) != null) ...[
+                            const SizedBox(width: 4),
+                            _mediaSharingPill(compact: true)!,
+                          ],
                         ],
                       ),
                     ],
@@ -3410,6 +3912,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
                   playing: _playing,
                   position: _position,
                   duration: _duration,
+                  bufferedPosition: _isStreamingRemoteSharedMedia && _mode == .local ? _bufferPosition : null,
                   volume: _volume,
                   micOn: _av?.micEnabled ?? false,
                   camOn: _av?.camEnabled ?? false,
@@ -3482,7 +3985,19 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
                     crossAxisAlignment: .start,
                     children: [
                       Expanded(
-                        child: Align(alignment: .topLeft, child: _roomPill(compact: true)),
+                        child: Align(
+                          alignment: .topLeft,
+                          child: Wrap(
+                            spacing: 8,
+                            runSpacing: 6,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              _roomPill(compact: true),
+                              if (_mediaSharingPill(compact: true) != null)
+                                _mediaSharingPill(compact: true)!,
+                            ],
+                          ),
+                        ),
                       ),
                       const SizedBox(width: 12),
                       _chatToggleButton(),
@@ -3552,6 +4067,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
                         playing: _playing,
                         position: _position,
                         duration: _duration,
+                        bufferedPosition: _isStreamingRemoteSharedMedia && _mode == .local ? _bufferPosition : null,
                         volume: _volume,
                         micOn: _av?.micEnabled ?? false,
                         camOn: _av?.camEnabled ?? false,

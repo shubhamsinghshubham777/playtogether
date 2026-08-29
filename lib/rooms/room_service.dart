@@ -36,11 +36,22 @@ class RoomService extends ChangeNotifier {
     _serverOffset = server.difference(midpoint);
   }
 
-  Future<Room> createRoom({required String name, required int durationMinutes}) async {
+  Future<Room> createRoom({
+    required String name,
+    required int durationMinutes,
+    String? stagedId,
+  }) async {
     try {
+      final params = <String, dynamic>{
+        'p_name': name,
+        'p_duration_minutes': durationMinutes,
+      };
+      if (stagedId != null) {
+        params['p_staged_id'] = stagedId;
+      }
       final row = await _client.rpc(
         'create_room',
-        params: {'p_name': name, 'p_duration_minutes': durationMinutes},
+        params: params,
       );
       final room = Room.fromJson(_singleRow(row));
       _currentRoom = room;

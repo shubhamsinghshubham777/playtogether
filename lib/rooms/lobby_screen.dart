@@ -1,8 +1,12 @@
 import 'dart:async';
+import 'dart:io';
 
+import 'package:fast_file_picker/fast_file_picker.dart';
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import 'package:path/path.dart' as p;
 import 'package:playtogether/analytics.dart';
 import 'package:playtogether/app_router.dart';
 import 'package:playtogether/app_version.dart';
@@ -10,8 +14,11 @@ import 'package:playtogether/auth/auth_service.dart';
 import 'package:playtogether/diagnostics.dart';
 import 'package:playtogether/env.dart';
 import 'package:playtogether/profile/entitlement_service.dart';
+import 'package:playtogether/profile/media_quota_dialog.dart';
+import 'package:playtogether/profile/profile_models.dart';
 import 'package:playtogether/profile/profile_service.dart';
 import 'package:playtogether/rooms/local_media_store.dart';
+import 'package:playtogether/rooms/media_sharing_service.dart';
 import 'package:playtogether/rooms/room_models.dart';
 import 'package:playtogether/rooms/room_service.dart';
 import 'package:playtogether/rooms/widgets/extend_room_dialog.dart';
@@ -44,6 +51,14 @@ class _LobbyScreenState extends State<LobbyScreen> {
   int _codeShake = 0;
   String? _busyRoomId;
   Timer? _myRoomsPollTimer;
+
+  File? _stagedFile;
+  StagedUploadSession? _stagedSession;
+  StagedUploadSession? _activeStagingSession;
+  CancellationToken? _stagingCancelToken;
+  bool _stagingUpload = false;
+  UploadProgress? _stagingProgress;
+  final MediaSharingService _mediaSharingService = MediaSharingService();
 
   /// The entrance choreography is a *first impression*, not a transition.
   /// Static so coming back from a room is instant familiarity rather than a
@@ -88,6 +103,10 @@ class _LobbyScreenState extends State<LobbyScreen> {
   void _onRoomServiceChanged() {
     if (_roomExit.observe(inRoom: RoomService.instance.currentRoom != null)) {
       unawaited(_loadMyRooms());
+      if (AuthService.instance.isSignedIn) {
+        unawaited(ProfileService.instance.load());
+        unawaited(EntitlementService.instance.refresh());
+      }
     }
   }
 
@@ -123,6 +142,130 @@ class _LobbyScreenState extends State<LobbyScreen> {
     return '${h}h ${m}m';
   }
 
+  Future<void> _pickStagedMedia() async {
+    const videoTypeGroup = XTypeGroup(label: 'Videos', extensions: ['mp4', 'mkv']);
+    final FastFilePickerPath? response;
+    try {
+      response = await FastFilePicker.pickFile(acceptedTypeGroups: [videoTypeGroup]);
+    } catch (e, s) {
+      reportNonFatal(e, s, during: 'picking staged video in lobby');
+      return;
+    }
+    final path = response?.path;
+    if (path == null) return;
+    final file = File(path);
+    if (!file.existsSync()) return;
+
+    final fileSize = file.lengthSync();
+    final limits = EntitlementService.instance.limits;
+    final maxFileBytes = limits?.mediaSharingMaxSizeBytes;
+    if (maxFileBytes != null && fileSize > maxFileBytes) {
+      final fileStr = Profile.formatBytes(fileSize);
+      final maxStr = Profile.formatBytes(maxFileBytes);
+      _snack('This video ($fileStr) exceeds the maximum single file limit ($maxStr).');
+      if (mounted) showMediaQuotaDialog(context);
+      return;
+    }
+
+    final weeklyLimit = limits?.mediaSharingWeeklyBytes;
+    final profile = ProfileService.instance.profile;
+    if (weeklyLimit != null && profile != null) {
+      final remaining = profile.remainingWeeklyBytes(weeklyLimit);
+      if (fileSize > remaining) {
+        final fileStr = Profile.formatBytes(fileSize);
+        final remainingStr = Profile.formatBytes(remaining);
+        _snack('This video ($fileStr) exceeds your remaining weekly quota ($remainingStr).');
+        if (mounted) showMediaQuotaDialog(context);
+        return;
+      }
+    }
+
+    final cancelToken = CancellationToken();
+    setState(() {
+      _stagedFile = file;
+      _stagingUpload = true;
+      _stagingProgress = null;
+      _stagedSession = null;
+      _activeStagingSession = null;
+      _stagingCancelToken = cancelToken;
+    });
+
+    try {
+      final session = await _mediaSharingService.uploadStagedFile(
+        file: file,
+        cancelToken: cancelToken,
+        onSessionCreated: (session) {
+          if (mounted && _stagingCancelToken == cancelToken) {
+            setState(() => _activeStagingSession = session);
+          }
+        },
+        onProgress: (progress) {
+          if (mounted && _stagingCancelToken == cancelToken) {
+            setState(() {
+              _stagingProgress = progress;
+            });
+          }
+        },
+      );
+      if (mounted && _stagingCancelToken == cancelToken) {
+        setState(() {
+          _stagedSession = session;
+          _stagingUpload = false;
+        });
+        unawaited(ProfileService.instance.load());
+      }
+    } catch (e, s) {
+      if (cancelToken.isCancelled) {
+        // User explicitly cancelled, nothing to snack
+        return;
+      }
+      reportNonFatal(e, s, during: 'staging media upload in lobby');
+      if (mounted && _stagingCancelToken == cancelToken) {
+        setState(() {
+          _stagingUpload = false;
+          _stagedFile = null;
+          _stagedSession = null;
+          _activeStagingSession = null;
+          _stagingProgress = null;
+        });
+        final error = MediaSharingException.fromError(e);
+        _snack(error.message);
+        if (error.code == 'quota_exceeded' && mounted) {
+          showMediaQuotaDialog(context);
+        }
+      }
+    }
+  }
+
+  Future<void> _cancelStagedMedia() async {
+    _stagingCancelToken?.cancel();
+    final active = _activeStagingSession;
+    final ready = _stagedSession;
+
+    setState(() {
+      _stagedFile = null;
+      _stagedSession = null;
+      _activeStagingSession = null;
+      _stagingUpload = false;
+      _stagingProgress = null;
+      _stagingCancelToken = null;
+    });
+
+    if (active != null) {
+      unawaited(_mediaSharingService.abortStagedUpload(
+        stagedId: active.stagedId,
+        uploadId: active.uploadId,
+        r2Key: active.r2Key,
+      ));
+    } else if (ready != null) {
+      unawaited(_mediaSharingService.abortStagedUpload(
+        stagedId: ready.stagedId,
+        uploadId: ready.uploadId,
+        r2Key: ready.r2Key,
+      ));
+    }
+  }
+
   Future<void> _create({bool isRetry = false}) async {
     setState(() => _creating = true);
     var roomEndedForRetry = false;
@@ -130,7 +273,15 @@ class _LobbyScreenState extends State<LobbyScreen> {
       final room = await RoomService.instance.createRoom(
         name: _nameController.text,
         durationMinutes: _durationMinutes,
+        stagedId: _stagedSession?.stagedId,
       );
+      if (_stagedFile != null) {
+        await LocalMediaStore.instance.record(
+          roomId: room.id,
+          name: p.basename(_stagedFile!.path),
+          path: _stagedFile!.path,
+        );
+      }
       if (mounted) context.go(roomPath(room.id));
     } catch (e, s) {
       final code = RoomErrorCode.fromError(e);
@@ -176,6 +327,10 @@ class _LobbyScreenState extends State<LobbyScreen> {
     try {
       final rooms = await RoomService.instance.loadMyRooms();
       await LocalMediaStore.instance.prune(keepRoomIds: {for (final r in rooms) r.room.id});
+      if (AuthService.instance.isSignedIn) {
+        unawaited(ProfileService.instance.load());
+        unawaited(EntitlementService.instance.refresh());
+      }
     } catch (e, s) {
       reportNonFatal(e, s, during: 'loading the lobby room list');
     }
@@ -371,6 +526,8 @@ class _LobbyScreenState extends State<LobbyScreen> {
             children: [
               const _Wordmark(),
               const Spacer(),
+              _mediaQuotaChip(),
+              const SizedBox(width: 12),
               if (_showPremiumChip) ...[
                 _premiumChip(),
                 const SizedBox(width: 12),
@@ -463,9 +620,11 @@ class _LobbyScreenState extends State<LobbyScreen> {
                 children: [
                   const _Wordmark(compact: true),
                   const Spacer(),
+                  _mediaQuotaChip(compact: true),
+                  const SizedBox(width: 8),
                   if (_showPremiumChip) ...[
                     _premiumChip(),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: 8),
                   ],
                   _avatarButton(),
                 ],
@@ -502,7 +661,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 20),
         child: Column(
-          crossAxisAlignment: .start,
+          crossAxisAlignment: CrossAxisAlignment.start,
           spacing: 14,
           children: [
             Row(
@@ -511,9 +670,11 @@ class _LobbyScreenState extends State<LobbyScreen> {
                 const SizedBox(width: 10),
                 const _Greeting(style: PTText.panelHeading, align: .centerLeft),
                 const Spacer(),
+                _mediaQuotaChip(compact: true),
+                const SizedBox(width: 8),
                 if (_showPremiumChip) ...[
                   _premiumChip(),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 8),
                 ],
                 _avatarButton(size: 36),
               ],
@@ -614,6 +775,54 @@ class _LobbyScreenState extends State<LobbyScreen> {
               fontSize: 13,
               fontWeight: .w600,
               color: PTColors.textAccent,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _mediaQuotaChip({bool compact = false}) {
+    final profile = ProfileService.instance.profile;
+    final limits = EntitlementService.instance.limitsOrFallback;
+    final isPrem = EntitlementService.instance.isPremium;
+    final isGuest = profile?.isGuest ?? true;
+
+    final weeklyLimit = limits.mediaSharingWeeklyBytes;
+    final remainingBytes = profile?.remainingWeeklyBytes(weeklyLimit) ?? weeklyLimit;
+    final isLow = remainingBytes < 1024 * 1024 * 1024 && !isGuest && !isPrem;
+
+    return GlassPill(
+      onTap: () => showMediaQuotaDialog(context),
+      padding: EdgeInsets.symmetric(horizontal: compact ? 9 : 12, vertical: 7),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        spacing: 6,
+        children: [
+          Icon(
+            isPrem ? Symbols.crown_rounded : Symbols.cloud_queue_rounded,
+            size: 16,
+            fill: 1,
+            color: isPrem
+                ? PTColors.textAccent
+                : isLow
+                    ? PTColors.warning
+                    : PTColors.white(0.75),
+          ),
+          Text(
+            isPrem
+                ? (compact ? 'Unlimited' : 'Unlimited quota')
+                : isGuest
+                    ? 'Quota info'
+                    : '${Profile.formatBytes(remainingBytes)} quota',
+            style: PTText.body.copyWith(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: isPrem
+                  ? PTColors.textAccent
+                  : isLow
+                      ? PTColors.warning
+                      : PTColors.white(0.85),
             ),
           ),
         ],
@@ -738,6 +947,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
               ),
           ],
         ),
+        _stagedMediaSection(compact),
         PTButton(
           label: 'Create room',
           icon: Symbols.rocket_launch_rounded,
@@ -747,6 +957,189 @@ class _LobbyScreenState extends State<LobbyScreen> {
       ],
     );
     return _card(content, compact: compact, scroll: scroll, delay: delay);
+  }
+
+  Widget _stagedMediaSection(bool compact) {
+    if (!EntitlementService.instance.limitsOrFallback.canShareMedia) return const SizedBox.shrink();
+
+    if (_stagedSession != null && _stagedFile != null) {
+      final fileName = p.basename(_stagedFile!.path);
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: PTColors.glass(0.3),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: PTColors.online.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          children: [
+            const Icon(Symbols.check_circle_rounded, color: PTColors.online, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    fileName,
+                    style: PTText.body.copyWith(fontSize: 12, fontWeight: FontWeight.w600),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                  ),
+                  Text(
+                    'Pre-uploaded & ready for guests',
+                    style: PTText.caption.copyWith(fontSize: 10, color: PTColors.online),
+                  ),
+                ],
+              ),
+            ),
+            IconButton(
+              tooltip: 'Remove staged video',
+              icon: Icon(Symbols.close_rounded, size: 18, color: PTColors.white(0.6)),
+              onPressed: _creating ? null : _cancelStagedMedia,
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_stagingUpload && _stagedFile != null) {
+      final fileName = p.basename(_stagedFile!.path);
+      final fraction = _stagingProgress?.fraction ?? 0.0;
+      final percent = (fraction * 100).toInt();
+      final speedMb = ((_stagingProgress?.speedBps ?? 0) / (1024 * 1024)).toStringAsFixed(1);
+      final eta = _stagingProgress?.etaSeconds ?? 0;
+
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: PTColors.glass(0.3),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: PTColors.white(0.1)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          spacing: 8,
+          children: [
+            Row(
+              children: [
+                const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: PTColors.textAccent),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Pre-uploading $fileName...',
+                    style: PTText.body.copyWith(fontSize: 12),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                  ),
+                ),
+                Text(
+                  '$percent%',
+                  style: PTText.mono.copyWith(fontSize: 11, color: PTColors.textAccent),
+                ),
+                const SizedBox(width: 8),
+                GestureDetector(
+                  onTap: _cancelStagedMedia,
+                  child: Text(
+                    'Cancel',
+                    style: PTText.caption.copyWith(
+                      fontSize: 11,
+                      color: PTColors.danger,
+                      decoration: TextDecoration.underline,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(2),
+              child: LinearProgressIndicator(
+                value: fraction,
+                backgroundColor: PTColors.white(0.1),
+                valueColor: const AlwaysStoppedAnimation<Color>(PTColors.textAccent),
+                minHeight: 4,
+              ),
+            ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  '$speedMb MB/s',
+                  style: PTText.mono.copyWith(fontSize: 10, color: PTColors.white(0.4)),
+                ),
+                Text(
+                  'ETA ${eta}s',
+                  style: PTText.mono.copyWith(fontSize: 10, color: PTColors.white(0.4)),
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+    }
+
+    final profile = ProfileService.instance.profile;
+    final limits = EntitlementService.instance.limitsOrFallback;
+    final isPrem = EntitlementService.instance.isPremium;
+    final isGuest = profile?.isGuest ?? true;
+    final weeklyLimit = limits.mediaSharingWeeklyBytes;
+    final remainingBytes = profile?.remainingWeeklyBytes(weeklyLimit) ?? weeklyLimit;
+    final isLow = remainingBytes < 1024 * 1024 * 1024 && !isGuest && !isPrem;
+
+    final quotaSubtitle = isPrem
+        ? 'Unlimited uploads with Premium • Up to 10 GB'
+        : isGuest
+            ? 'Sign in to stream local video files with guests'
+            : '${Profile.formatBytes(remainingBytes)} weekly quota available • Up to 2 GB';
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: _creating ? null : _pickStagedMedia,
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: PTColors.glass(0.2),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: PTColors.white(0.08)),
+          ),
+          child: Row(
+            children: [
+              const Icon(Symbols.video_library_rounded, color: PTColors.textAccent, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Pre-upload video (Optional)',
+                      style: PTText.body.copyWith(fontSize: 12, fontWeight: FontWeight.w500),
+                    ),
+                    Text(
+                      quotaSubtitle,
+                      style: PTText.caption.copyWith(
+                        fontSize: 10,
+                        color: isLow ? PTColors.warning : PTColors.white(0.5),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                tooltip: 'Bandwidth quota info',
+                icon: Icon(Symbols.info_rounded, size: 18, color: PTColors.textAccent),
+                onPressed: () => showMediaQuotaDialog(context),
+              ),
+              Icon(Symbols.add_rounded, color: PTColors.white(0.6), size: 18),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _joinCard({bool compact = false, bool scroll = false, Duration delay = Duration.zero}) {

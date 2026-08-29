@@ -269,6 +269,12 @@ export function PricingTable() {
                 <td className="p-4 sm:p-5"><Check className="w-4 h-4 text-emerald-400" /></td>
                 <td className="p-4 sm:p-5"><Check className="w-4 h-4 text-emerald-400" /></td>
               </tr>
+              <tr>
+                <td className="p-4 sm:p-5 font-semibold text-white">Cloud Media Streaming (Host Upload)</td>
+                <td className="p-4 sm:p-5 text-gray-500"><Minus className="w-4 h-4" /></td>
+                <td className="p-4 sm:p-5 text-purple-300">2.5 GB/wk (up to 2 GB file)</td>
+                <td className="p-4 sm:p-5 text-amber-300 font-bold">Unlimited (up to 10 GB file)</td>
+              </tr>
             </tbody>
           </table>
         </GlassPanel>

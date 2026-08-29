@@ -373,6 +373,36 @@ void main() {
           GateState.closed,
         );
       });
+
+      test('mediaUploadState uploading closes the gate even when all members are ready', () {
+        expect(
+          evaluateGateState(
+            hasPresenceSynced: true,
+            media: _localMedia,
+            members: [
+              _member('a', ready: .ready, file: 'movie.mkv'),
+              _member('b', ready: .ready, file: 'movie.mkv'),
+            ],
+            mediaUploadState: 'uploading',
+          ),
+          GateState.closed,
+        );
+      });
+
+      test('mediaUploadState ready allows gate to open when all members ready', () {
+        expect(
+          evaluateGateState(
+            hasPresenceSynced: true,
+            media: _localMedia,
+            members: [
+              _member('a', ready: .ready, file: 'movie.mkv'),
+              _member('b', ready: .ready, file: 'movie.mkv'),
+            ],
+            mediaUploadState: 'ready',
+          ),
+          GateState.open,
+        );
+      });
     });
 
     group('gateBlockers', () {

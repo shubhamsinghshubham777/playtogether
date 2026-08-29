@@ -9,6 +9,7 @@ environment:
 dependencies:
   app_links: 7.2.1
   auto_updater: 1.0.0
+  clock: 1.1.2
   collection: 1.19.1
   crypto: 3.0.6
   fast_file_picker: 0.4.8
@@ -25,13 +26,18 @@ dependencies:
   media_kit: 1.2.6
   media_kit_video: 2.0.1
   media_kit_libs_video: 1.0.7
+  mime: 2.0.0
   package_info_plus: 9.0.1
+  path: 1.9.1
+  path_provider: 2.1.5
   responsive_framework: 1.5.1
   sentry_flutter: 9.25.0
   shared_preferences: 2.5.5
+  storage_space: 1.2.0
   supabase_flutter: 2.16.0
   url_launcher: 6.3.2
   uuid: 4.6.0
+  wakelock_plus: 1.4.0
   window_manager: 0.5.2
 
 dev_dependencies:

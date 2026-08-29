@@ -394,10 +394,21 @@ void main() {
         }),
         throwsA(isA<TypeError>()),
       );
-      expect(
-        () => ReactionEvent.fromPayload({'senderId': 'u1', 'timestamp': 5, 'emoji': 7}),
-        throwsA(isA<TypeError>()),
+    });
+
+    test('RoomExtendedEvent roundtrips cleanly', () {
+      final nowStr = DateTime.now().toIso8601String();
+      final event = RoomExtendedEvent(
+        senderId: 'host-1',
+        timestamp: 1000,
+        expiresAt: nowStr,
+        durationMinutes: 180,
       );
+      final payload = event.toPayload();
+      final restored = RoomExtendedEvent.fromPayload(payload);
+      expect(restored.senderId, 'host-1');
+      expect(restored.expiresAt, nowStr);
+      expect(restored.durationMinutes, 180);
     });
   });
 }

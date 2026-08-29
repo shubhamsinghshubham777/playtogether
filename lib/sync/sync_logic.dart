@@ -133,9 +133,11 @@ GateState evaluateGateState({
   required RoomMedia media,
   required List<PresentMember> members,
   Set<String> waived = const {},
+  String mediaUploadState = 'none',
 }) {
   if (!hasPresenceSynced) return .indeterminate;
   if (!media.isSet) return .closed;
+  if (mediaUploadState == 'uploading') return .closed;
   if (members.isEmpty) return .indeterminate;
   return members.every((m) => memberClearsGate(m, media, waived)) ? .open : .closed;
 }
