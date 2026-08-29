@@ -668,8 +668,10 @@ class _LobbyScreenState extends State<LobbyScreen> {
               children: [
                 const _Wordmark(compact: true),
                 const SizedBox(width: 10),
-                const _Greeting(style: PTText.panelHeading, align: .centerLeft),
-                const Spacer(),
+                const Flexible(
+                  child: _Greeting(style: PTText.panelHeading, align: .centerLeft),
+                ),
+                const SizedBox(width: 8),
                 _mediaQuotaChip(compact: true),
                 const SizedBox(width: 8),
                 if (_showPremiumChip) ...[
@@ -1293,6 +1295,8 @@ class _Greeting extends StatelessWidget {
             twoLine ? 'Hey $name,\nready to watch?' : 'Hey $name, ready to watch?',
             key: ValueKey(name),
             style: style,
+            maxLines: twoLine ? 2 : 1,
+            overflow: TextOverflow.ellipsis,
           ),
         );
       },
