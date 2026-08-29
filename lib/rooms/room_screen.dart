@@ -1496,9 +1496,8 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
       return;
     }
 
-    // Auto-stream shared media if host has shared it and local copy not found
-    if (!(_sync?.isHost ?? false) &&
-        (_sync?.mediaUploadState == 'ready' || _room?.mediaUploadState == 'ready' || _uploadState == 'ready') &&
+    // Auto-stream shared media if room has ready shared media and local disk copy not found
+    if ((_sync?.mediaUploadState == 'ready' || _room?.mediaUploadState == 'ready' || _uploadState == 'ready') &&
         _localFileName != media.name) {
       trace(
         'auto-streaming shared media for local mode',
