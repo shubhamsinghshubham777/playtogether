@@ -2,20 +2,29 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Logo } from "@/components/Logo";
+import Link from "next/link";
 import { GlassPanel } from "@/components/GlassPanel";
 import { PTButton } from "@/components/PTButton";
-import { CheckCircle2, AlertCircle, ExternalLink, ArrowRight, ShieldCheck } from "lucide-react";
+import confetti from "canvas-confetti";
+import {
+  Check,
+  AlertCircle,
+  ArrowUpRight,
+  ArrowRight,
+  Sparkles,
+  Layers,
+  XCircle,
+} from "lucide-react";
 
 function DesktopCallbackContent() {
   const searchParams = useSearchParams();
   const [deepLinkUrl, setDeepLinkUrl] = useState<string>("synctogether://auth-callback");
   const [isError, setIsError] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [redirectAttempted, setRedirectAttempted] = useState(false);
+  const [launchStatus, setLaunchStatus] = useState<"launching" | "launched">("launching");
 
   useEffect(() => {
-    // Construct the complete deep link with all query parameters and hash fragments
+    // Extract query and hash fragments
     const search = window.location.search || "";
     const hash = window.location.hash || "";
     const targetUri = `synctogether://auth-callback${search}${hash}`;
@@ -33,18 +42,32 @@ function DesktopCallbackContent() {
       setErrorMessage(
         errorDesc?.replace(/\+/g, " ") || "Authentication could not be completed."
       );
+      return;
     }
 
-    // Automatically trigger the deep link to focus and authenticate the desktop app
+    // Gentle celebratory confetti
+    try {
+      confetti({
+        particleCount: 45,
+        spread: 60,
+        origin: { y: 0.65 },
+        colors: ["#8B5CF6", "#A855F7", "#4ADE80", "#C9B8FF"],
+        disableForReducedMotion: true,
+      });
+    } catch {
+      // Ignore if confetti fails in headless/SSR environments
+    }
+
+    // Automatically trigger deep-link launch
     const timer = setTimeout(() => {
       try {
         window.location.href = targetUri;
       } catch (err) {
         console.error("Deep link navigation error:", err);
       } finally {
-        setRedirectAttempted(true);
+        setLaunchStatus("launched");
       }
-    }, 150);
+    }, 250);
 
     return () => clearTimeout(timer);
   }, [searchParams]);
@@ -55,46 +78,47 @@ function DesktopCallbackContent() {
     }
   };
 
+  const handleCloseWindow = () => {
+    window.close();
+  };
+
   if (isError) {
     return (
       <GlassPanel
         glow="purple"
-        className="p-8 sm:p-10 space-y-6 max-w-md w-full border-rose-500/25 bg-[#141024]/90 text-center"
+        className="p-8 sm:p-10 space-y-6 max-w-md w-full border-rose-500/25 bg-[#120F20]/90 text-center relative shadow-2xl"
       >
-        <div className="flex justify-center mb-2">
-          <Logo size="lg" />
-        </div>
-
-        <div className="mx-auto w-16 h-16 rounded-full bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400 shadow-lg shadow-rose-500/10 animate-in fade-in zoom-in duration-300">
+        {/* Error Icon */}
+        <div className="mx-auto w-16 h-16 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400 shadow-lg shadow-rose-500/10">
           <AlertCircle className="w-8 h-8" />
         </div>
 
         <div className="space-y-2">
           <h1 className="text-2xl font-bold text-white font-[family-name:var(--font-space-grotesk)]">
-            Authentication Incomplete
+            Sign-in Incomplete
           </h1>
-          <p className="text-sm text-gray-400 leading-relaxed">
-            {errorMessage || "We were unable to complete your sign-in request."}
+          <p className="text-xs text-gray-400 leading-relaxed max-w-xs mx-auto">
+            {errorMessage || "We couldn't finish signing you in. Please try again."}
           </p>
         </div>
 
-        <div className="pt-2 flex flex-col gap-3">
+        <div className="pt-2 flex flex-col gap-2.5">
           <PTButton
             variant="primary"
-            size="lg"
+            size="md"
             className="w-full justify-center"
             onClick={handleManualOpen}
+            rightIcon={<ArrowRight className="w-4 h-4" />}
           >
-            <span>Return to SyncTogether</span>
-            <ArrowRight className="w-4 h-4" />
+            Return to App
           </PTButton>
 
-          <a
+          <Link
             href="/auth"
-            className="text-xs text-purple-300 hover:text-purple-200 transition-colors underline underline-offset-4"
+            className="text-xs text-purple-300/80 hover:text-purple-200 transition-colors py-1.5"
           >
             Try signing in again
-          </a>
+          </Link>
         </div>
       </GlassPanel>
     );
@@ -103,51 +127,83 @@ function DesktopCallbackContent() {
   return (
     <GlassPanel
       glow="purple"
-      className="p-8 sm:p-10 space-y-6 max-w-md w-full border-purple-500/25 bg-[#141024]/90 text-center relative"
+      className="p-8 sm:p-10 max-w-md w-full border-white/10 bg-[#120F20]/95 text-center relative shadow-2xl space-y-6"
     >
-      <div className="flex justify-center mb-2">
-        <Logo size="lg" />
-      </div>
-
-      {/* Success Animated Badge */}
+      {/* Unified Hero: Brand Icon with Integrated Success Badge */}
       <div className="relative mx-auto w-20 h-20 flex items-center justify-center">
-        <div className="absolute inset-0 rounded-full bg-emerald-500/20 blur-xl animate-pulse" />
-        <div className="relative w-16 h-16 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shadow-lg shadow-emerald-500/20">
-          <CheckCircle2 className="w-9 h-9 animate-in zoom-in duration-300" />
+        {/* Ambient Halo */}
+        <div className="absolute inset-0 rounded-2xl bg-purple-500/20 blur-xl animate-pulse pointer-events-none" />
+
+        {/* SyncTogether Icon */}
+        <div className="w-16 h-16 rounded-2xl btn-primary-gradient p-0.5 shadow-xl shadow-purple-950/60 flex items-center justify-center">
+          <div className="w-full h-full bg-[#141026] rounded-[14px] flex items-center justify-center">
+            <svg
+              className="w-7 h-7 text-[#C9B8FF] fill-current ml-0.5"
+              viewBox="0 0 24 24"
+            >
+              <path d="M8 5.14v14l11-7-11-7z" />
+            </svg>
+          </div>
+        </div>
+
+        {/* Integrated Checkmark Badge */}
+        <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-emerald-500 text-black flex items-center justify-center shadow-lg shadow-emerald-500/40 border-2 border-[#120F20] animate-in zoom-in-50 duration-300">
+          <Check className="w-4 h-4 stroke-[3]" />
         </div>
       </div>
 
+      {/* Typography */}
       <div className="space-y-2">
-        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-medium tracking-wide">
-          <ShieldCheck className="w-3.5 h-3.5" />
-          <span>Signed In Successfully</span>
-        </div>
-
-        <h1 className="text-2xl sm:text-3xl font-bold text-white font-[family-name:var(--font-space-grotesk)]">
-          Login Successful!
+        <h1 className="text-2xl sm:text-3xl font-bold text-white tracking-tight font-[family-name:var(--font-space-grotesk)]">
+          You&apos;re All Set!
         </h1>
-        <p className="text-sm text-gray-300 leading-relaxed">
-          You&apos;ve successfully authenticated with Google. You can return to the SyncTogether desktop app now.
+        <p className="text-xs sm:text-sm text-gray-300/90 leading-relaxed max-w-xs mx-auto">
+          Successfully signed in with Google. We&apos;ve sent your session to the SyncTogether desktop app.
         </p>
       </div>
 
-      {/* Primary Action Button */}
-      <div className="space-y-3 pt-2">
+      {/* Dynamic Status Indicator */}
+      <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/[0.04] border border-white/[0.08] text-xs text-gray-400">
+        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+        <span>
+          {launchStatus === "launching" ? "Opening desktop app..." : "Ready in SyncTogether"}
+        </span>
+      </div>
+
+      {/* Action Buttons */}
+      <div className="space-y-2.5 pt-1">
         <PTButton
           variant="primary"
           size="lg"
-          className="w-full justify-center shadow-lg shadow-purple-900/40 group"
+          className="w-full justify-center shadow-xl shadow-purple-950/50"
           onClick={handleManualOpen}
+          rightIcon={<ArrowUpRight className="w-4 h-4" />}
         >
-          <span>Open SyncTogether App</span>
-          <ExternalLink className="w-4 h-4 transition-transform duration-200 group-hover:scale-110" />
+          Open SyncTogether
         </PTButton>
 
-        <p className="text-xs text-gray-400 leading-relaxed">
-          {redirectAttempted
-            ? "If SyncTogether didn't open automatically, click the button above. You can safely close this browser window."
-            : "Redirecting you back to the desktop application..."}
-        </p>
+        <button
+          onClick={handleCloseWindow}
+          className="w-full py-2 text-xs text-gray-400 hover:text-gray-200 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+        >
+          <XCircle className="w-3.5 h-3.5 opacity-60" />
+          <span>Close this tab</span>
+        </button>
+      </div>
+
+      {/* Helpful Subtle Footer Links */}
+      <div className="pt-4 border-t border-white/[0.06] flex items-center justify-between text-[11px] text-gray-500 px-1">
+        <span className="flex items-center gap-1">
+          <Sparkles className="w-3 h-3 text-purple-400/80" />
+          <span>Sync & Watch in 4K</span>
+        </span>
+        <Link
+          href="/account"
+          className="text-purple-400/80 hover:text-purple-300 transition-colors inline-flex items-center gap-1"
+        >
+          <Layers className="w-3 h-3" />
+          <span>Web Dashboard</span>
+        </Link>
       </div>
     </GlassPanel>
   );
@@ -156,8 +212,9 @@ function DesktopCallbackContent() {
 export default function DesktopCallbackPage() {
   return (
     <div className="min-h-[80vh] flex items-center justify-center px-4 py-12 relative overflow-hidden">
-      {/* Background Ambient Glow */}
-      <div className="glow-blob-purple top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-30 pointer-events-none" />
+      {/* Subtle Background Glows */}
+      <div className="glow-blob-purple top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-25 pointer-events-none" />
+      <div className="glow-blob-gold top-1/3 right-1/4 opacity-10 pointer-events-none" />
 
       <Suspense
         fallback={
