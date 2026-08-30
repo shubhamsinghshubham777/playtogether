@@ -1,10 +1,12 @@
 Business Source License 1.1
 https://mariadb.com/bsl11/
 
+Copyright (c) 2026 Shubham Singh. All rights reserved.
+
 Parameters:
 
 Licensor: 
-SyncTogether Authors
+Shubham Singh
 
 Licensed Work: 
 SyncTogether, including the Flutter client applications, Supabase backend schema and functions, and Next.js web application (collectively the "Software").

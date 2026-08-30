@@ -174,7 +174,7 @@ SyncTogether is licensed under the **[Business Source License 1.1 (BUSL-1.1)](LI
 - ✅ **Contributions & Forking**: You can fork the repository, build custom features, submit pull requests, and deploy private instances.
 
 ### What is prohibited:
-- ❌ **Commercial Resale / SaaS**: You may **not** sell SyncTogether as your own product, package it into a commercial distribution, or offer it as a paid commercial hosted service / SaaS to third parties without an explicit commercial license from the authors.
+- ❌ **Commercial Resale / SaaS**: You may **not** sell SyncTogether as your own product, package it into a commercial distribution, or offer it as a paid commercial hosted service / SaaS to third parties without an explicit commercial license from the Licensor.
 
 *After a 4-year period from release, the license automatically transitions to the permissive **Apache License, Version 2.0**.*
 
