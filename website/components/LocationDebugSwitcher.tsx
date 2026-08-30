@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { usePricing } from "@/lib/usePricing";
-import { COUNTRY_CURRENCY_MAP } from "@/lib/pricing";
+import { COUNTRY_CURRENCY_MAP, isLocalEnvironment } from "@/lib/pricing";
 import { Globe, MapPin, ChevronDown, Check } from "lucide-react";
 
 interface LocationDebugSwitcherProps {
@@ -10,10 +10,15 @@ interface LocationDebugSwitcherProps {
 }
 
 export function LocationDebugSwitcher({ className = "" }: LocationDebugSwitcherProps) {
+  const [isLocal, setIsLocal] = useState(false);
   const { countryCode, currencyCode, isMocked, mockCountry, setMockCountry } =
     usePricing();
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setIsLocal(isLocalEnvironment());
+  }, []);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -27,6 +32,11 @@ export function LocationDebugSwitcher({ className = "" }: LocationDebugSwitcherP
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, []);
+
+  // Strictly hide debug simulator on production / Vercel deployments
+  if (!isLocal) {
+    return null;
+  }
 
   const activeConfig = COUNTRY_CURRENCY_MAP[countryCode] || COUNTRY_CURRENCY_MAP["US"];
 

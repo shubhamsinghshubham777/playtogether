@@ -7,6 +7,7 @@ import {
   detectUserCountry,
   formatCurrency,
   calculateSavingsPercentage,
+  isLocalEnvironment,
   type LocalizedPriceData,
 } from "./pricing";
 
@@ -19,7 +20,7 @@ const PADDLE_ANNUAL_PRICE_ID =
 const clientPriceCache: Record<string, LocalizedPriceData> = {};
 
 function subscribeMockCountry(callback: () => void) {
-  if (typeof window === "undefined") return () => {};
+  if (typeof window === "undefined" || !isLocalEnvironment()) return () => {};
   window.addEventListener("pt_mock_country_changed", callback);
   window.addEventListener("storage", callback);
   return () => {
@@ -29,7 +30,7 @@ function subscribeMockCountry(callback: () => void) {
 }
 
 function getMockCountrySnapshot(): string | null {
-  if (typeof window === "undefined") return null;
+  if (typeof window === "undefined" || !isLocalEnvironment()) return null;
   const urlParams = new URLSearchParams(window.location.search);
   const paramMock = urlParams.get("mock_country") || urlParams.get("country");
   const storedMock = localStorage.getItem("synctogether_mock_country");
@@ -64,6 +65,7 @@ export function usePricing() {
   );
 
   const setMockCountry = useCallback((country: string | null) => {
+    if (!isLocalEnvironment()) return;
     if (country) {
       const upper = country.toUpperCase();
       localStorage.setItem("synctogether_mock_country", upper);
@@ -75,9 +77,9 @@ export function usePricing() {
     }
   }, []);
 
-  // Expose global helper for automated testing and developer console
+  // Expose global helper for automated testing and developer console (local development only)
   useEffect(() => {
-    if (typeof window !== "undefined") {
+    if (typeof window !== "undefined" && isLocalEnvironment()) {
       (window as unknown as { __setMockCountry?: (c: string | null) => void }).__setMockCountry = setMockCountry;
     }
     return () => {

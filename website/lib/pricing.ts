@@ -15,6 +15,13 @@ export const COUNTRY_CURRENCY_MAP: Record<string, CountryConfig> = {
   CA: { country: "CA", currency: "CAD", name: "Canada", flag: "🇨🇦", symbol: "CA$" },
   AU: { country: "AU", currency: "AUD", name: "Australia", flag: "🇦🇺", symbol: "A$" },
   JP: { country: "JP", currency: "JPY", name: "Japan", flag: "🇯🇵", symbol: "¥" },
+  BR: { country: "BR", currency: "BRL", name: "Brazil", flag: "🇧🇷", symbol: "R$" },
+  MX: { country: "MX", currency: "MXN", name: "Mexico", flag: "🇲🇽", symbol: "Mex$" },
+  PL: { country: "PL", currency: "PLN", name: "Poland", flag: "🇵🇱", symbol: "zł" },
+  TR: { country: "TR", currency: "TRY", name: "Turkey", flag: "🇹🇷", symbol: "₺" },
+  NG: { country: "NG", currency: "USD", name: "Nigeria", flag: "🇳🇬", symbol: "$" },
+  PK: { country: "PK", currency: "USD", name: "Pakistan", flag: "🇵🇰", symbol: "$" },
+  PH: { country: "PH", currency: "USD", name: "Philippines", flag: "🇵🇭", symbol: "$" },
 };
 
 export interface LocalizedPriceData {
@@ -49,22 +56,45 @@ export function formatCurrency(amount: number, currencyCode: string): string {
 }
 
 /**
+ * Checks whether the current environment is local development or local testing
+ */
+export function isLocalEnvironment(): boolean {
+  if (process.env.NODE_ENV === "development") {
+    return true;
+  }
+  if (typeof window !== "undefined") {
+    const hostname = window.location.hostname;
+    return (
+      hostname === "localhost" ||
+      hostname === "127.0.0.1" ||
+      hostname === "0.0.0.0" ||
+      hostname.endsWith(".localhost") ||
+      hostname.endsWith(".local")
+    );
+  }
+  return false;
+}
+
+/**
  * Detects user country from timezone or browser locale
  */
 export function detectUserCountry(): string {
   if (typeof window === "undefined") return "US";
 
-  // 1. Check URL search param
-  const urlParams = new URLSearchParams(window.location.search);
-  const paramCountry = urlParams.get("mock_country") || urlParams.get("country");
-  if (paramCountry && COUNTRY_CURRENCY_MAP[paramCountry.toUpperCase()]) {
-    return paramCountry.toUpperCase();
-  }
+  // Mock overrides are strictly allowed only in local development / testing
+  if (isLocalEnvironment()) {
+    // 1. Check URL search param
+    const urlParams = new URLSearchParams(window.location.search);
+    const paramCountry = urlParams.get("mock_country") || urlParams.get("country");
+    if (paramCountry && COUNTRY_CURRENCY_MAP[paramCountry.toUpperCase()]) {
+      return paramCountry.toUpperCase();
+    }
 
-  // 2. Check localStorage
-  const stored = localStorage.getItem("synctogether_mock_country");
-  if (stored && COUNTRY_CURRENCY_MAP[stored.toUpperCase()]) {
-    return stored.toUpperCase();
+    // 2. Check localStorage
+    const stored = localStorage.getItem("synctogether_mock_country");
+    if (stored && COUNTRY_CURRENCY_MAP[stored.toUpperCase()]) {
+      return stored.toUpperCase();
+    }
   }
 
   // 3. Infer from Timezone

@@ -95,6 +95,10 @@ export async function GET(request: NextRequest) {
       CAD: { m: 4.99, a: 37.99 },
       AUD: { m: 5.99, a: 44.99 },
       JPY: { m: 550, a: 4200 },
+      BRL: { m: 9.90, a: 69.90 },
+      MXN: { m: 49, a: 349 },
+      PLN: { m: 11.99, a: 84.99 },
+      TRY: { m: 59, a: 429 },
     };
 
     const currency = targetCurrency in fallbackPrices ? targetCurrency : "USD";

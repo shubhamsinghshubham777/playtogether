@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 const COUNTRY_CURRENCY_MAP: Record<string, { currency: string; symbol: string }> = {
   IN: { currency: "INR", symbol: "₹" },
-  US: { currency: "USD", symbol: "default_api:$" },
+  US: { currency: "USD", symbol: "$" },
   GB: { currency: "GBP", symbol: "£" },
   DE: { currency: "EUR", symbol: "€" },
   CA: { currency: "CAD", symbol: "CA$" },
@@ -16,6 +16,37 @@ function calculateSavingsPercentage(monthlyAmount: number, annualAmount: number)
   const fullAnnualCost = monthlyAmount * 12;
   const savings = ((fullAnnualCost - annualAmount) / fullAnnualCost) * 100;
   return `${Math.max(1, Math.round(savings))}%`;
+}
+
+function formatCurrency(amount: number, currencyCode: string): string {
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency: currencyCode,
+      minimumFractionDigits: amount % 1 === 0 ? 0 : 2,
+      maximumFractionDigits: 2,
+    }).format(amount);
+  } catch {
+    const symbol = COUNTRY_CURRENCY_MAP[currencyCode]?.symbol || "$";
+    return `${symbol}${amount.toFixed(amount % 1 === 0 ? 0 : 2)}`;
+  }
+}
+
+function isLocalEnvironment(customEnv?: string, customHostname?: string): boolean {
+  const env = customEnv ?? process.env.NODE_ENV;
+  if (env === "development") {
+    return true;
+  }
+  if (customHostname) {
+    return (
+      customHostname === "localhost" ||
+      customHostname === "127.0.0.1" ||
+      customHostname === "0.0.0.0" ||
+      customHostname.endsWith(".localhost") ||
+      customHostname.endsWith(".local")
+    );
+  }
+  return false;
 }
 
 test("COUNTRY_CURRENCY_MAP contains all key regional currencies", () => {
@@ -45,4 +76,22 @@ test("Currency conversion and decimal rounding handles whole and fractional amou
 
   const usdAmount = 3.99;
   assert.equal(usdAmount % 1 !== 0, true);
+  assert.equal(formatCurrency(3.99, "USD"), "$3.99");
 });
+
+test("isLocalEnvironment strictly hides simulator on production domains and shows on localhost/dev", () => {
+  // Production / Vercel domains must return false
+  assert.equal(isLocalEnvironment("production", "synctogether.com"), false);
+  assert.equal(isLocalEnvironment("production", "synctogether.vercel.app"), false);
+  assert.equal(isLocalEnvironment("production", "synctogether-git-main-shubham.vercel.app"), false);
+
+  // Local development / local hostnames must return true
+  assert.equal(isLocalEnvironment("development", "synctogether.vercel.app"), true);
+  assert.equal(isLocalEnvironment("production", "localhost"), true);
+  assert.equal(isLocalEnvironment("production", "127.0.0.1"), true);
+  assert.equal(isLocalEnvironment("production", "0.0.0.0"), true);
+  assert.equal(isLocalEnvironment("production", "app.local"), true);
+  assert.equal(isLocalEnvironment("production", "test.localhost"), true);
+});
+
+
