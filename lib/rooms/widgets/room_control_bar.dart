@@ -58,12 +58,16 @@ class RoomControlBar extends StatefulWidget {
     required this.camOn,
     required this.avAvailable,
     this.camAvailable = true,
+    this.avEnabled = true,
     required this.actions,
     this.compact = false,
     this.reactOpen = false,
     this.transportEnabled = true,
     this.transportHint,
   });
+
+  static const String soloMicTooltip = 'Talking to yourself? Wait for a friend to join first!';
+  static const String soloCamTooltip = 'Who are you posing for? Wait for a friend to join first!';
 
   final bool playing;
   final Duration position;
@@ -73,8 +77,8 @@ class RoomControlBar extends StatefulWidget {
   final bool micOn;
   final bool camOn;
   final bool avAvailable;
-
   final bool camAvailable;
+  final bool avEnabled;
   final RoomControlBarActions actions;
   final bool compact;
   final bool reactOpen;
@@ -267,8 +271,10 @@ class _RoomControlBarState extends State<RoomControlBar> {
                 glass: false,
                 borderRadius: BorderRadius.circular(12),
                 size: 42,
-                tooltip: widget.micOn ? 'Mute mic' : 'Mic on',
-                onPressed: () => actions.onMicToggle(!widget.micOn),
+                tooltip: widget.avEnabled
+                    ? (widget.micOn ? 'Mute mic' : 'Mic on')
+                    : RoomControlBar.soloMicTooltip,
+                onPressed: widget.avEnabled ? () => actions.onMicToggle(!widget.micOn) : null,
               ),
               if (widget.camAvailable)
                 PTIconButton(
@@ -277,12 +283,16 @@ class _RoomControlBarState extends State<RoomControlBar> {
                   glass: false,
                   borderRadius: BorderRadius.circular(12),
                   size: 42,
-                  tooltip: widget.camOn ? 'Camera off' : 'Camera on',
-                  onPressed: () => actions.onCamToggle(!widget.camOn),
+                  tooltip: widget.avEnabled
+                      ? (widget.camOn ? 'Camera off' : 'Camera on')
+                      : RoomControlBar.soloCamTooltip,
+                  onPressed: widget.avEnabled ? () => actions.onCamToggle(!widget.camOn) : null,
                 )
               else if (actions.onCamLocked != null)
                 Tooltip(
-                  message: 'Video facecams (Premium)',
+                  message: widget.avEnabled
+                      ? 'Video facecams (Premium)'
+                      : RoomControlBar.soloCamTooltip,
                   child: Stack(
                     alignment: Alignment.center,
                     children: [
@@ -293,7 +303,7 @@ class _RoomControlBarState extends State<RoomControlBar> {
                         borderRadius: BorderRadius.circular(12),
                         size: 42,
                         iconSize: 20,
-                        onPressed: actions.onCamLocked,
+                        onPressed: widget.avEnabled ? actions.onCamLocked : null,
                       ),
                       Positioned(
                         bottom: 4,
@@ -461,7 +471,10 @@ class _RoomControlBarState extends State<RoomControlBar> {
                 glass: false,
                 borderRadius: BorderRadius.circular(12),
                 iconSize: 20,
-                onPressed: () => actions.onMicToggle(!widget.micOn),
+                tooltip: widget.avEnabled
+                    ? (widget.micOn ? 'Mute mic' : 'Mic on')
+                    : RoomControlBar.soloMicTooltip,
+                onPressed: widget.avEnabled ? () => actions.onMicToggle(!widget.micOn) : null,
               ),
               if (widget.camAvailable)
                 PTIconButton(
@@ -470,11 +483,16 @@ class _RoomControlBarState extends State<RoomControlBar> {
                   glass: false,
                   borderRadius: BorderRadius.circular(12),
                   iconSize: 20,
-                  onPressed: () => actions.onCamToggle(!widget.camOn),
+                  tooltip: widget.avEnabled
+                      ? (widget.camOn ? 'Camera off' : 'Camera on')
+                      : RoomControlBar.soloCamTooltip,
+                  onPressed: widget.avEnabled ? () => actions.onCamToggle(!widget.camOn) : null,
                 )
               else if (actions.onCamLocked != null)
                 Tooltip(
-                  message: 'Video facecams (Premium)',
+                  message: widget.avEnabled
+                      ? 'Video facecams (Premium)'
+                      : RoomControlBar.soloCamTooltip,
                   child: Stack(
                     alignment: Alignment.center,
                     children: [
@@ -484,7 +502,7 @@ class _RoomControlBarState extends State<RoomControlBar> {
                         glass: false,
                         borderRadius: BorderRadius.circular(12),
                         iconSize: 18,
-                        onPressed: actions.onCamLocked,
+                        onPressed: widget.avEnabled ? actions.onCamLocked : null,
                       ),
                       Positioned(
                         bottom: 2,

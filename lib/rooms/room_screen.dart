@@ -289,6 +289,13 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
   void _toggleFacecam(String kind, bool on) {
     final av = _av;
     if (av == null) return;
+    if (_present.length < 2 && on) {
+      _snack(
+        kind == 'mic' ? RoomControlBar.soloMicTooltip : RoomControlBar.soloCamTooltip,
+        kind: .info,
+      );
+      return;
+    }
     if (kind == 'cam' && on && !av.canPublishCamera) {
       _snack('Cameras are a premium thing — this room is voice only.', kind: .info);
       return;
@@ -659,6 +666,10 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
 
   Future<void> _onPresenceChanged(List<PresentMember> present) async {
     setState(() => _present = present);
+    if (present.length < 2) {
+      if (_av?.micEnabled == true) unawaited(_av?.setMicEnabled(false));
+      if (_av?.camEnabled == true) unawaited(_av?.setCamEnabled(false));
+    }
     unawaited(_refreshMemberTiers());
     _syncGateReveal();
     if (present.length > _peakMembers) _peakMembers = present.length;
@@ -2131,7 +2142,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
     if (_privacyHidden) {
       setState(() => _privacyHidden = false);
       if (_chatOpenBeforePrivacy && !_chatOpen) _toggleChat();
-      if (av != null) {
+      if (av != null && _present.length >= 2) {
         if (_micBeforePrivacy) av.setMicEnabled(true);
         if (_camBeforePrivacy) av.setCamEnabled(true);
       }
@@ -2454,7 +2465,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
                         context.go('/lobby');
                       },
                     ),
-                    if (!EntitlementService.instance.isPremium && AuthService.instance.isSignedIn)
+                    if (_canShowPremiumUpsell)
                       PTButton(
                         label: 'Unlock 24h rooms with Premium',
                         icon: Symbols.crown_rounded,
@@ -2472,6 +2483,13 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
         ),
       ),
     );
+  }
+
+  bool get _canShowPremiumUpsell {
+    if (EntitlementService.instance.isPremium || !AuthService.instance.isSignedIn) {
+      return false;
+    }
+    return _evictionReason != 'kicked' && _evictionReason != 'deleted';
   }
 
   bool get _canPickBackUp {
@@ -3810,6 +3828,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
                     camOn: _av?.camEnabled ?? false,
                     avAvailable: _av != null,
                     camAvailable: _av?.canPublishCamera ?? false,
+                    avEnabled: _present.length >= 2,
                     actions: _controlActions,
                     reactOpen: _reactOpen,
                     transportEnabled: _transportBlockedReason == null,
@@ -3918,6 +3937,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
                   camOn: _av?.camEnabled ?? false,
                   avAvailable: _av != null,
                   camAvailable: _av?.canPublishCamera ?? false,
+                  avEnabled: _present.length >= 2,
                   actions: _controlActions,
                   reactOpen: _reactOpen,
                   transportEnabled: _transportBlockedReason == null,
@@ -4075,6 +4095,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
                         camOn: _av?.camEnabled ?? false,
                         avAvailable: _av != null,
                         camAvailable: _av?.canPublishCamera ?? false,
+                        avEnabled: _present.length >= 2,
                         actions: _controlActions,
                         reactOpen: _reactOpen,
                         transportEnabled: _transportBlockedReason == null,

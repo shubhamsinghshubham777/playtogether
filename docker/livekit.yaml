@@ -1,0 +1,22 @@
+# LiveKit Server Configuration for SyncTogether Self-Hosting
+# Reference: https://docs.livekit.io/home/self-hosting/deployment/
+
+port: 7880
+bind_addresses:
+  - ""
+
+rtc:
+  tcp_port: 7881
+  port_range_start: 50000
+  port_range_end: 50100
+  use_external_ip: false
+
+# API keys used for authentication and token signing.
+# Format: <api_key>: <api_secret>
+# MUST match LIVEKIT_API_KEY and LIVEKIT_API_SECRET in supabase/functions/.env
+keys:
+  devkey: secret_dev_key_for_synctogether_change_in_production
+
+logging:
+  json: false
+  level: info

@@ -245,12 +245,16 @@ class _PTIconButtonState extends State<PTIconButton> with SingleTickerProviderSt
       onExit: (_) => setState(() => _hovered = false),
       child: PTPressable(
         onTap: widget.onPressed == null ? null : _handleTap,
-        child: AnimatedContainer(
+        child: AnimatedOpacity(
           duration: PTMotion.functional(context, PTMotion.hover),
-          width: widget.size,
-          height: widget.size,
-          decoration: decoration,
-          child: glyph,
+          opacity: widget.onPressed != null ? 1 : 0.45,
+          child: AnimatedContainer(
+            duration: PTMotion.functional(context, PTMotion.hover),
+            width: widget.size,
+            height: widget.size,
+            decoration: decoration,
+            child: glyph,
+          ),
         ),
       ),
     );

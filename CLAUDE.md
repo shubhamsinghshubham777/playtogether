@@ -237,3 +237,7 @@ macOS and Windows replace themselves in place: `auto_updater` wraps Sparkle 2.9.
 - **macOS re-prompts for camera/mic after every update, and always will** while the app is ad-hoc signed: TCC keys its grants on the code signature, and each ad-hoc build signs differently, so every self-update looks like a new app to it. This is not a one-off migration cost — it recurs per release, and the only fix is a Developer ID signature. Don't chase it in `lib/av/`.
 - **`package_info_plus` is pinned back at 9.0.1**: 10.x needs win32 ^6, and `livekit_client` → `device_info_plus` 12.x pins win32 ^5. Bumping it fails resolution until LiveKit moves.
 
+### Licensing & Self-Hosting
+
+The project is licensed under **Business Source License 1.1** (`LICENSE`), which permits personal, internal, and self-hosted use, but prohibits commercial SaaS or resale. Full production self-hosting and Docker deployment instructions are documented in `docs/self-hosting.md`.
+

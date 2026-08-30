@@ -1,0 +1,43 @@
+Business Source License 1.1
+https://mariadb.com/bsl11/
+
+Parameters:
+
+Licensor: 
+SyncTogether Authors
+
+Licensed Work: 
+SyncTogether, including the Flutter client applications, Supabase backend schema and functions, and Next.js web application (collectively the "Software").
+
+Additional Use Grant:
+You are granted the right to use, copy, modify, distribute, and run the Software for personal, educational, non-commercial, and internal organizational purposes, including self-hosting the complete stack for yourself, your family, or your internal team.
+
+You may NOT make the functionality of the Software or any derivative work available to third parties as a commercial product, paid hosted service, Software-as-a-Service (SaaS), platform service, or white-labeled commercial application, nor charge third parties for access to or distribution of the Software without an explicit, separate commercial license from the Licensor.
+
+Change Date:
+2030-01-01 (4 years from initial release)
+
+Change License:
+Apache License, Version 2.0 (as published by the Apache Software Foundation)
+
+================================================================================
+
+Terms of the Business Source License
+
+1. Grant of License.
+Licensor hereby grants you the right to make use of the Licensed Work under the terms of this License, subject to the conditions and limitations set forth herein, until the Change Date.
+
+2. Additional Use Grant.
+Your rights to use the Licensed Work prior to the Change Date are defined and limited by the Additional Use Grant specified above.
+
+3. Effective on the Change Date.
+Effective on the Change Date, this License automatically converts into the Change License, and Licensor grants you the rights to make use of the Licensed Work under the terms of the Change License.
+
+4. Notice Requirements.
+You must include a copy of this License and retain all copyright notices in all copies or substantial portions of the Licensed Work or derivative works that you distribute.
+
+5. Trademarks.
+This License does not grant any trademark rights or rights to use the trademarks, logos, or brand names of the Licensor.
+
+6. Disclaimer of Warranty.
+TO THE EXTENT PERMITTED BY APPLICABLE LAW, THE LICENSED WORK IS PROVIDED "AS IS" AND WITHOUT WARRANTIES OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL LICENSOR BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF, OR IN CONNECTION WITH THE LICENSED WORK OR THE USE OR OTHER DEALINGS IN THE LICENSED WORK.

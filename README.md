@@ -1,133 +1,187 @@
-<img src="assets/icon/app_icon.svg" width="96" alt="App Icon">
+<p align="center">
+  <img src="assets/icon/app_icon.svg" width="96" alt="SyncTogether App Icon">
+</p>
 
-# SyncTogether
+<h1 align="center">SyncTogether</h1>
 
-Watch stuff together, perfectly in sync. SyncTogether is a Flutter app where you
-create a **room**, share a 6-character code (or a `synctogether://join/<code>`
-invite link), and everyone's playback stays in lockstep — play, pause, and seeks
-broadcast to every member in real time, with chat and live facecams alongside.
+<p align="center">
+  <strong>Watch videos together, perfectly in sync. Cross-platform, low-latency, and self-hostable.</strong>
+</p>
 
-# Preview
+<p align="center">
+  <a href="#license"><img src="https://img.shields.io/badge/License-BUSL--1.1-blue.svg" alt="License: BUSL-1.1"></a>
+  <img src="https://img.shields.io/badge/Flutter-3.44.x-02569B?logo=flutter" alt="Flutter">
+  <img src="https://img.shields.io/badge/Supabase-Realtime_%26_DB-3ECF8E?logo=supabase" alt="Supabase">
+  <img src="https://img.shields.io/badge/LiveKit-AV_Mesh-FF5964?logo=webrtc" alt="LiveKit">
+  <img src="https://img.shields.io/badge/Platforms-macOS_%7C_Windows_%7C_Linux_%7C_Android_%7C_iOS-blueviolet" alt="Platforms">
+</p>
+
+---
+
+SyncTogether is a modern cross-platform application for synchronized media playback across devices. Create a **room**, share a 6-character room code (or a `synctogether://join/<code>` invite link), and keep everyone's playback in lockstep — play, pause, and seeks broadcast in real-time, accompanied by synchronized chat, animated emoji reactions, and live voice & video facecams.
+
+## Preview
 
 | Screen | Preview |
 |---|---|
-| Splash | <img src="https://github.com/user-attachments/assets/f6be89db-907d-4b2e-8553-87a2339f1e96" /> |
-| Home | <img src="https://github.com/user-attachments/assets/cbd1b2ae-ba97-48ec-8636-dd2fc29b03a8" /> |
-| Room | <img src="https://github.com/user-attachments/assets/520ddc80-dcb9-4588-a05e-9167e59ec2ca" /> |
+| **Splash** | <img src="https://github.com/user-attachments/assets/f6be89db-907d-4b2e-8553-87a2339f1e96" width="280" /> |
+| **Lobby** | <img src="https://github.com/user-attachments/assets/cbd1b2ae-ba97-48ec-8636-dd2fc29b03a8" width="280" /> |
+| **Room** | <img src="https://github.com/user-attachments/assets/520ddc80-dcb9-4588-a05e-9167e59ec2ca" width="280" /> |
 
+---
 
-## Features
+## Key Features
 
-- **Tiers & Room Limits** — Guest (up to 4 members, 1 h session), Free (up to 8 members, 4 h session, voice facecams, 24 h dormant room retention with 1 free 60-min extension), and Premium (up to 16 members, 24 h sessions, video facecams at 360p, persistent rooms, full extended animated reactions, custom duration extensions).
-- **Resumable Rooms** — Dormant rooms can be resumed by the host from the lobby with playback position seamlessly restored, or ended/deleted by the room creator.
-- **Two Playback Modes** — local video files (via media_kit; each member opens their own copy, with a mismatch warning if the files differ) and YouTube (via custom IFrame bridge).
-- **Sync Engine** — strict lockstep readiness gate, last-action-wins conflict resolution, authority-answered state sync for late joiners, host drift-correction heartbeat, automatic reconnection.
-- **Chat** — persisted per-room history, typing indicators, unread badge.
-- **Quick Reactions** — Meet-style animated Noto Emoji (8 core bundled, extended collection streamed on demand via CDN with cryptographic SHA-256 verification for Premium).
-- **Facecams** — LiveKit-powered voice (Free/Premium) and video (Premium) tiles, with mic/cam toggles.
-- **Web & Subscriptions** — Next.js 15 marketing site and account portal (`website/`) with Paddle Billing checkout and real-time subscription reactivity in the Flutter client.
-- **Auth** — Google sign-in or instant guest accounts (Cloudflare Turnstile protected); guests can upgrade to Google in-place without losing their identity.
-- **Self-Updating Desktop** — macOS and Windows check for new releases on launch and offer a one-click "update & restart" from the lobby.
-- **Design** — dark violet glass aesthetic with desktop, portrait, and landscape layouts.
+- **Strict Lockstep Sync** — Millisecond-level synchronization with readiness gates, host drift-correction heartbeats, and authority-answered state recovery for late joiners.
+- **Two Playback Modes** — Local video files (via `media_kit` hardware-accelerated rendering with file hash mismatch warnings) and YouTube (via internal loopback IFrame bridge).
+- **Voice & Video Facecams** — Multi-participant live AV tiles powered by LiveKit SFU mesh with dynamic mic/camera controls.
+- **Persisted Chat & Quick Reactions** — In-room chat history, typing indicators, and Google Noto animated emoji reactions.
+- **Flexible Authentication** — Instant anonymous guest accounts (protected by Cloudflare Turnstile) or Google Sign-In with seamless in-place identity upgrades.
+- **Resumable & Persistent Rooms** — Dormant rooms can be resumed by the host with playback position preserved, or extended/ended on demand.
+- **Self-Hosting Ready** — Deploy the complete stack (Postgres database, Realtime engine, Edge Functions, LiveKit server, Web portal) on your own infrastructure or cloud free tiers.
+- **Modern Violet Glass UI** — Consistent, dark glassmorphism design system across desktop, tablet, and mobile orientations.
 
-Backend: Supabase (Postgres + RLS, private Realtime channels, edge functions, pg_cron sweeps). AV: LiveKit Cloud. Billing: Paddle Merchant of Record.
+---
 
-## Development setup
+## 🚀 Self-Hosting
 
-### Flutter App
+SyncTogether is designed to be easily self-hosted. You can run it on your home server, local LAN, VPS, or private cloud.
 
-The Flutter SDK is managed with [fvm](https://fvm.app) — prefix every
-`flutter`/`dart` command with `fvm`.
+> 📖 **Full Guide**: See [docs/self-hosting.md](docs/self-hosting.md) for detailed production deployment, Docker Compose recipes, and configuration options.
 
-1. `fvm flutter pub get`
-2. Copy `.env.example` to `.env` in the repo root and fill in the values
-   (Supabase URL + publishable key; `LIVEKIT_URL` and `TURNSTILE_SITE_KEY` are
-   optional — facecams and the guest captcha are hidden/skipped when unset).
-   The app won't build without a `.env` (it's declared as a Flutter asset).
-   **Client-safe values only — `.env` ships inside the app bundle.**
-3. `fvm flutter run -d macos` (or `windows`, `linux`, `android`, `ios`)
+### Quick Start (Managed Hybrid Path)
 
-Lint with `fvm flutter analyze`; test with `fvm flutter test`; release-build with
-`fvm flutter build <platform> --release`.
+1. **Deploy Supabase Backend**:
+   - Create a free project at [database.new](https://database.new).
+   - Push database migrations and RPCs:
+     ```bash
+     supabase login
+     supabase link --project-ref <your-project-ref>
+     supabase db push
+     ```
+2. **Deploy Edge Functions**:
+   - Fill in `supabase/functions/.env` with your LiveKit API keys (from [cloud.livekit.io](https://cloud.livekit.io) or self-hosted server).
+   - Deploy the token minter:
+     ```bash
+     supabase functions deploy livekit-token
+     supabase secrets set --env-file supabase/functions/.env
+     ```
+3. **Build the Client**:
+   - Copy `.env.example` to `.env` and fill in your `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, and `LIVEKIT_URL`.
+   - Build for your platform:
+     ```bash
+     fvm flutter pub get
+     fvm flutter run -d macos  # or windows, linux, android, ios
+     ```
 
-### Web App & Subscriptions (`website/`)
+### Self-Hosted LiveKit (Docker)
 
-The marketing site, download portal, and subscription checkout live in `website/`:
-
-```bash
-cd website
-npm install
-cp .env.example .env.local    # configure Supabase + Paddle sandbox credentials
-npm run dev                   # start Next.js 15 server at http://localhost:3000
-npm test                      # run webhook deduplication & signature tests
-```
-
-To test Paddle webhooks locally, use Hookdeck or the Paddle CLI:
-```bash
-hookdeck listen 3000 synctogether-webhooks --path /api/paddle/webhook
-```
-
-### Backend (Supabase)
-
-Server-side pieces live in `supabase/`. With a linked Supabase CLI:
+To self-host the LiveKit voice/video server on your own VPS or LAN:
 
 ```bash
-supabase db push                                          # schema, RLS, RPCs, cron jobs
-supabase functions deploy livekit-token                   # LiveKit token minting
-supabase secrets set --env-file supabase/functions/.env   # LiveKit key/secret, see .env.example
-supabase config push                                      # auth config (Google OAuth, captcha, redirect URLs)
+# Start LiveKit SFU container
+docker compose -f docker-compose.selfhost.yml up -d
 ```
 
-Server secrets go in `supabase/functions/.env` and `supabase/.env` (both
-gitignored — see the neighbouring `.env.example` files), never in the root
-`.env`. Google OAuth needs a Web OAuth client whose redirect URI is
-`https://<project-ref>.supabase.co/auth/v1/callback`; the Turnstile widget's
-hostname allow-list must include `localhost` (the in-app captcha WebView is
-served from there).
+---
 
-### Testing sync on one machine
+## 🛠 Local Development Setup
 
-Room sync needs two identities, but the macOS app shares one
-preferences domain across instances of the same bundle id. Use the
-helper:
+SyncTogether includes an automated orchestrator script (`./scripts/dev.sh`) to spin up the local development stack (Supabase container stack, Edge Functions runtime, and Next.js web portal) with one command.
+
+### Prerequisites
+
+- [FVM](https://fvm.app) (Flutter Version Management)
+- [Supabase CLI](https://supabase.com/docs/guides/cli) (`brew install supabase/tap/supabase`)
+- [Docker Desktop](https://www.docker.com/) or OrbStack
+- [Node.js](https://nodejs.org/) (v20+)
+
+### Start Development Stack
 
 ```bash
-fvm flutter run -d macos 2>&1 | tee /tmp/pt-run.log   # instance A
-./build/pt-instance-b.sh                              # instance B (logs: /tmp/pt-b.log)
+# Spin up local Supabase, Edge Functions, and Next.js web portal
+./scripts/dev.sh
+
+# Run the Flutter desktop app (Instance A)
+fvm flutter run -d macos
+
+# Run an isolated second client for room testing (Instance B)
+./build/pt-instance-b.sh
+
+# Check ecosystem health
+./scripts/dev.sh status
+
+# Spin down all services and clean up ports
+./scripts/dev.sh down
 ```
 
-The script clones the debug build under a different bundle id so instance B
-gets its own sandbox container and guest identity. Re-run it after rebuilds.
+---
 
-## Installers
+## 🧪 Testing & Code Quality
 
-GitHub Actions (manual trigger) builds a Windows installer (Inno Setup via
-`inno_bundle`) and a macOS DMG. The version comes from `pubspec.yaml`. On
-Windows/Linux the `synctogether://` URL scheme registration is an installer
-concern; macOS/iOS/Android register it via their app manifests.
+SyncTogether maintains comprehensive test coverage across client, database, and web layers:
 
-The same run also publishes a signed `appcast.xml`, which is how installed
-desktop builds update themselves (Sparkle on macOS, WinSparkle on Windows).
-Pre-releases are excluded from that feed, so they never reach existing installs.
+```bash
+# 1. Run Flutter unit & widget tests
+fvm flutter test
 
-## Repository layout
+# 2. Run Supabase pgTAP database RPC & RLS tests
+supabase start && supabase test db
 
-| Path | What lives there |
+# 3. Run Web application & billing webhook tests
+npm --prefix website test
+
+# 4. Run static analysis
+fvm flutter analyze
+```
+
+---
+
+## 📦 Installers & Desktop Self-Updates
+
+Release builds and installer artifacts are built via GitHub Actions (`.github/workflows/`):
+- **macOS**: DMG package with Sparkle-based auto-updater.
+- **Windows**: Inno Setup installer (`dart run inno_bundle`) with WinSparkle auto-updater and `synctogether://` protocol registration.
+- **Linux**: Standalone release bundle.
+- **Android**: Release APK.
+
+---
+
+## 📂 Repository Layout
+
+| Directory | Description |
 |---|---|
-| `lib/ui/` | Design system: theme/tokens, glass panels, buttons, inputs, dialogs |
-| `lib/auth/`, `lib/profile/` | Sign-in flows, Turnstile dialog, profile + avatar, `SubscriptionScreen`, `EntitlementService` |
-| `lib/rooms/` | Lobby, room screen and its widgets, room models/service, dormancy & resume |
-| `lib/sync/` | `SyncService` — the realtime sync engine (see `AGENTS.md` / `CLAUDE.md` for invariants) |
-| `lib/av/` | LiveKit connection + track management |
-| `lib/updates/` | Desktop self-update: appcast check + native updater handoff |
-| `website/` | Next.js 15 marketing site, download portal, changelog, FAQ, auth & Paddle billing portal |
-| `supabase/` | Migrations (schema/RLS/RPCs/cron), edge functions, auth config |
+| `lib/ui/` | Violet glass design system: tokens (`PTColors`, `PTText`), buttons, inputs, loaders (`PTLoader`), dialogs |
+| `lib/auth/`, `lib/profile/` | Authentication flows, Turnstile captcha bridge, user profiles, entitlement management |
+| `lib/rooms/` | Lobby, room screen, participant grid, dormancy/resume engine, room service |
+| `lib/sync/` | Lockstep synchronization engine (`SyncService`, `SyncBackend`, `SyncLogic`) |
+| `lib/av/` | LiveKit SFU audio/video connection & facecam tiles |
+| `lib/updates/` | Desktop self-update service (Sparkle / WinSparkle appcast parser) |
+| `docs/` | In-depth technical documentation & [Self-Hosting Guide](docs/self-hosting.md) |
+| `docker/` | Docker Compose and server configuration templates for self-hosting |
+| `supabase/` | Database migrations (schema, RLS, RPCs, pg_cron), edge functions, auth config |
+| `website/` | Next.js 15 marketing site, download portal, changelog, FAQ, and Paddle billing |
+| `tool/` | Asset generation scripts (audio, emoji, certificates, app icons) |
 
-`AGENTS.md` and `CLAUDE.md` document the architecture and the sync-engine invariants in depth.
+---
 
-## Credits
+## 📄 License & Business Notice
 
-Quick-reaction animations are [Noto Animated Emoji](https://googlefonts.github.io/noto-emoji-animation/)
-by Google, licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
-They're bundled in `assets/emoji/` and refreshed by
-`python3 tool/fetch_reaction_emoji.py`.
+SyncTogether is licensed under the **[Business Source License 1.1 (BUSL-1.1)](LICENSE)**.
+
+### What is permitted:
+- ✅ **Self-Hosting**: You are 100% free to self-host, run, inspect, and modify SyncTogether for personal, educational, family, community, or internal organizational use.
+- ✅ **Contributions & Forking**: You can fork the repository, build custom features, submit pull requests, and deploy private instances.
+
+### What is prohibited:
+- ❌ **Commercial Resale / SaaS**: You may **not** sell SyncTogether as your own product, package it into a commercial distribution, or offer it as a paid commercial hosted service / SaaS to third parties without an explicit commercial license from the authors.
+
+*After a 4-year period from release, the license automatically transitions to the permissive **Apache License, Version 2.0**.*
+
+---
+
+## 👏 Credits & Third-Party Assets
+
+- **Animated Reactions**: [Noto Animated Emoji](https://googlefonts.github.io/noto-emoji-animation/) by Google (licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)).
+- **Video Playback**: [media_kit](https://github.com/media-kit/media-kit) (MPV-backed high performance player for Flutter).
+- **WebRTC Mesh**: [LiveKit](https://livekit.io) real-time video and audio platform.

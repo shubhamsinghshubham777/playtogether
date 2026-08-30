@@ -1,0 +1,33 @@
+# ==============================================================================
+# SyncTogether Self-Hosted LiveKit & Media Server
+# ------------------------------------------------------------------------------
+# Usage:
+#   docker compose -f docker-compose.selfhost.yml up -d
+#   docker compose -f docker-compose.selfhost.yml logs -f
+#   docker compose -f docker-compose.selfhost.yml down
+# ==============================================================================
+
+name: synctogether-selfhost
+
+services:
+  livekit:
+    image: livekit/livekit-server:latest
+    container_name: synctogether-livekit
+    restart: unless-stopped
+    command: --config /etc/livekit.yaml
+    volumes:
+      - ./docker/livekit.yaml:/etc/livekit.yaml:ro
+    ports:
+      # WebSocket signaling and HTTP management
+      - "7880:7880"
+      # WebRTC TCP fallback (for restrictive corporate firewalls)
+      - "7881:7881"
+      # WebRTC UDP traffic (Voice & Video Facecam media streams)
+      - "50000-50100:50000-50100/udp"
+    environment:
+      - LIVEKIT_CONFIG=/etc/livekit.yaml
+    healthcheck:
+      test: ["CMD", "livekit-server", "--version"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
