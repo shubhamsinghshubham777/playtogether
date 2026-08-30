@@ -1,0 +1,17 @@
+{
+  "flutter-analyzer": {
+    "enabled": false,
+    "PostToolUse": [
+      {
+        "matcher": "replace_file_content|write_to_file",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "fvm flutter analyze",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}

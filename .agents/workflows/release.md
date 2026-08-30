@@ -1,1 +1,1 @@
-../../.claude/skills/release/SKILL.md
+../skills/release/SKILL.md
