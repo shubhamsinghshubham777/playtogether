@@ -116,10 +116,9 @@ class AuthService {
     _oauthWindow = null;
   }
 
-  static String get _authRedirectUrl =>
-      kDebugMode && Env.usingLocalStack
-          ? 'http://localhost:3000/auth/desktop-callback'
-          : 'https://synctogether.app/auth/desktop-callback';
+  static String get _authRedirectUrl => kDebugMode && Env.usingLocalStack
+      ? 'http://localhost:3000/auth/desktop-callback'
+      : 'https://synctogether.app/auth/desktop-callback';
 
   /// Browser OAuth + deep-link callback — the one flow that works on every
   /// platform (plan Phase 1). supabase_flutter handles the callback URI.
