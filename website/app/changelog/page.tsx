@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { GlassPanel } from "@/components/GlassPanel";
 import { PTButton } from "@/components/PTButton";
+import { MarkdownRenderer } from "@/components/MarkdownRenderer";
 import { getAllReleases } from "@/lib/github";
 import { Tag, Calendar, ExternalLink, Sparkles } from "lucide-react";
 
@@ -104,8 +105,8 @@ export default async function ChangelogPage() {
                 </div>
 
                 {/* Release Body formatted */}
-                <div className="prose prose-invert prose-purple max-w-none text-xs sm:text-sm text-gray-300 leading-relaxed whitespace-pre-line">
-                  {rel.body}
+                <div className="pt-2">
+                  <MarkdownRenderer content={rel.body} />
                 </div>
               </GlassPanel>
             </div>
