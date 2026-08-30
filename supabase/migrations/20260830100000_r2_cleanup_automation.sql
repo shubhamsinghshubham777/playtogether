@@ -60,12 +60,52 @@ create trigger on_staged_media_deleted_cleanup
   before delete on public.staged_media_uploads
   for each row execute function public.trig_queue_staged_media_deletion();
 
--- 4. App settings default configuration for R2 cleanup worker
+-- 4. Update clear_staged_upload to rely on delete trigger (avoids duplicate pending_r2_deletions)
+create or replace function public.clear_staged_upload(
+  p_staged_id uuid,
+  p_bytes_uploaded bigint default 0
+)
+returns void
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+declare
+  v_staged public.staged_media_uploads%rowtype;
+  v_new_aborts int;
+  v_cooldown timestamptz := null;
+begin
+  select * into v_staged from public.staged_media_uploads where id = p_staged_id;
+  if v_staged.id is null then
+    return;
+  end if;
+
+  -- Abort penalty tracking
+  select coalesce(r2_consecutive_aborts, 0) + 1 into v_new_aborts
+  from public.profiles where id = v_staged.user_id;
+
+  if v_new_aborts >= 5 then
+    v_cooldown := now() + interval '30 minutes';
+  end if;
+
+  update public.profiles set
+    r2_upload_bytes_7d = r2_upload_bytes_7d + p_bytes_uploaded,
+    r2_consecutive_aborts = v_new_aborts,
+    r2_cooldown_until = coalesce(v_cooldown, r2_cooldown_until),
+    active_upload_staged_id = null,
+    active_upload_started_at = null
+  where id = v_staged.user_id;
+
+  -- Deleting row fires on_staged_media_deleted_cleanup trigger to enqueue to pending_r2_deletions
+  delete from public.staged_media_uploads where id = p_staged_id;
+end $$;
+
+-- 5. App settings default configuration for R2 cleanup worker
 insert into public.app_settings (key, value)
 values ('r2_cleanup', '{"enabled": true, "endpoint_url": null, "service_role_key": null}'::jsonb)
 on conflict (key) do nothing;
 
--- 5. Helper function: invoke_r2_cleanup()
+-- 6. Helper function: invoke_r2_cleanup()
 -- Evaluates whether cleanup work exists and invokes the cleanup-r2 edge function via pg_net if configured.
 create or replace function public.invoke_r2_cleanup()
 returns void

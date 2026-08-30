@@ -13,6 +13,11 @@ This project uses [fvm](https://fvm.app) to manage the Flutter SDK version — *
 A `.env` file must exist in the repo root before running or building — it is declared as a Flutter asset, so `flutter build`/`run` fail without it. Copy `.env.example` and fill in `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, and optionally `SUPABASE_URL_LOCAL` + `SUPABASE_PUBLISHABLE_KEY_LOCAL` (see below), `LIVEKIT_URL` (facecams), `TURNSTILE_SITE_KEY` (guest-signup captcha), `SENTRY_DSN` (error reporting — omit it and reporting is disabled, which is normal for local work) and `POSTHOG_API_KEY` (+ `POSTHOG_HOST` only for EU/self-hosted projects; product analytics, likewise disabled when absent). **Never put server secrets in `.env` — it ships inside the app bundle.** A Sentry DSN and a PostHog *project* key are both write-only and public by design, so they belong here rather than under `supabase/` — a PostHog *personal* API key never does. Server-side secrets live in `supabase/functions/.env` and `supabase/.env` (gitignored; see `.env.example` files under `supabase/`).
 
 ```bash
+# Full local dev ecosystem control
+./scripts/dev.sh                        # Spin down previous state & spin up Supabase, Edge Functions & Web
+./scripts/dev.sh down                   # Cleanly spin down all services & free ports
+./scripts/dev.sh status                 # View running status of all components
+
 fvm flutter pub get                 # install dependencies
 fvm flutter run -d macos            # run (or: windows, linux, android, ios)
 fvm flutter analyze                 # lint (flutter_lints via analysis_options.yaml)

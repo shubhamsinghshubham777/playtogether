@@ -57,6 +57,7 @@ supabase/snippets/
 supabase/.env
 supabase/functions/.env
 supabase/.temp/
+.temp/
 
 # Update-signing private keys. The public halves are committed on purpose
 # (windows/runner/resources/dsa_pub.pem, SUPublicEDKey in macos/Runner/Info.plist);
