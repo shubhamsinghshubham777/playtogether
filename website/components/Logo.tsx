@@ -38,7 +38,7 @@ export function Logo({ className = "", size = "md" }: LogoProps) {
         <span
           className={`${s.text} font-bold tracking-tight text-white font-[family-name:var(--font-space-grotesk)]`}
         >
-          Play<span className="text-gradient-accent">Together</span>
+          Sync<span className="text-gradient-accent">Together</span>
         </span>
       </div>
     </Link>
