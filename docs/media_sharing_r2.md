@@ -628,12 +628,14 @@ const supabaseAdmin = createClient(
 
 #### [NEW] `supabase/functions/cleanup-r2/index.ts`
 
-Scheduled worker (triggered via `pg_cron` / Supabase Cron every 5 minutes):
+Scheduled worker (triggered via `pg_cron` + `pg_net` / Supabase Cron every 5 minutes):
 - Reads up to 50 rows from `pending_r2_deletions`.
 - If `upload_id` is present, executes `AbortMultipartUploadCommand`; otherwise executes `DeleteObjectCommand`.
 - Deletes processed rows from `pending_r2_deletions`.
 - Increments `attempts` on failure; drops rows exceeding 5 failed attempts.
 - Sweeps rooms stuck in `'uploading'` state for $> 2\text{ hours}$ and aborts their uploads using the stored `media_upload_id` and `media_r2_key`.
+- Sweeps unclaimed expired staged uploads (`staged_media_uploads`) and aborts/deletes their R2 objects.
+- **Fail-Safe Deletion Triggers**: `BEFORE DELETE` triggers on `public.rooms` and `public.staged_media_uploads` guarantee that whenever a room or staged upload is deleted (manual, RPC, or cascading), any attached R2 keys/upload IDs are automatically pushed to `pending_r2_deletions`.
 
 ---
 
