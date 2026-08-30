@@ -9,33 +9,33 @@ This guide provides complete instructions for self-hosting your own SyncTogether
 SyncTogether consists of four modular layers designed for low latency, secure room state synchronization, and peer-to-peer AV facecams:
 
 ```mermaid
-graph TD
+flowchart TD
     Client["SyncTogether Client<br/>(Desktop macOS/Windows/Linux, Mobile iOS/Android)"]
     
-    subgraph "Backend Infrastructure"
+    subgraph Backend ["Backend Infrastructure"]
         DB[("PostgreSQL Database<br/>(Rooms, Members, Chat, RLS)")]
         Realtime["Supabase Realtime<br/>(Low-Latency Room Lockstep Sync)"]
         Auth["Supabase Auth<br/>(Guest Anonymous & Google OAuth)"]
         Functions["Supabase Edge Functions<br/>(livekit-token, media-share, cleanup-r2)"]
     end
 
-    subgraph "Audio / Video Mesh"
+    subgraph AV ["Audio / Video Mesh"]
         LiveKit["LiveKit SFU Server<br/>(Voice & 360p Video Facecams)"]
     end
 
-    subgraph "Optional Services"
+    subgraph Optional ["Optional Services"]
         R2["Cloudflare R2 / S3<br/>(Shared Media Streaming)"]
         Web["Next.js Web Portal<br/>(App Downloads & Invite Redirects)"]
     end
 
-    Client -->|WebSocket (Realtime Channel)| Realtime
-    Client -->|PostgreSQL RPCs & Auth| DB
-    Client -->|HTTPS REST| Functions
-    Client -->|WebRTC (UDP/TCP)| LiveKit
-    Client -.->|HTTP Upload/Stream| R2
-    Client -.->|Deep Link Invite Bridge| Web
-    Functions -->|Mint Room Token| LiveKit
-    Functions -->|Generate Presigned URLs| R2
+    Client -->|"WebSocket (Realtime Channel)"| Realtime
+    Client -->|"PostgreSQL RPCs & Auth"| DB
+    Client -->|"HTTPS REST"| Functions
+    Client -->|"WebRTC (UDP/TCP)"| LiveKit
+    Client -.->|"HTTP Upload/Stream"| R2
+    Client -.->|"Deep Link Invite Bridge"| Web
+    Functions -->|"Mint Room Token"| LiveKit
+    Functions -->|"Generate Presigned URLs"| R2
 ```
 
 ---
