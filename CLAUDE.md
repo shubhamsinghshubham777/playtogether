@@ -19,7 +19,7 @@ A `.env` file must exist in the repo root before running or building — it is d
 ./scripts/dev.sh status                 # View running status of all components
 
 fvm flutter pub get                 # install dependencies
-fvm flutter run -d macos            # run (or: windows, linux, android, ios)
+fvm flutter run -d macos            # run (or: windows, android, ios)
 fvm flutter analyze                 # lint (flutter_lints via analysis_options.yaml)
 fvm flutter build macos --release   # release build per platform
 

@@ -27,7 +27,7 @@ SyncTogether is a cross-platform Flutter application for synchronized, low-laten
 
 # Flutter Application
 fvm flutter pub get                     # Install dependencies
-fvm flutter run -d macos                # Run on macOS (or: windows, linux, android, ios)
+fvm flutter run -d macos                # Run on macOS (or: windows, android, ios)
 fvm flutter analyze                     # Static analysis (flutter_lints)
 fvm flutter test                        # Run Dart unit/widget test suite
 

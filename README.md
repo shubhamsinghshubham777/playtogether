@@ -13,7 +13,7 @@
   <img src="https://img.shields.io/badge/Flutter-3.44.x-02569B?logo=flutter" alt="Flutter">
   <img src="https://img.shields.io/badge/Supabase-Realtime_%26_DB-3ECF8E?logo=supabase" alt="Supabase">
   <img src="https://img.shields.io/badge/LiveKit-AV_Mesh-FF5964?logo=webrtc" alt="LiveKit">
-  <img src="https://img.shields.io/badge/Platforms-macOS_%7C_Windows_%7C_Linux_%7C_Android_%7C_iOS-blueviolet" alt="Platforms">
+  <img src="https://img.shields.io/badge/Platforms-macOS_%7C_Windows_%7C_Android_%7C_iOS-blueviolet" alt="Platforms">
 </p>
 
 ---
@@ -71,7 +71,7 @@ SyncTogether is designed to be easily self-hosted. You can run it on your home s
    - Build for your platform:
      ```bash
      fvm flutter pub get
-     fvm flutter run -d macos  # or windows, linux, android, ios
+     fvm flutter run -d macos  # or windows, android, ios
      ```
 
 ### Self-Hosted LiveKit (Docker)
@@ -142,7 +142,6 @@ fvm flutter analyze
 Release builds and installer artifacts are built via GitHub Actions (`.github/workflows/`):
 - **macOS**: DMG package with Sparkle-based auto-updater.
 - **Windows**: Inno Setup installer (`dart run inno_bundle`) with WinSparkle auto-updater and `synctogether://` protocol registration.
-- **Linux**: Standalone release bundle.
 - **Android**: Release APK.
 
 ---

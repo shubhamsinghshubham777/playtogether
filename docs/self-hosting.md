@@ -10,7 +10,7 @@ SyncTogether consists of four modular layers designed for low latency, secure ro
 
 ```mermaid
 flowchart TD
-    Client["SyncTogether Client<br/>(Desktop macOS/Windows/Linux, Mobile iOS/Android)"]
+    Client["SyncTogether Client<br/>(Desktop macOS/Windows, Mobile iOS/Android)"]
     
     subgraph Backend ["Backend Infrastructure"]
         DB[("PostgreSQL Database<br/>(Rooms, Members, Chat, RLS)")]
@@ -173,6 +173,9 @@ SyncTogether supports two primary authentication modes:
 
 ### Step 5: Configure and Build Client Applications
 
+> [!NOTE]
+> **Platform Support**: Desktop builds officially target **macOS** and **Windows**. Linux desktop is currently unsupported due to upstream WebView and self-update limitations.
+
 1. Copy `.env.example` to `.env` in the repository root:
    ```bash
    cp .env.example .env
@@ -190,12 +193,11 @@ SyncTogether supports two primary authentication modes:
 fvm flutter pub get
 
 # Run locally in debug mode
-fvm flutter run -d macos    # or windows, linux, android, ios
+fvm flutter run -d macos    # or windows, android, ios
 
 # Build release binaries
 fvm flutter build macos --release     # Builds macOS .app / DMG
 fvm flutter build windows --release   # Builds Windows executable
-fvm flutter build linux --release     # Builds Linux bundle
 fvm flutter build apk --release       # Builds Android APK
 ```
 
