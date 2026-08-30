@@ -24,21 +24,21 @@ export default function TermsPage() {
         </p>
       </div>
 
-      <GlassPanel className="p-8 sm:p-10 space-y-8 text-sm text-gray-300 leading-relaxed border-purple-500/20">
+      <GlassPanel className="p-8 sm:p-10 space-y-8 text-sm sm:text-base text-gray-300 leading-relaxed border-purple-500/20">
         <section className="space-y-3">
-          <h2 className="text-xl font-bold text-white font-[family-name:var(--font-space-grotesk)]">
+          <h2 className="text-xl sm:text-2xl font-bold text-white font-[family-name:var(--font-space-grotesk)]">
             1. Nature of the Service
           </h2>
           <p>
-            SyncTogether is a media synchronization software platform that enables participants to synchronize playback state (play, pause, seek, audio track) for locally stored media files and public YouTube videos across connected devices.
+            SyncTogether is a media synchronization software platform that enables participants to synchronize playback state (play, pause, seek, audio track) for locally stored media files, cloud-shared videos, and public YouTube videos across connected devices.
           </p>
-          <p className="p-3.5 rounded-xl bg-purple-500/10 border border-purple-400/20 text-purple-200 text-xs">
-            <strong>Important:</strong> SyncTogether does not host, upload, re-stream, or distribute audio or video media files. All participants must possess their own local copy of a video file or stream from public web endpoints.
-          </p>
+          <div className="p-4 rounded-xl bg-purple-500/10 border border-purple-400/20 text-purple-200 text-sm">
+            <strong>Important:</strong> In Local Sync mode, SyncTogether does not host or distribute media files — all participants possess their own local copy. In Cloud Media Sharing mode, room hosts may upload videos for temporary streaming to room guests, subject to automated session expiration.
+          </div>
         </section>
 
         <section className="space-y-3">
-          <h2 className="text-xl font-bold text-white font-[family-name:var(--font-space-grotesk)]">
+          <h2 className="text-xl sm:text-2xl font-bold text-white font-[family-name:var(--font-space-grotesk)]">
             2. User Accounts &amp; Identities
           </h2>
           <p>
@@ -47,11 +47,11 @@ export default function TermsPage() {
         </section>
 
         <section className="space-y-3">
-          <h2 className="text-xl font-bold text-white font-[family-name:var(--font-space-grotesk)]">
+          <h2 className="text-xl sm:text-2xl font-bold text-white font-[family-name:var(--font-space-grotesk)]">
             3. Acceptable Use
           </h2>
           <p>You agree not to:</p>
-          <ul className="list-disc list-inside space-y-1.5 text-gray-400 text-xs">
+          <ul className="list-disc list-inside space-y-2 text-gray-300 text-sm sm:text-base">
             <li>Use the service to broadcast abusive, harmful, or illegal communications.</li>
             <li>Interfere with, overburden, or compromise the integrity of our real-time relay infrastructure.</li>
             <li>Attempt to reverse-engineer server APIs or bypass room limits.</li>
@@ -59,7 +59,7 @@ export default function TermsPage() {
         </section>
 
         <section className="space-y-3">
-          <h2 className="text-xl font-bold text-white font-[family-name:var(--font-space-grotesk)]">
+          <h2 className="text-xl sm:text-2xl font-bold text-white font-[family-name:var(--font-space-grotesk)]">
             4. Premium Subscriptions &amp; Billing
           </h2>
           <p>
@@ -71,16 +71,16 @@ export default function TermsPage() {
         </section>
 
         <section className="space-y-3">
-          <h2 className="text-xl font-bold text-white font-[family-name:var(--font-space-grotesk)]">
+          <h2 className="text-xl sm:text-2xl font-bold text-white font-[family-name:var(--font-space-grotesk)]">
             5. User Content &amp; Privacy
           </h2>
           <p>
-            We do not store your media files or full file paths. Room chat messages and quick reactions are session-scoped and purged automatically upon room expiration or closure.
+            In Local Sync mode, we do not upload or store your media files or full directory file paths. In Cloud Media Sharing mode, host-uploaded video files are temporarily hosted in encrypted storage and permanently deleted upon room closure or expiry. Room chat messages and quick reactions are session-scoped and purged automatically upon room expiration or closure. For complete details, see our <a href="/privacy" className="text-purple-300 hover:text-white underline">Privacy Policy</a>.
           </p>
         </section>
 
         <section className="space-y-3">
-          <h2 className="text-xl font-bold text-white font-[family-name:var(--font-space-grotesk)]">
+          <h2 className="text-xl sm:text-2xl font-bold text-white font-[family-name:var(--font-space-grotesk)]">
             6. Service Availability &amp; Disclaimer
           </h2>
           <p>
@@ -89,7 +89,7 @@ export default function TermsPage() {
         </section>
 
         <section className="space-y-3">
-          <h2 className="text-xl font-bold text-white font-[family-name:var(--font-space-grotesk)]">
+          <h2 className="text-xl sm:text-2xl font-bold text-white font-[family-name:var(--font-space-grotesk)]">
             7. Governing Law
           </h2>
           <p>
@@ -98,7 +98,7 @@ export default function TermsPage() {
         </section>
 
         <section className="space-y-3">
-          <h2 className="text-xl font-bold text-white font-[family-name:var(--font-space-grotesk)]">
+          <h2 className="text-xl sm:text-2xl font-bold text-white font-[family-name:var(--font-space-grotesk)]">
             8. Contact Us
           </h2>
           <p>

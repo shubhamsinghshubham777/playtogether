@@ -190,7 +190,7 @@ export const FAQ_ITEMS = [
     questions: [
       {
         q: "What data does SyncTogether collect?",
-        a: "We collect only your basic Google profile (email and display name) for authentication. We never collect or store your file names, full file paths, or file contents. Chat messages are session-scoped and automatically wiped when rooms close."
+        a: "We collect your Google profile (email and display name) for authentication, or assign an anonymous ID for guests. In Local Sync mode, your full disk paths and video files never leave your device (only the basic filename and duration are synced for alignment). In Cloud Media Sharing mode, uploaded files are encrypted and purged when the room ends. Chat messages and reactions are automatically wiped when rooms close."
       },
       {
         q: "Can I opt out of analytics?",
