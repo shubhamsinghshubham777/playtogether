@@ -45,8 +45,8 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Redirect logged-in users away from /auth to /account (or their intended redirect)
-  if (user && pathname.startsWith("/auth") && !pathname.startsWith("/auth/callback")) {
+  // Redirect logged-in users away from the /auth login page to /account (or their intended redirect)
+  if (user && (pathname === "/auth" || pathname === "/auth/")) {
     const redirectParam = request.nextUrl.searchParams.get("redirect");
     const targetPath =
       redirectParam && redirectParam.startsWith("/") && !redirectParam.startsWith("//")
