@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:playtogether/ui/pt_theme.dart';
+import 'package:synctogether/ui/pt_theme.dart';
 
 class PTLogoMark extends StatelessWidget {
   const PTLogoMark({super.key, this.size = 40});

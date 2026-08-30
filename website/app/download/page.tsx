@@ -11,9 +11,9 @@ import {
 } from "lucide-react";
 
 export const metadata: Metadata = {
-  title: "Download PlayTogether for macOS and Windows",
+  title: "Download SyncTogether for macOS and Windows",
   description:
-    "Download the latest version of PlayTogether standalone desktop app for macOS (Apple Silicon & Intel) and Windows 10/11.",
+    "Download the latest version of SyncTogether standalone desktop app for macOS (Apple Silicon & Intel) and Windows 10/11.",
 };
 
 export default async function DownloadPage() {
@@ -31,7 +31,7 @@ export default async function DownloadPage() {
           <span>Latest Release: {release.name || `v${release.version}`}</span>
         </div>
         <h1 className="text-4xl sm:text-6xl font-extrabold text-white tracking-tight font-[family-name:var(--font-space-grotesk)]">
-          Download <span className="text-gradient-brand">PlayTogether.</span>
+          Download <span className="text-gradient-brand">SyncTogether.</span>
         </h1>
         <p className="text-lg text-gray-300">
           Standalone desktop application with native hardware acceleration, zero bloat, and automatic self-updates.
@@ -133,7 +133,7 @@ export default async function DownloadPage() {
             </div>
             <ol className="space-y-2 text-xs text-gray-300 list-decimal list-inside leading-relaxed">
               <li>Download and open the <code className="text-purple-300">.dmg</code> image.</li>
-              <li>Drag <strong>PlayTogether</strong> into your <strong>Applications</strong> folder.</li>
+              <li>Drag <strong>SyncTogether</strong> into your <strong>Applications</strong> folder.</li>
               <li>On first launch, if prompted by Gatekeeper, right-click the app icon and select <strong>Open</strong>.</li>
             </ol>
           </GlassPanel>
@@ -146,7 +146,7 @@ export default async function DownloadPage() {
             <ol className="space-y-2 text-xs text-gray-300 list-decimal list-inside leading-relaxed">
               <li>Download and launch the <code className="text-purple-300">.exe</code> setup wizard.</li>
               <li>Follow the installer prompts and grant required permissions.</li>
-              <li>Launch <strong>PlayTogether</strong> from your Start Menu or Desktop shortcut.</li>
+              <li>Launch <strong>SyncTogether</strong> from your Start Menu or Desktop shortcut.</li>
             </ol>
           </GlassPanel>
         </div>
@@ -164,7 +164,7 @@ export default async function DownloadPage() {
                 Mobile Apps Coming Soon
               </h4>
               <p className="text-xs text-gray-400">
-                PlayTogether is built desktop-first for big screens. iOS and Android companion apps are currently on our roadmap.
+                SyncTogether is built desktop-first for big screens. iOS and Android companion apps are currently on our roadmap.
               </p>
             </div>
           </div>

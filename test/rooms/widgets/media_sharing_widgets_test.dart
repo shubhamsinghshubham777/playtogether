@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:playtogether/rooms/widgets/media_sharing_prompt_dialog.dart';
-import 'package:playtogether/rooms/widgets/media_sharing_toggle.dart';
-import 'package:playtogether/rooms/widgets/sharing_progress_indicator.dart';
+import 'package:synctogether/rooms/widgets/media_sharing_prompt_dialog.dart';
+import 'package:synctogether/rooms/widgets/media_sharing_toggle.dart';
+import 'package:synctogether/rooms/widgets/sharing_progress_indicator.dart';
 
 void main() {
   group('SharingProgressIndicator', () {

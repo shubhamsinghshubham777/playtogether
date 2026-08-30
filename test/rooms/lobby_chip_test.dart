@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:playtogether/profile/profile_models.dart';
+import 'package:synctogether/profile/profile_models.dart';
 
 bool shouldShowPremiumChip({required Profile? profile, required bool isPremium}) {
   return profile != null && !profile.isGuest && !isPremium;

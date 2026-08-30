@@ -1,11 +1,11 @@
 import 'dart:async';
 
 import 'package:clock/clock.dart';
-import 'package:playtogether/analytics.dart';
-import 'package:playtogether/diagnostics.dart';
-import 'package:playtogether/profile/profile_models.dart';
-import 'package:playtogether/rooms/reactions.dart';
-import 'package:playtogether/rooms/room_models.dart';
+import 'package:synctogether/analytics.dart';
+import 'package:synctogether/diagnostics.dart';
+import 'package:synctogether/profile/profile_models.dart';
+import 'package:synctogether/rooms/reactions.dart';
+import 'package:synctogether/rooms/room_models.dart';
 
 import 'sync_backend.dart';
 import 'sync_events.dart';

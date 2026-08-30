@@ -5,15 +5,15 @@ import 'dart:io';
 import 'package:auto_updater/auto_updater.dart';
 import 'package:flutter/foundation.dart';
 import 'package:package_info_plus/package_info_plus.dart';
-import 'package:playtogether/analytics.dart';
-import 'package:playtogether/diagnostics.dart';
-import 'package:playtogether/platform.dart';
-import 'package:playtogether/updates/appcast.dart';
+import 'package:synctogether/analytics.dart';
+import 'package:synctogether/diagnostics.dart';
+import 'package:synctogether/platform.dart';
+import 'package:synctogether/updates/appcast.dart';
 
 const kAppcastUrl =
-    'https://github.com/shubhamsinghshubham777/playtogether/releases/latest/download/appcast.xml';
+    'https://github.com/shubhamsinghshubham777/synctogether/releases/latest/download/appcast.xml';
 
-const _kWinSparkleConfigKey = r'HKCU\Software\app.playtogether\playtogether\WinSparkle';
+const _kWinSparkleConfigKey = r'HKCU\Software\app.synctogether\synctogether\WinSparkle';
 
 class UpdateService extends ChangeNotifier with UpdaterListener {
   UpdateService._();

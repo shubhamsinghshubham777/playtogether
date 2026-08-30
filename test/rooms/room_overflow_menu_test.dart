@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:playtogether/rooms/room_models.dart';
-import 'package:playtogether/rooms/widgets/room_overflow_menu.dart';
-import 'package:playtogether/sync/sync_service.dart';
+import 'package:synctogether/rooms/room_models.dart';
+import 'package:synctogether/rooms/widgets/room_overflow_menu.dart';
+import 'package:synctogether/sync/sync_service.dart';
 
 void main() {
   group('RoomOverflowMenu', () {

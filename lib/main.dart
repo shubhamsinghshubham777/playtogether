@@ -5,23 +5,23 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:media_kit/media_kit.dart';
-import 'package:playtogether/analytics.dart';
-import 'package:playtogether/analytics_consent.dart';
-import 'package:playtogether/app_router.dart';
-import 'package:playtogether/app_version.dart';
-import 'package:playtogether/auth/auth_service.dart';
-import 'package:playtogether/auth/webview_runtime.dart';
-import 'package:playtogether/diagnostics.dart';
-import 'package:playtogether/env.dart';
-import 'package:playtogether/platform.dart';
-import 'package:playtogether/rooms/room_models.dart';
-import 'package:playtogether/rooms/room_service.dart';
-import 'package:playtogether/tls.dart';
-import 'package:playtogether/updates/update_service.dart';
-import 'package:playtogether/ui/banners.dart';
-import 'package:playtogether/ui/pt_theme.dart';
-import 'package:playtogether/ui/responsive.dart';
-import 'package:playtogether/ui/splash_screen.dart';
+import 'package:synctogether/analytics.dart';
+import 'package:synctogether/analytics_consent.dart';
+import 'package:synctogether/app_router.dart';
+import 'package:synctogether/app_version.dart';
+import 'package:synctogether/auth/auth_service.dart';
+import 'package:synctogether/auth/webview_runtime.dart';
+import 'package:synctogether/diagnostics.dart';
+import 'package:synctogether/env.dart';
+import 'package:synctogether/platform.dart';
+import 'package:synctogether/rooms/room_models.dart';
+import 'package:synctogether/rooms/room_service.dart';
+import 'package:synctogether/tls.dart';
+import 'package:synctogether/updates/update_service.dart';
+import 'package:synctogether/ui/banners.dart';
+import 'package:synctogether/ui/pt_theme.dart';
+import 'package:synctogether/ui/responsive.dart';
+import 'package:synctogether/ui/splash_screen.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:window_manager/window_manager.dart';
@@ -132,11 +132,11 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
   String? _lastLinkHandled;
   DateTime _lastLinkHandledAt = DateTime.fromMillisecondsSinceEpoch(0);
 
-  /// playtogether://join/<code> — invite links. The auth callback URI also
+  /// synctogether://join/<code> — invite links. The auth callback URI also
   /// flows through this stream (it's a broadcast shared with supabase_flutter);
   /// the `join` host filter is what keeps it out of this handler.
   Future<void> _onDeepLink(Uri uri, {required String source}) async {
-    if (uri.scheme != 'playtogether' || uri.host != 'join') return;
+    if (uri.scheme != 'synctogether' || uri.host != 'join') return;
     final code = uri.pathSegments.isNotEmpty ? uri.pathSegments.first : null;
     if (code == null || code.isEmpty) return;
 
@@ -204,7 +204,7 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     return MaterialApp.router(
-      title: 'PlayTogether',
+      title: 'SyncTogether',
       debugShowCheckedModeBanner: false,
       scaffoldMessengerKey: _scaffoldMessengerKey,
       theme: buildPTTheme(),

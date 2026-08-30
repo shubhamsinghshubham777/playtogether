@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:playtogether/rooms/widgets/room_control_bar.dart';
-import 'package:playtogether/ui/inputs.dart';
+import 'package:synctogether/rooms/widgets/room_control_bar.dart';
+import 'package:synctogether/ui/inputs.dart';
 
 RoomControlBarActions _dummyActions() => RoomControlBarActions(
   onPlayPause: () {},

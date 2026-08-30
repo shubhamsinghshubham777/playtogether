@@ -3,9 +3,9 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
-import 'package:playtogether/diagnostics.dart';
-import 'package:playtogether/ui/pt_motion.dart';
-import 'package:playtogether/ui/pt_theme.dart';
+import 'package:synctogether/diagnostics.dart';
+import 'package:synctogether/ui/pt_motion.dart';
+import 'package:synctogether/ui/pt_theme.dart';
 
 /// Total run: logo in, hold, cross-fade out.
 const _kTotal = Duration(milliseconds: 1800);
@@ -314,7 +314,7 @@ class _Wordmark extends StatelessWidget {
         // so the two read as one object springing in.
         alignment: .centerLeft,
         child: const Text(
-          'PlayTogether',
+          'SyncTogether',
           style: TextStyle(
             fontFamily: PTFonts.display,
             fontSize: 42,

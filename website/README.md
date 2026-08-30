@@ -1,6 +1,6 @@
-# PlayTogether Web Portal
+# SyncTogether Web Portal
 
-The official web application for [PlayTogether](https://playtogether.app) — featuring the marketing landing page, app downloads, release changelogs, FAQ and legal policies, Supabase authentication, and Paddle Merchant of Record (MoR) billing checkout & account management.
+The official web application for [SyncTogether](https://synctogether.app) — featuring the marketing landing page, app downloads, release changelogs, FAQ and legal policies, Supabase authentication, and Paddle Merchant of Record (MoR) billing checkout & account management.
 
 ## Tech Stack
 
@@ -59,7 +59,7 @@ Paddle webhooks can be forwarded to your local development server using [Hookdec
 
 ```bash
 # Using Hookdeck
-hookdeck listen 3000 playtogether-webhooks --path /api/paddle/webhook
+hookdeck listen 3000 synctogether-webhooks --path /api/paddle/webhook
 
 # Using Paddle CLI
 paddle webhook:listen --url http://localhost:3000/api/paddle/webhook

@@ -4,8 +4,8 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
-import 'package:playtogether/diagnostics.dart';
-import 'package:playtogether/rooms/reactions.dart';
+import 'package:synctogether/diagnostics.dart';
+import 'package:synctogether/rooms/reactions.dart';
 
 typedef ReactionFetcher = Future<List<int>> Function(Uri url);
 

@@ -5,12 +5,12 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:lottie/lottie.dart';
-import 'package:playtogether/diagnostics.dart';
-import 'package:playtogether/rooms/reaction_cdn.dart';
-import 'package:playtogether/rooms/reactions.dart';
-import 'package:playtogether/sync/sync_events.dart';
-import 'package:playtogether/ui/pt_motion.dart';
-import 'package:playtogether/ui/pt_theme.dart';
+import 'package:synctogether/diagnostics.dart';
+import 'package:synctogether/rooms/reaction_cdn.dart';
+import 'package:synctogether/rooms/reactions.dart';
+import 'package:synctogether/sync/sync_events.dart';
+import 'package:synctogether/ui/pt_motion.dart';
+import 'package:synctogether/ui/pt_theme.dart';
 
 class ReactionAssets {
   ReactionAssets({ReactionCdn? cdn}) : _cdn = cdn ?? ReactionCdn.instance;

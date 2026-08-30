@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
-import 'package:playtogether/ui/buttons.dart';
-import 'package:playtogether/ui/pt_theme.dart';
+import 'package:synctogether/ui/buttons.dart';
+import 'package:synctogether/ui/pt_theme.dart';
 
 /// Body for [showGlassDialog]. Pops `true` to remove and let them back in,
 /// `false` to remove and bar them for the life of the room, null to cancel —

@@ -8,7 +8,7 @@
 
 int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
                       _In_ wchar_t *command_line, _In_ int show_command) {
-  // Windows delivers a playtogether:// URI by launching a *fresh* process with
+  // Windows delivers a synctogether:// URI by launching a *fresh* process with
   // the URI as argv[1]; it has no way to poke the running app. This hands the
   // link to an existing instance over WM_COPYDATA (what feeds uriLinkStream)
   // and focuses it. Without it the OAuth callback signs a second, invisible
@@ -40,7 +40,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   FlutterWindow window(project);
   Win32Window::Point origin(10, 10);
   Win32Window::Size size(1280, 720);
-  if (!window.Create(L"PlayTogether", origin, size)) {
+  if (!window.Create(L"SyncTogether", origin, size)) {
     return EXIT_FAILURE;
   }
   window.SetQuitOnClose(true);

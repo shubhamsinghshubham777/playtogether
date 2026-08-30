@@ -1,5 +1,5 @@
 import 'package:package_info_plus/package_info_plus.dart';
-import 'package:playtogether/diagnostics.dart';
+import 'package:synctogether/diagnostics.dart';
 
 abstract final class AppVersion {
   static String? current;

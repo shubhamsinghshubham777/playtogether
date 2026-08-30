@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
-import 'package:playtogether/analytics.dart';
+import 'package:synctogether/analytics.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'room_models.dart';

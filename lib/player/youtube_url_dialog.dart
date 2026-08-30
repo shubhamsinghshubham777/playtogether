@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
-import 'package:playtogether/player/youtube/youtube_links.dart';
-import 'package:playtogether/ui/buttons.dart';
-import 'package:playtogether/ui/inputs.dart';
-import 'package:playtogether/ui/pt_theme.dart';
+import 'package:synctogether/player/youtube/youtube_links.dart';
+import 'package:synctogether/ui/buttons.dart';
+import 'package:synctogether/ui/inputs.dart';
+import 'package:synctogether/ui/pt_theme.dart';
 
 /// Body for [showGlassDialog]; pops the validated URL string.
 class YouTubeUrlDialog extends StatefulWidget {

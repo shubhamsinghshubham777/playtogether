@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:playtogether/player/youtube/youtube_links.dart';
+import 'package:synctogether/player/youtube/youtube_links.dart';
 
 void main() {
   group('youtubeVideoId', () {

@@ -2,9 +2,9 @@ import 'dart:async';
 
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:playtogether/rooms/room_models.dart';
-import 'package:playtogether/sync/sync_events.dart';
-import 'package:playtogether/sync/sync_service.dart';
+import 'package:synctogether/rooms/room_models.dart';
+import 'package:synctogether/sync/sync_events.dart';
+import 'package:synctogether/sync/sync_service.dart';
 
 import 'fakes.dart';
 

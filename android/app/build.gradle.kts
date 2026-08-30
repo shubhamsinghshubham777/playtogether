@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "app.playtogether.playtogether"
+    namespace = "app.synctogether.synctogether"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -20,7 +20,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "app.playtogether.android"
+        applicationId = "app.synctogether.android"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion

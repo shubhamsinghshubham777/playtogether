@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:playtogether/profile/entitlement_service.dart';
-import 'package:playtogether/rooms/room_models.dart';
+import 'package:synctogether/profile/entitlement_service.dart';
+import 'package:synctogether/rooms/room_models.dart';
 
 void main() {
   group('EntitlementService', () {

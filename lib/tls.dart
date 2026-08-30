@@ -1,7 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/services.dart';
-import 'package:playtogether/diagnostics.dart';
+import 'package:synctogether/diagnostics.dart';
 
 /// Widens the set of CA roots the app trusts, and names the certificate behind
 /// any handshake that still fails.

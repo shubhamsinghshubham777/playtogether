@@ -90,7 +90,7 @@ jobs:
       - name: Build iss script
         run: dart run inno_bundle --no-app --release --no-installer
 
-      # Adds the playtogether:// protocol handler (OAuth callbacks) and the
+      # Adds the synctogether:// protocol handler (OAuth callbacks) and the
       # WebView2 runtime (guest captcha) — neither is expressible in the
       # inno_bundle config, and it rewrites the script on every build.
       - name: Patch installer script
@@ -103,10 +103,10 @@ jobs:
 
       - name: Rename installer
         run: |
-          mv "./build/windows/x64/installer/Release/PlayTogether-x86_64-${{ steps.version.outputs.APP_VERSION }}-Installer.exe" "./PlayTogether-${{ steps.version.outputs.APP_VERSION }}-Windows.exe"
+          mv "./build/windows/x64/installer/Release/SyncTogether-x86_64-${{ steps.version.outputs.APP_VERSION }}-Installer.exe" "./SyncTogether-${{ steps.version.outputs.APP_VERSION }}-Windows.exe"
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
           name: windows-installer
-          path: ./PlayTogether-${{ steps.version.outputs.APP_VERSION }}-Windows.exe
+          path: ./SyncTogether-${{ steps.version.outputs.APP_VERSION }}-Windows.exe

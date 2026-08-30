@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
-import 'package:playtogether/ui/pt_motion.dart';
-import 'package:playtogether/ui/pt_theme.dart';
+import 'package:synctogether/ui/pt_motion.dart';
+import 'package:synctogether/ui/pt_theme.dart';
 
 enum InitialMode { local, youtube }
 

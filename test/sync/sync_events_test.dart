@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:playtogether/sync/sync_events.dart';
+import 'package:synctogether/sync/sync_events.dart';
 
 typedef Revive = SyncEvent Function(Map<String, dynamic>);
 

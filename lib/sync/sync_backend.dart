@@ -1,6 +1,6 @@
 import 'package:media_kit/media_kit.dart';
-import 'package:playtogether/rooms/room_models.dart';
-import 'package:playtogether/rooms/room_service.dart';
+import 'package:synctogether/rooms/room_models.dart';
+import 'package:synctogether/rooms/room_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'sync_logic.dart';

@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:playtogether/profile/subscription_screen.dart';
+import 'package:synctogether/profile/subscription_screen.dart';
 
 void main() {
   group('checkout and account URLs', () {
@@ -9,8 +9,8 @@ void main() {
         expect(checkoutUrl, 'http://localhost:3000/premium');
         expect(accountUrl, 'http://localhost:3000/account');
       } else {
-        expect(checkoutUrl, 'https://playtogether.app/premium');
-        expect(accountUrl, 'https://playtogether.app/account');
+        expect(checkoutUrl, 'https://synctogether.app/premium');
+        expect(accountUrl, 'https://synctogether.app/account');
       }
     });
   });

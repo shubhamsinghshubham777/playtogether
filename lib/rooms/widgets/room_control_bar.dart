@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
-import 'package:playtogether/ui/buttons.dart';
-import 'package:playtogether/ui/glass.dart';
-import 'package:playtogether/ui/inputs.dart';
-import 'package:playtogether/ui/pt_motion.dart';
-import 'package:playtogether/ui/pt_theme.dart';
+import 'package:synctogether/ui/buttons.dart';
+import 'package:synctogether/ui/glass.dart';
+import 'package:synctogether/ui/inputs.dart';
+import 'package:synctogether/ui/pt_motion.dart';
+import 'package:synctogether/ui/pt_theme.dart';
 
 class RoomControlBarActions {
   const RoomControlBarActions({

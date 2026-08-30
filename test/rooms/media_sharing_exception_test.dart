@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:playtogether/rooms/media_sharing_service.dart';
+import 'package:synctogether/rooms/media_sharing_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 void main() {

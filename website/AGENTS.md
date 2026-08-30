@@ -8,10 +8,10 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 <!-- END:nextjs-agent-rules -->
 
-## PlayTogether Web Portal Architecture & Guidelines
+## SyncTogether Web Portal Architecture & Guidelines
 
 ### Overview
-This Next.js 15 application serves as the marketing site, downloads portal, legal documentation, authentication bridge, and Paddle Merchant of Record (MoR) subscription & account management portal for PlayTogether.
+This Next.js 15 application serves as the marketing site, downloads portal, legal documentation, authentication bridge, and Paddle Merchant of Record (MoR) subscription & account management portal for SyncTogether.
 
 ### Supabase SSR Patterns
 - **Client Components**: Use `createClient()` from `lib/supabase/client.ts` (`createBrowserClient`).

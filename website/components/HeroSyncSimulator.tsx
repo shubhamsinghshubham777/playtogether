@@ -177,7 +177,7 @@ export function HeroSyncSimulator() {
             <div className="w-3 h-3 rounded-full bg-[#FFBD2E] border border-black/20" />
             <div className="w-3 h-3 rounded-full bg-[#27C93F] border border-black/20" />
             <span className="text-xs font-medium text-gray-300 ml-2 font-[family-name:var(--font-outfit)]">
-              PlayTogether
+              SyncTogether
             </span>
           </div>
 

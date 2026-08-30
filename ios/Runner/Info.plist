@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>PlayTogether</string>
+	<string>SyncTogether</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -15,7 +15,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>PlayTogether</string>
+	<string>SyncTogether</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -26,10 +26,10 @@
 	<array>
 		<dict>
 			<key>CFBundleURLName</key>
-			<string>com.playtogether.deeplink</string>
+			<string>app.synctogether.deeplink</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>playtogether</string>
+				<string>synctogether</string>
 			</array>
 		</dict>
 	</array>
@@ -38,9 +38,9 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>PlayTogether uses your camera for facecams during watch parties.</string>
+	<string>SyncTogether uses your camera for facecams during watch parties.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>PlayTogether uses your microphone for voice chat during watch parties.</string>
+	<string>SyncTogether uses your microphone for voice chat during watch parties.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

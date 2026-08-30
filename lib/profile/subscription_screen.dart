@@ -4,25 +4,25 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
-import 'package:playtogether/analytics.dart';
-import 'package:playtogether/diagnostics.dart';
-import 'package:playtogether/platform.dart';
-import 'package:playtogether/profile/entitlement_service.dart';
-import 'package:playtogether/profile/profile_service.dart';
-import 'package:playtogether/ui/banners.dart';
-import 'package:playtogether/ui/buttons.dart';
-import 'package:playtogether/ui/glass.dart';
-import 'package:playtogether/ui/identity.dart';
-import 'package:playtogether/ui/loader.dart';
-import 'package:playtogether/ui/pt_theme.dart';
-import 'package:playtogether/ui/responsive.dart';
+import 'package:synctogether/analytics.dart';
+import 'package:synctogether/diagnostics.dart';
+import 'package:synctogether/platform.dart';
+import 'package:synctogether/profile/entitlement_service.dart';
+import 'package:synctogether/profile/profile_service.dart';
+import 'package:synctogether/ui/banners.dart';
+import 'package:synctogether/ui/buttons.dart';
+import 'package:synctogether/ui/glass.dart';
+import 'package:synctogether/ui/identity.dart';
+import 'package:synctogether/ui/loader.dart';
+import 'package:synctogether/ui/pt_theme.dart';
+import 'package:synctogether/ui/responsive.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 String get checkoutUrl =>
-    kDebugMode ? 'http://localhost:3000/premium' : 'https://playtogether.app/premium';
+    kDebugMode ? 'http://localhost:3000/premium' : 'https://synctogether.app/premium';
 
 String get accountUrl =>
-    kDebugMode ? 'http://localhost:3000/account' : 'https://playtogether.app/account';
+    kDebugMode ? 'http://localhost:3000/account' : 'https://synctogether.app/account';
 
 class SubscriptionScreen extends StatefulWidget {
   const SubscriptionScreen({super.key, this.source, this.desktopOverride});
@@ -68,12 +68,12 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> with WidgetsBin
     try {
       final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
       if (!launched && mounted) {
-        showPTSnack(context, "Couldn't open browser. Please visit playtogether.app/premium");
+        showPTSnack(context, "Couldn't open browser. Please visit synctogether.app/premium");
       }
     } catch (e, s) {
       reportNonFatal(e, s, during: 'launching checkout url');
       if (mounted) {
-        showPTSnack(context, "Couldn't open browser. Please visit playtogether.app/premium");
+        showPTSnack(context, "Couldn't open browser. Please visit synctogether.app/premium");
       }
     }
   }
@@ -85,7 +85,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> with WidgetsBin
     } catch (e, s) {
       reportNonFatal(e, s, during: 'launching account url');
       if (mounted) {
-        showPTSnack(context, "Couldn't open browser. Please visit playtogether.app/account");
+        showPTSnack(context, "Couldn't open browser. Please visit synctogether.app/account");
       }
     }
   }
@@ -184,7 +184,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> with WidgetsBin
           onPressed: () => context.canPop() ? context.pop() : context.go('/lobby'),
         ),
         Text(
-          'PlayTogether Premium',
+          'SyncTogether Premium',
           style: compact ? PTText.cardHeading.copyWith(fontSize: 18) : PTText.cardHeading,
         ),
       ],

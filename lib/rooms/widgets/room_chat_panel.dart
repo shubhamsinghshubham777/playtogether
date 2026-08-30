@@ -4,14 +4,14 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:material_symbols_icons/symbols.dart';
-import 'package:playtogether/platform.dart';
-import 'package:playtogether/player/youtube/youtube_links.dart';
-import 'package:playtogether/sync/sync_service.dart';
-import 'package:playtogether/ui/buttons.dart';
-import 'package:playtogether/ui/glass.dart';
-import 'package:playtogether/ui/identity.dart';
-import 'package:playtogether/ui/pt_motion.dart';
-import 'package:playtogether/ui/pt_theme.dart';
+import 'package:synctogether/platform.dart';
+import 'package:synctogether/player/youtube/youtube_links.dart';
+import 'package:synctogether/sync/sync_service.dart';
+import 'package:synctogether/ui/buttons.dart';
+import 'package:synctogether/ui/glass.dart';
+import 'package:synctogether/ui/identity.dart';
+import 'package:synctogether/ui/pt_motion.dart';
+import 'package:synctogether/ui/pt_theme.dart';
 
 class RoomChatPanel extends StatefulWidget {
   const RoomChatPanel({

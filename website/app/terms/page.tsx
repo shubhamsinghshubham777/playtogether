@@ -4,7 +4,7 @@ import { SITE_CONFIG } from "@/lib/constants";
 
 export const metadata: Metadata = {
   title: "Terms of Service",
-  description: "Terms of Service and conditions for using the PlayTogether application and services.",
+  description: "Terms of Service and conditions for using the SyncTogether application and services.",
 };
 
 export default function TermsPage() {
@@ -30,10 +30,10 @@ export default function TermsPage() {
             1. Nature of the Service
           </h2>
           <p>
-            PlayTogether is a media synchronization software platform that enables participants to synchronize playback state (play, pause, seek, audio track) for locally stored media files and public YouTube videos across connected devices.
+            SyncTogether is a media synchronization software platform that enables participants to synchronize playback state (play, pause, seek, audio track) for locally stored media files and public YouTube videos across connected devices.
           </p>
           <p className="p-3.5 rounded-xl bg-purple-500/10 border border-purple-400/20 text-purple-200 text-xs">
-            <strong>Important:</strong> PlayTogether does not host, upload, re-stream, or distribute audio or video media files. All participants must possess their own local copy of a video file or stream from public web endpoints.
+            <strong>Important:</strong> SyncTogether does not host, upload, re-stream, or distribute audio or video media files. All participants must possess their own local copy of a video file or stream from public web endpoints.
           </p>
         </section>
 
@@ -42,7 +42,7 @@ export default function TermsPage() {
             2. User Accounts &amp; Identities
           </h2>
           <p>
-            You may use PlayTogether as a Guest without registration, or authenticate using Google OAuth. You agree to maintain the security of your account and take full responsibility for all activities occurring under your identity.
+            You may use SyncTogether as a Guest without registration, or authenticate using Google OAuth. You agree to maintain the security of your account and take full responsibility for all activities occurring under your identity.
           </p>
         </section>
 
@@ -84,7 +84,7 @@ export default function TermsPage() {
             6. Service Availability &amp; Disclaimer
           </h2>
           <p>
-            PlayTogether is provided on an &ldquo;as is&rdquo; and &ldquo;as available&rdquo; basis without warranties of any kind. We do not guarantee uninterrupted or error-free operation.
+            SyncTogether is provided on an &ldquo;as is&rdquo; and &ldquo;as available&rdquo; basis without warranties of any kind. We do not guarantee uninterrupted or error-free operation.
           </p>
         </section>
 

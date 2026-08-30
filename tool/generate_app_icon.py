@@ -1,4 +1,4 @@
-"""Build the PlayTogether app-icon source art in assets/icon/.
+"""Build the SyncTogether app-icon source art in assets/icon/.
 
 The art mirrors the in-app wordmark logo (`_Wordmark` in
 lib/rooms/lobby_screen.dart): a rounded square filled with

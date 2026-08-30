@@ -112,7 +112,7 @@ function AuthCard() {
           <Logo size="lg" />
         </div>
         <h1 className="text-2xl font-bold text-white font-[family-name:var(--font-space-grotesk)]">
-          Welcome to PlayTogether
+          Welcome to SyncTogether
         </h1>
         <p className="text-xs text-gray-400 leading-relaxed">
           Sign in with your Google account to manage your subscription, unlock 4-hour rooms, and sync across all your devices.

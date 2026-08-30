@@ -2,8 +2,8 @@ import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:playtogether/rooms/reaction_cdn.dart';
-import 'package:playtogether/rooms/reactions.dart';
+import 'package:synctogether/rooms/reaction_cdn.dart';
+import 'package:synctogether/rooms/reactions.dart';
 
 const _lottie = '{"v":"5.0","fr":60,"op":120,"w":512,"h":512,"layers":[{"ty":4}]}';
 

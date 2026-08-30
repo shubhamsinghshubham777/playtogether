@@ -10,9 +10,9 @@
     <application
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
-        android:label="PlayTogether">
+        android:label="SyncTogether">
         <activity
-            android:name="app.playtogether.android.MainActivity"
+            android:name="app.synctogether.android.MainActivity"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:exported="true"
             android:hardwareAccelerated="true"
@@ -35,7 +35,7 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="playtogether" />
+                <data android:scheme="synctogether" />
             </intent-filter>
         </activity>
         <!-- Don't delete the meta-data below.

@@ -5,7 +5,7 @@ import { ShieldCheck } from "lucide-react";
 
 export const metadata: Metadata = {
   title: "Privacy Policy",
-  description: "Learn how PlayTogether protects your privacy, your media data, and your account information.",
+  description: "Learn how SyncTogether protects your privacy, your media data, and your account information.",
 };
 
 export default function PrivacyPage() {
@@ -33,7 +33,7 @@ export default function PrivacyPage() {
               <span>Our Privacy Pledge</span>
             </div>
             <p>
-              PlayTogether is designed around privacy by architecture: your local media file contents, absolute disk file paths, and video bytes never leave your device. We do not sell user data.
+              SyncTogether is designed around privacy by architecture: your local media file contents, absolute disk file paths, and video bytes never leave your device. We do not sell user data.
             </p>
           </div>
         </section>
@@ -99,7 +99,7 @@ export default function PrivacyPage() {
             You have full control over your personal information:
           </p>
           <ul className="space-y-1.5 text-xs text-gray-400 list-disc list-inside">
-            <li><strong>Delete Account:</strong> You can permanently delete your account and all associated records directly inside the PlayTogether desktop app.</li>
+            <li><strong>Delete Account:</strong> You can permanently delete your account and all associated records directly inside the SyncTogether desktop app.</li>
             <li><strong>Export Data:</strong> You can export a full JSON dump of your profile and subscription record at any time from your Account dashboard.</li>
             <li><strong>Opt Out:</strong> You can disable analytics telemetry in one click.</li>
           </ul>
@@ -110,7 +110,7 @@ export default function PrivacyPage() {
             5. Cookies
           </h2>
           <p>
-            The PlayTogether website uses only strictly essential cookies required to manage your authenticated user session. We do not use third-party advertising or cross-site tracking cookies.
+            The SyncTogether website uses only strictly essential cookies required to manage your authenticated user session. We do not use third-party advertising or cross-site tracking cookies.
           </p>
         </section>
 

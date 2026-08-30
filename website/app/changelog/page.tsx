@@ -6,7 +6,7 @@ import { Tag, Calendar, ExternalLink, Sparkles } from "lucide-react";
 
 export const metadata: Metadata = {
   title: "Changelog & Release Notes",
-  description: "Explore the latest updates, features, improvements, and fixes in PlayTogether releases.",
+  description: "Explore the latest updates, features, improvements, and fixes in SyncTogether releases.",
 };
 
 export const revalidate = 3600; // ISR hourly
@@ -18,7 +18,7 @@ export default async function ChangelogPage() {
     {
       id: 1,
       tag_name: "v0.11.0",
-      name: "PlayTogether 0.11.0 — Facecams & Persistent Rooms",
+      name: "SyncTogether 0.11.0 — Facecams & Persistent Rooms",
       published_at: "2026-08-11T12:00:00Z",
       body: `### New Features
 - **Video & Voice Facecams**: Real-time HD Video and low-latency Voice facecams integrated directly into rooms.
@@ -29,18 +29,18 @@ export default async function ChangelogPage() {
 ### Performance & Engine
 - Upgraded video playback engine with improved hardware decoding on macOS & Windows.
 - Clock-skew resistant server time synchronization for millisecond-accurate play/pause events.`,
-      html_url: "https://github.com/shubhamsinghshubham777/playtogether/releases",
+      html_url: "https://github.com/shubhamsinghshubham777/synctogether/releases",
     },
     {
       id: 2,
       tag_name: "v0.10.0",
-      name: "PlayTogether 0.10.0 — Redesigned Violet Glass Interface",
+      name: "SyncTogether 0.10.0 — Redesigned Violet Glass Interface",
       published_at: "2026-08-04T10:00:00Z",
       body: `### Highlights
 - Complete design overhaul featuring violet glassmorphism aesthetics and custom typography (Space Grotesk, Outfit, JetBrains Mono).
 - YouTube playback integration with shared seekbar synchronization.
 - Real-time room chat with typing presence and per-user avatar styling.`,
-      html_url: "https://github.com/shubhamsinghshubham777/playtogether/releases",
+      html_url: "https://github.com/shubhamsinghshubham777/synctogether/releases",
     },
   ];
 
@@ -61,7 +61,7 @@ export default async function ChangelogPage() {
           Changelog &amp; <span className="text-gradient-brand">Releases.</span>
         </h1>
         <p className="text-base text-gray-300">
-          Stay up to date with the latest features, improvements, and performance upgrades in PlayTogether.
+          Stay up to date with the latest features, improvements, and performance upgrades in SyncTogether.
         </p>
       </div>
 

@@ -38,23 +38,23 @@ const FALLBACK_RELEASE: ReleaseAssetInfo = {
   tagName: `v${FALLBACK_VERSION}`,
   name: `v${FALLBACK_VERSION}`,
   publishedAt: "2026-08-11T12:00:00Z",
-  macDownloadUrl: `https://github.com/shubhamsinghshubham777/playtogether/releases/download/v${FALLBACK_VERSION}/PlayTogether-${FALLBACK_VERSION}-macOS.dmg`,
+  macDownloadUrl: `https://github.com/shubhamsinghshubham777/synctogether/releases/download/v${FALLBACK_VERSION}/SyncTogether-${FALLBACK_VERSION}-macOS.dmg`,
   macSizeMb: 42.5,
-  winDownloadUrl: `https://github.com/shubhamsinghshubham777/playtogether/releases/download/v${FALLBACK_VERSION}/PlayTogether-${FALLBACK_VERSION}-Windows.exe`,
+  winDownloadUrl: `https://github.com/shubhamsinghshubham777/synctogether/releases/download/v${FALLBACK_VERSION}/SyncTogether-${FALLBACK_VERSION}-Windows.exe`,
   winSizeMb: 38.2,
   body: "### What's New\n- Synchronized local media & YouTube player enhancements\n- Real-time Voice & Video facecams\n- Persistent room memory and tier entitlements\n- Desktop fullscreen & keyboard shortcuts (F, Esc, Space)",
-  htmlUrl: `https://github.com/shubhamsinghshubham777/playtogether/releases/tag/v${FALLBACK_VERSION}`,
+  htmlUrl: `https://github.com/shubhamsinghshubham777/synctogether/releases/tag/v${FALLBACK_VERSION}`,
 };
 
 export async function getLatestRelease(): Promise<ReleaseAssetInfo> {
   try {
     const res = await fetch(
-      "https://api.github.com/repos/shubhamsinghshubham777/playtogether/releases/latest",
+      "https://api.github.com/repos/shubhamsinghshubham777/synctogether/releases/latest",
       {
         next: { revalidate: 3600 },
         headers: {
           Accept: "application/vnd.github.v3+json",
-          "User-Agent": "PlayTogether-Website",
+          "User-Agent": "SyncTogether-Website",
         },
       }
     );
@@ -82,11 +82,11 @@ export async function getLatestRelease(): Promise<ReleaseAssetInfo> {
       publishedAt: data.published_at,
       macDownloadUrl:
         macAsset?.browser_download_url ||
-        `https://github.com/shubhamsinghshubham777/playtogether/releases/download/${data.tag_name}/PlayTogether-${cleanVersion}-macOS.dmg`,
+        `https://github.com/shubhamsinghshubham777/synctogether/releases/download/${data.tag_name}/SyncTogether-${cleanVersion}-macOS.dmg`,
       macSizeMb: macAsset ? Math.round((macAsset.size / (1024 * 1024)) * 10) / 10 : 42.5,
       winDownloadUrl:
         winAsset?.browser_download_url ||
-        `https://github.com/shubhamsinghshubham777/playtogether/releases/download/${data.tag_name}/PlayTogether-${cleanVersion}-Windows.exe`,
+        `https://github.com/shubhamsinghshubham777/synctogether/releases/download/${data.tag_name}/SyncTogether-${cleanVersion}-Windows.exe`,
       winSizeMb: winAsset ? Math.round((winAsset.size / (1024 * 1024)) * 10) / 10 : 38.2,
       body: data.body || "",
       htmlUrl: data.html_url,
@@ -100,12 +100,12 @@ export async function getLatestRelease(): Promise<ReleaseAssetInfo> {
 export async function getAllReleases(): Promise<GitHubRelease[]> {
   try {
     const res = await fetch(
-      "https://api.github.com/repos/shubhamsinghshubham777/playtogether/releases?per_page=30",
+      "https://api.github.com/repos/shubhamsinghshubham777/synctogether/releases?per_page=30",
       {
         next: { revalidate: 3600 },
         headers: {
           Accept: "application/vnd.github.v3+json",
-          "User-Agent": "PlayTogether-Website",
+          "User-Agent": "SyncTogether-Website",
         },
       }
     );

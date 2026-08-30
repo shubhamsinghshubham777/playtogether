@@ -5,7 +5,7 @@ import { RefreshCcw } from "lucide-react";
 
 export const metadata: Metadata = {
   title: "Refund Policy (14-Day Money-Back Guarantee)",
-  description: "PlayTogether 14-day no-questions-asked refund policy for Premium subscriptions.",
+  description: "SyncTogether 14-day no-questions-asked refund policy for Premium subscriptions.",
 };
 
 export default function RefundPage() {
@@ -33,7 +33,7 @@ export default function RefundPage() {
               <span>14-Day Money-Back Guarantee</span>
             </div>
             <p>
-              We want you to love PlayTogether. If you are not completely satisfied with your first purchase of PlayTogether Premium, you can request a full refund within 14 days of your initial payment — no questions asked.
+              We want you to love SyncTogether. If you are not completely satisfied with your first purchase of SyncTogether Premium, you can request a full refund within 14 days of your initial payment — no questions asked.
             </p>
           </div>
         </section>

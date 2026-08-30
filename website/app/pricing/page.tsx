@@ -3,15 +3,15 @@ import { PricingTable } from "@/components/PricingTable";
 import { FAQAccordion } from "@/components/FAQAccordion";
 
 export const metadata: Metadata = {
-  title: "Pricing & Plans — PlayTogether Premium",
+  title: "Pricing & Plans — SyncTogether Premium",
   description:
-    "Upgrade to PlayTogether Premium for 20 persistent rooms, 16 members, 24-hour sessions, HD video facecams, and extended emoji reactions.",
+    "Upgrade to SyncTogether Premium for 20 persistent rooms, 16 members, 24-hour sessions, HD video facecams, and extended emoji reactions.",
 };
 
 export default function PricingPage() {
   const pricingFaqs = [
     {
-      q: "Can I try PlayTogether before paying?",
+      q: "Can I try SyncTogether before paying?",
       a: "Yes! Both our Guest and Free tiers are 100% free and fully functional. Free tier includes 4-hour sessions, 8 members, voice chat, and 24-hour room memory."
     },
     {
@@ -24,7 +24,7 @@ export default function PricingPage() {
     },
     {
       q: "Do I need an account to subscribe?",
-      a: "Yes, you must sign in with your Google account on the website to purchase Premium. This ensures your purchase links directly to your PlayTogether desktop app identity."
+      a: "Yes, you must sign in with your Google account on the website to purchase Premium. This ensures your purchase links directly to your SyncTogether desktop app identity."
     },
     {
       q: "What happens to my rooms if my subscription expires?",

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_symbols_icons/symbols.dart';
-import 'package:playtogether/profile/subscription_screen.dart';
-import 'package:playtogether/ui/responsive.dart';
+import 'package:synctogether/profile/subscription_screen.dart';
+import 'package:synctogether/ui/responsive.dart';
 
 Widget _wrap(Widget child) {
   return MaterialApp(
@@ -17,7 +17,7 @@ void main() {
       await tester.pumpWidget(_wrap(const SubscriptionScreen(desktopOverride: true)));
       await tester.pump(const Duration(milliseconds: 100));
 
-      expect(find.text('PlayTogether Premium'), findsOneWidget);
+      expect(find.text('SyncTogether Premium'), findsOneWidget);
       expect(find.text('Go Premium'), findsOneWidget);
       expect(
         find.text("You'll be taken to our website to complete your purchase."),
@@ -30,7 +30,7 @@ void main() {
       await tester.pumpWidget(_wrap(const SubscriptionScreen(desktopOverride: false)));
       await tester.pump(const Duration(milliseconds: 100));
 
-      expect(find.text('PlayTogether Premium'), findsOneWidget);
+      expect(find.text('SyncTogether Premium'), findsOneWidget);
       expect(find.text('Go Premium'), findsNothing);
       expect(find.text('Subscriptions are managed on our website.'), findsOneWidget);
     });

@@ -1,7 +1,7 @@
 import 'dart:async';
 
-import 'package:playtogether/analytics.dart';
-import 'package:playtogether/diagnostics.dart';
+import 'package:synctogether/analytics.dart';
+import 'package:synctogether/diagnostics.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// Thin wrapper over Supabase auth. Session persistence and token refresh are
@@ -32,7 +32,7 @@ class AuthService {
 
   /// Gives the auth stream's *errors* somewhere to go. Call once at startup.
   ///
-  /// supabase_flutter handles the `playtogether://auth-callback` deep link
+  /// supabase_flutter handles the `synctogether://auth-callback` deep link
   /// inside its own listener, so the code-for-session exchange runs nowhere
   /// near the sign-in button's try/catch. When it fails, `_handleDeeplink`
   /// hands the AuthException to gotrue's `notifyException`, which calls
@@ -119,7 +119,7 @@ class AuthService {
   Future<void> signInWithGoogle() => _startOAuth(
     () => _client.auth.signInWithOAuth(
       OAuthProvider.google,
-      redirectTo: 'playtogether://auth-callback',
+      redirectTo: 'synctogether://auth-callback',
       authScreenLaunchMode: LaunchMode.externalApplication,
     ),
   );
@@ -128,7 +128,7 @@ class AuthService {
   Future<void> linkGoogleIdentity() => _startOAuth(
     () => _client.auth.linkIdentity(
       OAuthProvider.google,
-      redirectTo: 'playtogether://auth-callback',
+      redirectTo: 'synctogether://auth-callback',
       authScreenLaunchMode: LaunchMode.externalApplication,
     ),
   );

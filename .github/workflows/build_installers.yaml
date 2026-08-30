@@ -90,8 +90,8 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           prerelease: ${{ inputs.prerelease }}
           files: |
-            ./PlayTogether-${{ needs.windows.outputs.app_version }}-Windows.exe
-            ./PlayTogether-${{ needs.macos.outputs.app_version }}-macOS.dmg
+            ./SyncTogether-${{ needs.windows.outputs.app_version }}-Windows.exe
+            ./SyncTogether-${{ needs.macos.outputs.app_version }}-macOS.dmg
             ./appcast.xml
           name: "v${{ needs.windows.outputs.app_version }}"
           tag_name: "v${{ needs.windows.outputs.app_version }}_${{ github.run_id }}"
@@ -99,11 +99,11 @@ jobs:
             ${{ inputs.release_notes }}
 
             ## Downloads
-            - **Windows**: `PlayTogether-${{ needs.windows.outputs.app_version }}-Windows.exe`
-            - **macOS**: `PlayTogether-${{ needs.macos.outputs.app_version }}-macOS.dmg`
+            - **Windows**: `SyncTogether-${{ needs.windows.outputs.app_version }}-Windows.exe`
+            - **macOS**: `SyncTogether-${{ needs.macos.outputs.app_version }}-macOS.dmg`
 
             ## macOS Installation Notes
             This build is unsigned. To run the app:
-            1. Open the DMG and drag PlayTogether to Applications
+            1. Open the DMG and drag SyncTogether to Applications
             2. Right-click the app and select "Open" (first time only)
-            3. Or run: `xattr -cr /Applications/PlayTogether.app`
+            3. Or run: `xattr -cr /Applications/SyncTogether.app`

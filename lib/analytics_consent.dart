@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
-import 'package:playtogether/analytics.dart';
-import 'package:playtogether/diagnostics.dart';
+import 'package:synctogether/analytics.dart';
+import 'package:synctogether/diagnostics.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 const _kOptOutKey = 'pt.analytics_opted_out';

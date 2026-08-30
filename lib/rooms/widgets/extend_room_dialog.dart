@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
-import 'package:playtogether/platform.dart';
-import 'package:playtogether/ui/buttons.dart';
-import 'package:playtogether/ui/pt_motion.dart';
-import 'package:playtogether/ui/pt_theme.dart';
+import 'package:synctogether/platform.dart';
+import 'package:synctogether/ui/buttons.dart';
+import 'package:synctogether/ui/pt_motion.dart';
+import 'package:synctogether/ui/pt_theme.dart';
 
 class ExtendRoomDialog extends StatefulWidget {
   const ExtendRoomDialog({super.key, required this.options, required this.headroomMinutes});

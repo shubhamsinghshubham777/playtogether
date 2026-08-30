@@ -2,7 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
-import 'package:playtogether/diagnostics.dart';
+import 'package:synctogether/diagnostics.dart';
 
 import 'identity.dart';
 import 'pt_motion.dart';

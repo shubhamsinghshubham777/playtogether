@@ -15,8 +15,8 @@ if [ "$WINDOWS_VERSION" != "$MACOS_VERSION" ]; then
 fi
 
 version="$WINDOWS_VERSION"
-exe="PlayTogether-${version}-Windows.exe"
-dmg="PlayTogether-${version}-macOS.dmg"
+exe="SyncTogether-${version}-Windows.exe"
+dmg="SyncTogether-${version}-macOS.dmg"
 
 for artifact in "$exe" "$dmg"; do
   if [ ! -f "$artifact" ]; then
@@ -84,9 +84,9 @@ cat > appcast.xml <<XML
 <?xml version="1.0" encoding="utf-8"?>
 <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
   <channel>
-    <title>PlayTogether</title>
+    <title>SyncTogether</title>
     <link>${feed_url}</link>
-    <description>Updates for PlayTogether</description>
+    <description>Updates for SyncTogether</description>
     <language>en</language>
     <item>
       <title>Version ${version}</title>

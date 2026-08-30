@@ -4,10 +4,10 @@ import 'dart:math';
 
 import 'package:mime/mime.dart';
 import 'package:path/path.dart' as p;
-import 'package:playtogether/diagnostics.dart';
-import 'package:playtogether/profile/profile_models.dart';
-import 'package:playtogether/rooms/local_media_store.dart';
-import 'package:playtogether/sync/sync_service.dart';
+import 'package:synctogether/diagnostics.dart';
+import 'package:synctogether/profile/profile_models.dart';
+import 'package:synctogether/rooms/local_media_store.dart';
+import 'package:synctogether/sync/sync_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 

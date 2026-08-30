@@ -3,11 +3,11 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
-import 'package:playtogether/auth/webview_runtime.dart';
-import 'package:playtogether/diagnostics.dart';
-import 'package:playtogether/env.dart';
-import 'package:playtogether/ui/glass.dart';
-import 'package:playtogether/ui/pt_theme.dart';
+import 'package:synctogether/auth/webview_runtime.dart';
+import 'package:synctogether/diagnostics.dart';
+import 'package:synctogether/env.dart';
+import 'package:synctogether/ui/glass.dart';
+import 'package:synctogether/ui/pt_theme.dart';
 
 /// Runs a Cloudflare Turnstile challenge in a webview and returns the
 /// captcha token (null on cancel/failure). The page is served from a throwaway
@@ -173,7 +173,7 @@ function onloadTurnstile() {
   /// retrying that forever is precisely what people did.
   String get _failureMessage => _errorCode == 'webview2-missing'
       ? "Your PC is missing a Windows component this check needs. "
-            "Reinstalling PlayTogether will add it."
+            "Reinstalling SyncTogether will add it."
       : "Hmm, the check didn't load. Close this and try again.";
 
   @override

@@ -2,8 +2,8 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:playtogether/rooms/widgets/room_chat_panel.dart';
-import 'package:playtogether/sync/sync_service.dart';
+import 'package:synctogether/rooms/widgets/room_chat_panel.dart';
+import 'package:synctogether/sync/sync_service.dart';
 
 import '../sync/fakes.dart';
 

@@ -3,12 +3,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:livekit_client/livekit_client.dart' as lk;
 import 'package:material_symbols_icons/symbols.dart';
-import 'package:playtogether/av/livekit_service.dart';
-import 'package:playtogether/sync/sync_service.dart';
-import 'package:playtogether/ui/buttons.dart';
-import 'package:playtogether/ui/identity.dart';
-import 'package:playtogether/ui/pt_motion.dart';
-import 'package:playtogether/ui/pt_theme.dart';
+import 'package:synctogether/av/livekit_service.dart';
+import 'package:synctogether/sync/sync_service.dart';
+import 'package:synctogether/ui/buttons.dart';
+import 'package:synctogether/ui/identity.dart';
+import 'package:synctogether/ui/pt_motion.dart';
+import 'package:synctogether/ui/pt_theme.dart';
 
 enum FacecamLayout { railLeft, stripTop, miniStackRight }
 

@@ -20,7 +20,7 @@ const s3 = new S3Client({
   },
 });
 
-const bucketName = Deno.env.get("CF_R2_BUCKET_NAME") || "playtogether-media";
+const bucketName = Deno.env.get("CF_R2_BUCKET_NAME") || "synctogether-media";
 
 // Service role client for privileged DB mutations
 const supabaseAdmin = createClient(

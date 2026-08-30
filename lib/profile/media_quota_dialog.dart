@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
-import 'package:playtogether/profile/entitlement_service.dart';
-import 'package:playtogether/profile/profile_models.dart';
-import 'package:playtogether/profile/profile_service.dart';
-import 'package:playtogether/ui/buttons.dart';
-import 'package:playtogether/ui/glass.dart';
-import 'package:playtogether/ui/pt_theme.dart';
+import 'package:synctogether/profile/entitlement_service.dart';
+import 'package:synctogether/profile/profile_models.dart';
+import 'package:synctogether/profile/profile_service.dart';
+import 'package:synctogether/ui/buttons.dart';
+import 'package:synctogether/ui/glass.dart';
+import 'package:synctogether/ui/pt_theme.dart';
 
 Future<void> showMediaQuotaDialog(BuildContext context) async {
   await showGlassDialog(

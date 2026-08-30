@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:playtogether/rooms/reactions.dart';
+import 'package:synctogether/rooms/reactions.dart';
 
 final _root = Directory.current;
 

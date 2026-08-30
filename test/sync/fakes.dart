@@ -1,6 +1,6 @@
-import 'package:playtogether/profile/profile_models.dart';
-import 'package:playtogether/rooms/room_models.dart';
-import 'package:playtogether/sync/sync_service.dart';
+import 'package:synctogether/profile/profile_models.dart';
+import 'package:synctogether/rooms/room_models.dart';
+import 'package:synctogether/sync/sync_service.dart';
 
 class SentMessage {
   const SentMessage(this.event, this.payload);

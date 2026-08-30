@@ -1,4 +1,4 @@
--- PlayTogether multi-participant upgrade: profiles, rooms, membership, chat,
+-- SyncTogether multi-participant upgrade: profiles, rooms, membership, chat,
 -- RLS, RPCs, realtime authorization, avatars bucket, expiry sweep.
 -- Plan: docs/multi-participant-plan.md (§2 Phase 0).
 

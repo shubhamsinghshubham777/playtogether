@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
-import 'package:playtogether/diagnostics.dart';
+import 'package:synctogether/diagnostics.dart';
 
 /// Windows-only preparation for the webviews in the app — the guest captcha and
 /// the YouTube player embed, which share one environment.
@@ -29,7 +29,7 @@ abstract final class PTWebView {
   ///
   /// More often the runtime is present and the *environment* still fails. With
   /// no `userDataFolder` set, WebView2 defaults it to the directory holding the
-  /// executable and tries to create `playtogether.exe.WebView2` next to it. The
+  /// executable and tries to create `synctogether.exe.WebView2` next to it. The
   /// installer is an admin install, so that directory is under Program Files, a
   /// standard user token cannot write there, and creation fails with nothing on
   /// the wire but "Cannot create the InAppWebView instance!". That is what a
@@ -78,7 +78,7 @@ abstract final class PTWebView {
     if (base == null || base.isEmpty) {
       throw StateError('Neither LOCALAPPDATA nor TEMP is set');
     }
-    final dir = Directory('$base\\PlayTogether\\WebView2');
+    final dir = Directory('$base\\SyncTogether\\WebView2');
     await dir.create(recursive: true);
     return dir.path;
   }

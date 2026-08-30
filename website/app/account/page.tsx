@@ -253,7 +253,7 @@ function AccountDashboard() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `playtogether-data-${user?.id?.slice(0, 8)}.json`;
+    a.download = `synctogether-data-${user?.id?.slice(0, 8)}.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -282,7 +282,7 @@ function AccountDashboard() {
             <CheckCircle2 className="w-6 h-6 text-amber-300 shrink-0" />
             <div>
               <h3 className="text-lg font-bold text-white font-[family-name:var(--font-space-grotesk)]">
-                Welcome to PlayTogether Premium! 🎉
+                Welcome to SyncTogether Premium! 🎉
               </h3>
               <p className="text-xs text-amber-200/80">
                 {verifying
@@ -316,7 +316,7 @@ function AccountDashboard() {
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-2xl font-bold text-white font-[family-name:var(--font-space-grotesk)]">
-                  {user?.user_metadata?.full_name || "PlayTogether User"}
+                  {user?.user_metadata?.full_name || "SyncTogether User"}
                 </h1>
                 <span
                   className={`text-xs font-bold font-mono uppercase px-2.5 py-0.5 rounded-full border ${
@@ -358,7 +358,7 @@ function AccountDashboard() {
                   Current Plan
                 </span>
                 <h2 className="text-3xl font-extrabold text-white font-[family-name:var(--font-space-grotesk)] mt-1">
-                  PlayTogether {isPremium ? "Premium" : "Free"}
+                  SyncTogether {isPremium ? "Premium" : "Free"}
                 </h2>
               </div>
               {isPremium ? (
@@ -419,7 +419,7 @@ function AccountDashboard() {
                   )}
                 </button>
                 <a
-                  href="mailto:support@playtogether.app?subject=Subscription%20Support"
+                  href="mailto:support@synctogether.app?subject=Subscription%20Support"
                   className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white text-xs font-semibold border border-white/10 transition-colors"
                 >
                   <span>Contact Support</span>

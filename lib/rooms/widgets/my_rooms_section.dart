@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
-import 'package:playtogether/rooms/room_models.dart';
-import 'package:playtogether/ui/buttons.dart';
-import 'package:playtogether/ui/glass.dart';
-import 'package:playtogether/ui/loader.dart';
-import 'package:playtogether/ui/pt_motion.dart';
-import 'package:playtogether/ui/pt_theme.dart';
+import 'package:synctogether/rooms/room_models.dart';
+import 'package:synctogether/ui/buttons.dart';
+import 'package:synctogether/ui/glass.dart';
+import 'package:synctogether/ui/loader.dart';
+import 'package:synctogether/ui/pt_motion.dart';
+import 'package:synctogether/ui/pt_theme.dart';
 
 class MyRoomsSection extends StatelessWidget {
   const MyRoomsSection({

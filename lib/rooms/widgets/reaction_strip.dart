@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
-import 'package:playtogether/rooms/reactions.dart';
-import 'package:playtogether/rooms/widgets/reaction_overlay.dart';
+import 'package:synctogether/rooms/reactions.dart';
+import 'package:synctogether/rooms/widgets/reaction_overlay.dart';
 import 'package:material_symbols_icons/symbols.dart';
-import 'package:playtogether/ui/glass.dart';
-import 'package:playtogether/ui/pt_motion.dart';
-import 'package:playtogether/ui/pt_theme.dart';
+import 'package:synctogether/ui/glass.dart';
+import 'package:synctogether/ui/pt_motion.dart';
+import 'package:synctogether/ui/pt_theme.dart';
 
 class ReactionStrip extends StatefulWidget {
   const ReactionStrip({

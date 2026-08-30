@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// Design tokens from the "Playtogether redesign" design system.
+/// Design tokens from the "SyncTogether" design system.
 /// Dark mode only — glass panels rely on dark video/ambient backdrops.
 abstract final class PTColors {
   // Accent — violet.

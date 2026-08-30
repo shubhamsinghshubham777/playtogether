@@ -33,17 +33,17 @@
 	<key>SUEnableAutomaticChecks</key>
 	<false/>
 	<key>NSCameraUsageDescription</key>
-	<string>PlayTogether uses your camera for facecams during watch parties.</string>
+	<string>SyncTogether uses your camera for facecams during watch parties.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>PlayTogether uses your microphone for voice chat during watch parties.</string>
+	<string>SyncTogether uses your microphone for voice chat during watch parties.</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
 			<key>CFBundleURLName</key>
-			<string>com.playtogether.deeplink</string>
+			<string>app.synctogether.deeplink</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>playtogether</string>
+				<string>synctogether</string>
 			</array>
 		</dict>
 	</array>

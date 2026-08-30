@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:playtogether/ui/scroll_fade.dart';
+import 'package:synctogether/ui/scroll_fade.dart';
 
 double _scrimOpacity(WidgetTester tester) {
   final opacity = tester.widget<Opacity>(

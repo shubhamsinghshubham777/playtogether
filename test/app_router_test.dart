@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:playtogether/app_router.dart';
+import 'package:synctogether/app_router.dart';
 
 void main() {
   group('room path helpers', () {

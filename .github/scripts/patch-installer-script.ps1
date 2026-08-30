@@ -6,8 +6,8 @@
 # no [Registry] option and no way to add a [Run] entry. So all of these have to
 # be patched in here rather than configured alongside the rest in pubspec.yaml.
 #
-#   1. The playtogether:// protocol handler. Google OAuth redirects to
-#      playtogether://auth-callback; with nothing registered, Windows drops the
+#   1. The synctogether:// protocol handler. Google OAuth redirects to
+#      synctogether://auth-callback; with nothing registered, Windows drops the
 #      callback and sign-in hangs on its spinner forever. macOS/iOS/Android
 #      declare this in their Info.plist/manifest, but on Windows it is purely an
 #      installer concern.
@@ -17,7 +17,7 @@
 #      is absent on LTSC/Server and de-bloated images — where the captcha would
 #      silently fail to render and guest sign-in becomes impossible. A [Code]
 #      check skips the bootstrapper when a runtime is already registered
-#      (Windows 11's inbox one, a previous PlayTogether install, or a manual
+#      (Windows 11's inbox one, a previous SyncTogether install, or a manual
 #      install all count) — even in that case the bootstrapper costs seconds of
 #      EdgeUpdate round-trips, which is pure waste on every upgrade. When it
 #      does run, it detects concurrent installs itself, so racing EdgeUpdate is
@@ -51,7 +51,7 @@ if (-not (Test-Path $iss)) {
 # rename would otherwise register a protocol handler pointing at nothing.
 $issContent = Get-Content $iss -Raw
 
-$exe = 'playtogether.exe'
+$exe = 'synctogether.exe'
 if ($issContent -notmatch [regex]::Escape('{app}\' + $exe)) {
     throw "$iss does not reference {app}\$exe — the executable may have been renamed."
 }
@@ -84,14 +84,14 @@ Invoke-WebRequest -Uri 'https://go.microsoft.com/fwlink/p/?LinkId=2124703' -OutF
 $lines = @(
     ''
     '[Registry]'
-    'Root: HKA; Subkey: "Software\Classes\playtogether"; ValueType: string; ValueName: ""; ValueData: "URL:PlayTogether Protocol"; Flags: uninsdeletekey'
-    'Root: HKA; Subkey: "Software\Classes\playtogether"; ValueType: string; ValueName: "URL Protocol"; ValueData: ""'
-    ('Root: HKA; Subkey: "Software\Classes\playtogether\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\' + $exe + ',0"')
+    'Root: HKA; Subkey: "Software\Classes\synctogether"; ValueType: string; ValueName: ""; ValueData: "URL:SyncTogether Protocol"; Flags: uninsdeletekey'
+    'Root: HKA; Subkey: "Software\Classes\synctogether"; ValueType: string; ValueName: "URL Protocol"; ValueData: ""'
+    ('Root: HKA; Subkey: "Software\Classes\synctogether\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\' + $exe + ',0"')
     # The doubled quotes are Inno's escape for a literal quote: the command ends
-    # up as `"C:\...\playtogether.exe" "%1"`. Quoting %1 is what keeps a URI
+    # up as `"C:\...\synctogether.exe" "%1"`. Quoting %1 is what keeps a URI
     # containing spaces from arriving split across argv — app_links only reads
     # the link when argc is exactly 2.
-    ('Root: HKA; Subkey: "Software\Classes\playtogether\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\' + $exe + '"" ""%1"""')
+    ('Root: HKA; Subkey: "Software\Classes\synctogether\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\' + $exe + '"" ""%1"""')
     ''
     '[Files]'
     ('Source: "' + $bootstrapper + '"; DestDir: "{tmp}"; Flags: deleteafterinstall; Check: WebView2Needed')
@@ -128,4 +128,4 @@ $lines = @(
 )
 
 Add-Content -Path $iss -Value $lines
-Write-Host "Patched $iss with the playtogether:// handler, the WebView2 runtime and the silent-install relaunch."
+Write-Host "Patched $iss with the synctogether:// handler, the WebView2 runtime and the silent-install relaunch."

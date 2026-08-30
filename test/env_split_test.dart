@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:playtogether/env.dart';
+import 'package:synctogether/env.dart';
 
 const _prod = '''
 SUPABASE_URL=https://prod.supabase.co

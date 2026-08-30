@@ -1,4 +1,4 @@
-import 'package:playtogether/profile/profile_models.dart';
+import 'package:synctogether/profile/profile_models.dart';
 
 const kRoomDurationCapMinutes = 240;
 
@@ -221,7 +221,7 @@ class Room {
     );
   }
 
-  String get inviteLink => 'playtogether://join/$code';
+  String get inviteLink => 'synctogether://join/$code';
 }
 
 class MyRoom {

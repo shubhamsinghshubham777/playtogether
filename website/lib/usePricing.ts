@@ -32,7 +32,7 @@ function getMockCountrySnapshot(): string | null {
   if (typeof window === "undefined") return null;
   const urlParams = new URLSearchParams(window.location.search);
   const paramMock = urlParams.get("mock_country") || urlParams.get("country");
-  const storedMock = localStorage.getItem("playtogether_mock_country");
+  const storedMock = localStorage.getItem("synctogether_mock_country");
   const activeMock = paramMock || storedMock || null;
   return activeMock ? activeMock.toUpperCase() : null;
 }
@@ -66,9 +66,9 @@ export function usePricing() {
   const setMockCountry = useCallback((country: string | null) => {
     if (country) {
       const upper = country.toUpperCase();
-      localStorage.setItem("playtogether_mock_country", upper);
+      localStorage.setItem("synctogether_mock_country", upper);
     } else {
-      localStorage.removeItem("playtogether_mock_country");
+      localStorage.removeItem("synctogether_mock_country");
     }
     if (typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent("pt_mock_country_changed", { detail: country }));

@@ -24,7 +24,7 @@ void reportNonFatal(Object error, StackTrace? stack, {required String during}) {
     FlutterErrorDetails(
       exception: error,
       stack: stack,
-      library: 'playtogether',
+      library: 'synctogether',
       context: ErrorDescription(during),
     ),
   );

@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:playtogether/diagnostics.dart';
+import 'package:synctogether/diagnostics.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 const _kStoreKey = 'pt.local_media_by_room';

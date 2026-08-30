@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Space_Grotesk, Outfit, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
+import { Analytics } from "@vercel/analytics/next";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { SITE_CONFIG } from "@/lib/constants";
@@ -26,8 +27,8 @@ const jetbrainsMono = JetBrains_Mono({
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_CONFIG.url),
   title: {
-    default: "PlayTogether — Synchronized Video & Media Playback",
-    template: "%s | PlayTogether",
+    default: "SyncTogether — Synchronized Video & Media Playback",
+    template: "%s | SyncTogether",
   },
   description: SITE_CONFIG.description,
   keywords: [
@@ -46,7 +47,7 @@ export const metadata: Metadata = {
     type: "website",
     locale: "en_US",
     url: SITE_CONFIG.url,
-    title: "PlayTogether — Synchronized Video & Media Playback",
+    title: "SyncTogether — Synchronized Video & Media Playback",
     description: SITE_CONFIG.description,
     siteName: SITE_CONFIG.name,
     images: [
@@ -54,13 +55,13 @@ export const metadata: Metadata = {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "PlayTogether — Synchronized Media Playback",
+        alt: "SyncTogether — Synchronized Media Playback",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "PlayTogether — Synchronized Video & Media Playback",
+    title: "SyncTogether — Synchronized Video & Media Playback",
     description: SITE_CONFIG.description,
     images: ["/og-image.png"],
     creator: "@shubhamsingh",
@@ -95,7 +96,7 @@ export default function RootLayout({
   const jsonLdApp = {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
-    name: "PlayTogether",
+    name: "SyncTogether",
     operatingSystem: "macOS 12.0+, Windows 10/11",
     applicationCategory: "MultimediaApplication",
     offers: {
@@ -125,6 +126,7 @@ export default function RootLayout({
         <Header />
         <main className="flex-1 pt-20">{children}</main>
         <Footer />
+        <Analytics />
       </body>
     </html>
   );

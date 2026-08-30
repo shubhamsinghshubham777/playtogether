@@ -65,7 +65,7 @@ Host-initiated, per-room file sharing that lets a premium or quota-eligible host
 > - If a member selects "Download to Device" while actively streaming, the background download finishes seamlessly without hot-swapping or re-opening the player mid-playback (preventing audio/video hitches). The cached file is registered in `LocalMediaStore` for instant local playback on subsequent seeks, replays, or room rejoins.
 
 > [!WARNING]
-> **Mobile Backgrounding & Foreground Auto-Resume.** On iOS/Android, background network sockets are aggressively throttled or suspended after 30 seconds. The app acquires `WakelockPlus` during uploads and displays an in-app banner warning hosts to keep PlayTogether in the foreground. If the host backgrounds the app, `MediaSharingService` automatically resumes from the last completed part chunk when the app returns to the foreground (`AppLifecycleState.resumed`).
+> **Mobile Backgrounding & Foreground Auto-Resume.** On iOS/Android, background network sockets are aggressively throttled or suspended after 30 seconds. The app acquires `WakelockPlus` during uploads and displays an in-app banner warning hosts to keep SyncTogether in the foreground. If the host backgrounds the app, `MediaSharingService` automatically resumes from the last completed part chunk when the app returns to the foreground (`AppLifecycleState.resumed`).
 
 > [!WARNING]
 > **The Media-Switch Lock, Dormant Room Hygiene, Subtitle Tracks, and Host Succession.**
@@ -115,7 +115,7 @@ Cloudflare R2 is a **separate service** from Supabase Storage. Supabase's free-t
 
 3. **Create the bucket**:
    - Click **Create bucket**.
-   - Name: `playtogether-media` (or your preference).
+   - Name: `synctogether-media` (or your preference).
    - Location hint: **Automatic** (Cloudflare routes to nearest region).
    - Default storage class: **Standard**.
 
@@ -145,7 +145,7 @@ Cloudflare R2 is a **separate service** from Supabase Storage. Supabase's free-t
 
 7. **Create an API token** for Edge Functions:
    - Go to **R2 Object Storage** → **Manage R2 API tokens** → **Create API token**.
-   - Permissions: **Object Read & Write** on the `playtogether-media` bucket only.
+   - Permissions: **Object Read & Write** on the `synctogether-media` bucket only.
    - Copy the **Access Key ID** and **Secret Access Key**.
 
 8. **Note your Account ID**:
@@ -158,7 +158,7 @@ Cloudflare R2 is a **separate service** from Supabase Storage. Supabase's free-t
    CF_R2_ACCOUNT_ID=<your-account-id>
    CF_R2_ACCESS_KEY_ID=<from-step-7>
    CF_R2_SECRET_ACCESS_KEY=<from-step-7>
-   CF_R2_BUCKET_NAME=playtogether-media
+   CF_R2_BUCKET_NAME=synctogether-media
    CF_R2_ENDPOINT=https://<your-account-id>.r2.cloudflarestorage.com
    ```
 
@@ -788,7 +788,7 @@ Manages local downloaded media cache hygiene:
 
 ### 4. Client-Side Dart — Sync & Gate Integration
 
-#### [MODIFY] [sync_logic.dart](file:///Users/shubham/Projects/Personal/playtogether/lib/sync/sync_logic.dart)
+#### [MODIFY] [sync_logic.dart](file:///Users/shubham/Projects/Personal/synctogether/lib/sync/sync_logic.dart)
 
 Keep `memberSatisfiesGate` purely member-focused. Handle room upload state inside `evaluateGateState`:
 ```dart
@@ -815,14 +815,14 @@ GateState evaluateGateState({
 }
 ```
 
-#### [MODIFY] [sync_service.dart](file:///Users/shubham/Projects/Personal/playtogether/lib/sync/sync_service.dart)
+#### [MODIFY] [sync_service.dart](file:///Users/shubham/Projects/Personal/synctogether/lib/sync/sync_service.dart)
 
 Add media sharing broadcast methods and late-joiner auto-waiver handling:
 - **Late Joiner Auto-Waiver:** When a member joins a live room that is already playing (`roomPlaying == true`) with shared media `ready`, the authority client automatically adds the new member to `_waived` temporarily until they emit `ReadyStatus.ready`. This guarantees `evaluateGateState` does not drop to `.closed` and prevents unwanted room-wide pauses for existing watchers.
 - `broadcastUploadProgress(...)` (Host only, throttled $\ge 3.0\text{s}$).
 - `broadcastSharingToggled(...)` (Host only).
 
-#### [MODIFY] [sync_events.dart](file:///Users/shubham/Projects/Personal/playtogether/lib/sync/sync_events.dart)
+#### [MODIFY] [sync_events.dart](file:///Users/shubham/Projects/Personal/synctogether/lib/sync/sync_events.dart)
 
 Add media sharing event types:
 ```dart
@@ -838,7 +838,7 @@ New event payloads:
 
 ### 5. Client-Side Dart — Entitlement & Room Models
 
-#### [MODIFY] [entitlement_service.dart](file:///Users/shubham/Projects/Personal/playtogether/lib/profile/entitlement_service.dart)
+#### [MODIFY] [entitlement_service.dart](file:///Users/shubham/Projects/Personal/synctogether/lib/profile/entitlement_service.dart)
 
 Add to `TierLimits`:
 ```dart
@@ -848,7 +848,7 @@ bool get canShareMedia => mediaSharing != 'none';
 bool get hasUnlimitedSharing => mediaSharing == 'full';
 ```
 
-#### [MODIFY] [room_models.dart](file:///Users/shubham/Projects/Personal/playtogether/lib/rooms/room_models.dart)
+#### [MODIFY] [room_models.dart](file:///Users/shubham/Projects/Personal/synctogether/lib/rooms/room_models.dart)
 
 Add to `Room`:
 ```dart
@@ -871,7 +871,7 @@ mediaSharingDisabled('media_sharing_disabled', "Media sharing is temporarily und
 
 ### 6. Client-Side Dart — Room Screen UI & User Flows
 
-#### [MODIFY] [room_screen.dart](file:///Users/shubham/Projects/Personal/playtogether/lib/rooms/room_screen.dart)
+#### [MODIFY] [room_screen.dart](file:///Users/shubham/Projects/Personal/synctogether/lib/rooms/room_screen.dart)
 
 #### A. Clean Stream Handling, Network Watchdog & 403 Auto-Renewal:
 Add `_adoptRemoteStream({required String streamUrl, required String name, Duration? seekTo})`:
@@ -948,7 +948,7 @@ Member dialog on upload completion offering instant streaming vs background down
 #### [NEW] `lib/rooms/widgets/sharing_progress_indicator.dart`
 Reusable progress bar displaying percentage, transfer speed (e.g., `14.2 MB/s`), and ETA, with smooth client-side dead-reckoning interpolation.
 
-#### [MODIFY] [readiness_overlay.dart](file:///Users/shubham/Projects/Personal/playtogether/lib/rooms/widgets/readiness_overlay.dart)
+#### [MODIFY] [readiness_overlay.dart](file:///Users/shubham/Projects/Personal/synctogether/lib/rooms/widgets/readiness_overlay.dart)
 Update overlay to handle upload state:
 - If `mediaUploadState == 'uploading'`, renders a shared file upload banner with progress bar and ETA, suppressing the "Locate your copy" button.
 

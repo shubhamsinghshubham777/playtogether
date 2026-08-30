@@ -97,13 +97,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "app.playtogether" "\0"
-            VALUE "FileDescription", "playtogether" "\0"
+            VALUE "CompanyName", "app.synctogether" "\0"
+            VALUE "FileDescription", "synctogether" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "app.playtogether.windows" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2025 app.playtogether. All rights reserved." "\0"
-            VALUE "OriginalFilename", "playtogether.exe" "\0"
-            VALUE "ProductName", "playtogether" "\0"
+            VALUE "InternalName", "app.synctogether.windows" "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2025 app.synctogether. All rights reserved." "\0"
+            VALUE "OriginalFilename", "synctogether.exe" "\0"
+            VALUE "ProductName", "synctogether" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

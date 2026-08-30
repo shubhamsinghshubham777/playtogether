@@ -1,9 +1,9 @@
 <img src="assets/icon/app_icon.svg" width="96" alt="App Icon">
 
-# PlayTogether
+# SyncTogether
 
-Watch stuff together, perfectly in sync. PlayTogether is a Flutter app where you
-create a **room**, share a 6-character code (or a `playtogether://join/<code>`
+Watch stuff together, perfectly in sync. SyncTogether is a Flutter app where you
+create a **room**, share a 6-character code (or a `synctogether://join/<code>`
 invite link), and everyone's playback stays in lockstep — play, pause, and seeks
 broadcast to every member in real time, with chat and live facecams alongside.
 
@@ -64,7 +64,7 @@ npm test                      # run webhook deduplication & signature tests
 
 To test Paddle webhooks locally, use Hookdeck or the Paddle CLI:
 ```bash
-hookdeck listen 3000 playtogether-webhooks --path /api/paddle/webhook
+hookdeck listen 3000 synctogether-webhooks --path /api/paddle/webhook
 ```
 
 ### Backend (Supabase)
@@ -103,7 +103,7 @@ gets its own sandbox container and guest identity. Re-run it after rebuilds.
 
 GitHub Actions (manual trigger) builds a Windows installer (Inno Setup via
 `inno_bundle`) and a macOS DMG. The version comes from `pubspec.yaml`. On
-Windows/Linux the `playtogether://` URL scheme registration is an installer
+Windows/Linux the `synctogether://` URL scheme registration is an installer
 concern; macOS/iOS/Android register it via their app manifests.
 
 The same run also publishes a signed `appcast.xml`, which is how installed

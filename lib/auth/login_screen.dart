@@ -1,16 +1,16 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
-import 'package:playtogether/auth/auth_service.dart';
-import 'package:playtogether/auth/turnstile_dialog.dart';
-import 'package:playtogether/diagnostics.dart';
-import 'package:playtogether/env.dart';
-import 'package:playtogether/ui/banners.dart';
-import 'package:playtogether/ui/buttons.dart';
-import 'package:playtogether/ui/glass.dart';
-import 'package:playtogether/ui/pt_motion.dart';
-import 'package:playtogether/ui/pt_theme.dart';
-import 'package:playtogether/ui/responsive.dart';
+import 'package:synctogether/auth/auth_service.dart';
+import 'package:synctogether/auth/turnstile_dialog.dart';
+import 'package:synctogether/diagnostics.dart';
+import 'package:synctogether/env.dart';
+import 'package:synctogether/ui/banners.dart';
+import 'package:synctogether/ui/buttons.dart';
+import 'package:synctogether/ui/glass.dart';
+import 'package:synctogether/ui/pt_motion.dart';
+import 'package:synctogether/ui/pt_theme.dart';
+import 'package:synctogether/ui/responsive.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -253,7 +253,7 @@ class _BrandState extends State<_Brand> with SingleTickerProviderStateMixin {
         PTEntrance(
           delay: const Duration(milliseconds: 60),
           child: Text(
-            'PlayTogether',
+            'SyncTogether',
             style: PTText.display.copyWith(fontSize: widget.large ? 32 : 30),
           ),
         ),

@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:playtogether/diagnostics.dart';
+import 'package:synctogether/diagnostics.dart';
 import 'package:uuid/uuid.dart';
 
 typedef AnalyticsTransport = Future<bool> Function(Uri endpoint, String body);

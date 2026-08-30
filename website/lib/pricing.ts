@@ -62,7 +62,7 @@ export function detectUserCountry(): string {
   }
 
   // 2. Check localStorage
-  const stored = localStorage.getItem("playtogether_mock_country");
+  const stored = localStorage.getItem("synctogether_mock_country");
   if (stored && COUNTRY_CURRENCY_MAP[stored.toUpperCase()]) {
     return stored.toUpperCase();
   }

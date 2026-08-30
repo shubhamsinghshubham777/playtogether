@@ -34,7 +34,7 @@ export default async function HomePage() {
           className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-purple-500/10 border border-purple-400/30 text-purple-200 text-xs font-semibold shadow-inner hover:bg-purple-500/20 hover:border-purple-400/50 hover:text-white transition-all duration-200 group cursor-pointer"
         >
           <Sparkles className="w-3.5 h-3.5 text-amber-300 animate-pulse group-hover:scale-110 transition-transform" />
-          <span>PlayTogether {displayTag} is now live</span>
+          <span>SyncTogether {displayTag} is now live</span>
           <ArrowRight className="w-3 h-3 text-purple-400 group-hover:translate-x-0.5 transition-transform" />
         </Link>
 
@@ -118,7 +118,7 @@ export default async function HomePage() {
               <p className="text-sm text-gray-400 leading-relaxed">
                 Send your unique 6-character room code or one-click{" "}
                 <code className="text-xs text-purple-300 bg-purple-950/80 px-1 py-0.5 rounded">
-                  playtogether://
+                  synctogether://
                 </code>{" "}
                 invite link to your friends.
               </p>
@@ -250,7 +250,7 @@ export default async function HomePage() {
               Ready to watch together?
             </h2>
             <p className="text-base text-gray-300">
-              Download PlayTogether for free and host your first watch party in seconds.
+              Download SyncTogether for free and host your first watch party in seconds.
             </p>
           </div>
 

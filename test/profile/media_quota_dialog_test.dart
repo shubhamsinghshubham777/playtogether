@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:playtogether/profile/media_quota_dialog.dart';
+import 'package:synctogether/profile/media_quota_dialog.dart';
 
 void main() {
   group('MediaQuotaDialog', () {

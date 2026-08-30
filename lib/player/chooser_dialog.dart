@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:media_kit/media_kit.dart';
-import 'package:playtogether/ui/pt_theme.dart';
+import 'package:synctogether/ui/pt_theme.dart';
 
 /// Body for [showGlassDialog]: audio/subtitle track picker styled per the
 /// "Subtitles" dialog in the redesign.

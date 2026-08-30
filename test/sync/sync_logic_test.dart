@@ -1,8 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:playtogether/rooms/room_models.dart';
-import 'package:playtogether/sync/sync_logic.dart';
+import 'package:synctogether/rooms/room_models.dart';
+import 'package:synctogether/sync/sync_logic.dart';
 
 final _epoch = DateTime.utc(2026, 7, 31, 12);
 

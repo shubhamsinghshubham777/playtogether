@@ -7,32 +7,32 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:path/path.dart' as p;
-import 'package:playtogether/analytics.dart';
-import 'package:playtogether/app_router.dart';
-import 'package:playtogether/app_version.dart';
-import 'package:playtogether/auth/auth_service.dart';
-import 'package:playtogether/diagnostics.dart';
-import 'package:playtogether/env.dart';
-import 'package:playtogether/profile/entitlement_service.dart';
-import 'package:playtogether/profile/media_quota_dialog.dart';
-import 'package:playtogether/profile/profile_models.dart';
-import 'package:playtogether/profile/profile_service.dart';
-import 'package:playtogether/rooms/local_media_store.dart';
-import 'package:playtogether/rooms/media_sharing_service.dart';
-import 'package:playtogether/rooms/room_models.dart';
-import 'package:playtogether/rooms/room_service.dart';
-import 'package:playtogether/rooms/widgets/extend_room_dialog.dart';
-import 'package:playtogether/rooms/widgets/my_rooms_section.dart';
-import 'package:playtogether/updates/update_service.dart';
-import 'package:playtogether/ui/banners.dart';
-import 'package:playtogether/ui/buttons.dart';
-import 'package:playtogether/ui/glass.dart';
-import 'package:playtogether/ui/identity.dart';
-import 'package:playtogether/ui/inputs.dart';
-import 'package:playtogether/ui/pt_motion.dart';
-import 'package:playtogether/ui/pt_theme.dart';
-import 'package:playtogether/ui/responsive.dart';
-import 'package:playtogether/ui/scroll_fade.dart';
+import 'package:synctogether/analytics.dart';
+import 'package:synctogether/app_router.dart';
+import 'package:synctogether/app_version.dart';
+import 'package:synctogether/auth/auth_service.dart';
+import 'package:synctogether/diagnostics.dart';
+import 'package:synctogether/env.dart';
+import 'package:synctogether/profile/entitlement_service.dart';
+import 'package:synctogether/profile/media_quota_dialog.dart';
+import 'package:synctogether/profile/profile_models.dart';
+import 'package:synctogether/profile/profile_service.dart';
+import 'package:synctogether/rooms/local_media_store.dart';
+import 'package:synctogether/rooms/media_sharing_service.dart';
+import 'package:synctogether/rooms/room_models.dart';
+import 'package:synctogether/rooms/room_service.dart';
+import 'package:synctogether/rooms/widgets/extend_room_dialog.dart';
+import 'package:synctogether/rooms/widgets/my_rooms_section.dart';
+import 'package:synctogether/updates/update_service.dart';
+import 'package:synctogether/ui/banners.dart';
+import 'package:synctogether/ui/buttons.dart';
+import 'package:synctogether/ui/glass.dart';
+import 'package:synctogether/ui/identity.dart';
+import 'package:synctogether/ui/inputs.dart';
+import 'package:synctogether/ui/pt_motion.dart';
+import 'package:synctogether/ui/pt_theme.dart';
+import 'package:synctogether/ui/responsive.dart';
+import 'package:synctogether/ui/scroll_fade.dart';
 
 class LobbyScreen extends StatefulWidget {
   const LobbyScreen({super.key});
@@ -730,7 +730,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
         kind: .info,
         icon: Symbols.rocket_launch_rounded,
         title: 'v${updates.availableVersion} is ready',
-        subtitle: 'Grab it now — PlayTogether will restart itself.',
+        subtitle: 'Grab it now — SyncTogether will restart itself.',
         trailing: PTButton(
           label: 'Update & restart',
           height: 38,
@@ -1408,7 +1408,7 @@ class _Wordmark extends StatelessWidget {
           crossAxisAlignment: .start,
           children: [
             Text(
-              'PlayTogether',
+              'SyncTogether',
               style: TextStyle(
                 fontFamily: PTFonts.display,
                 fontSize: compact ? 17 : 19,
@@ -1425,12 +1425,12 @@ class _Wordmark extends StatelessWidget {
                   Text(
                     Env.usingLocalStack ? '$version · local' : version,
                     style: PTText.mono.copyWith(
-                      fontSize: compact ? 10 : 11,
+                       fontSize: compact ? 10 : 11,
                       color: Env.usingLocalStack ? PTColors.warning : PTColors.white(0.4),
                     ),
                   ),
                 Text(
-                  AppVersion.label != null ? '· playtogether.app' : 'playtogether.app',
+                  AppVersion.label != null ? '· synctogether.app' : 'synctogether.app',
                   style: PTText.caption.copyWith(
                     fontSize: compact ? 10 : 11,
                     color: PTColors.white(0.35),

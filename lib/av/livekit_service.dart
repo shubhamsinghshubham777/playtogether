@@ -2,9 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:livekit_client/livekit_client.dart' as lk;
-import 'package:playtogether/diagnostics.dart';
-import 'package:playtogether/env.dart';
-import 'package:playtogether/rooms/room_models.dart';
+import 'package:synctogether/diagnostics.dart';
+import 'package:synctogether/env.dart';
+import 'package:synctogether/rooms/room_models.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 enum AvConnectionState { disconnected, connecting, connected, reconnecting }

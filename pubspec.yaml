@@ -1,4 +1,4 @@
-name: playtogether
+name: synctogether
 description: "A simple shared media player for all your favorite platforms (powered by Flutter)."
 publish_to: 'none'
 version: 0.11.0

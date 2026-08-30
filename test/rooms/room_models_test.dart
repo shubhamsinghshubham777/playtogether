@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:playtogether/rooms/room_models.dart';
+import 'package:synctogether/rooms/room_models.dart';
 
 Map<String, dynamic> _minimalRow() => {
   'id': 'r1',
@@ -92,7 +92,7 @@ void main() {
 
     test('builds the invite link from the code', () {
       final room = Room.fromJson(_minimalRow());
-      expect(room.inviteLink, 'playtogether://join/ABC123');
+      expect(room.inviteLink, 'synctogether://join/ABC123');
     });
   });
 

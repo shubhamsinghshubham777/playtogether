@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:playtogether/rooms/room_models.dart';
+import 'package:synctogether/rooms/room_models.dart';
 
 /// How far a member has got towards having the room's canonical media loaded.
 /// Declaration order is the rank — "more ready" compares by [index], which is

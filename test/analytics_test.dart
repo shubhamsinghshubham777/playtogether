@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:playtogether/analytics.dart';
+import 'package:synctogether/analytics.dart';
 
 class _RecordingTransport {
   _RecordingTransport({this.succeed = true});

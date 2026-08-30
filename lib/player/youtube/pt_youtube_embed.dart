@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
-import 'package:playtogether/auth/webview_runtime.dart';
-import 'package:playtogether/diagnostics.dart';
-import 'package:playtogether/player/youtube/pt_youtube_controller.dart';
-import 'package:playtogether/ui/pt_theme.dart';
+import 'package:synctogether/auth/webview_runtime.dart';
+import 'package:synctogether/diagnostics.dart';
+import 'package:synctogether/player/youtube/pt_youtube_controller.dart';
+import 'package:synctogether/ui/pt_theme.dart';
 
 class PTYouTubeEmbed extends StatefulWidget {
   const PTYouTubeEmbed({super.key, required this.controller});
@@ -103,7 +103,7 @@ class _MissingRuntime extends StatelessWidget {
           children: [
             Text(
               "Your PC is missing a Windows component YouTube videos need. "
-              "Reinstalling PlayTogether will add it.",
+              "Reinstalling SyncTogether will add it.",
               textAlign: .center,
               style: PTText.body.copyWith(color: PTColors.white(0.6)),
             ),

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# PlayTogether Development Ecosystem Controller
+# SyncTogether Development Ecosystem Controller
 # ------------------------------------------------------------------------------
 # Usage:
 #   ./scripts/dev.sh                # Spin down old state, then spin whole ecosystem UP
@@ -27,7 +27,7 @@ mkdir -p "$PID_DIR"
 FUNCTIONS_PID_FILE="$PID_DIR/functions.pid"
 WEBSITE_PID_FILE="$PID_DIR/website.pid"
 TUNNEL_PID_FILE="$PID_DIR/tunnel.pid"
-LOGS_DIR="/tmp/playtogether-logs"
+LOGS_DIR="/tmp/synctogether-logs"
 mkdir -p "$LOGS_DIR"
 
 FUNCTIONS_LOG="$LOGS_DIR/functions.log"
@@ -57,7 +57,7 @@ banner() { echo -e "\n${BOLD}${CYAN}=== $1 ===${NC}\n"; }
 # Spin Down
 # ------------------------------------------------------------------------------
 spin_down() {
-  banner "Spinning Down PlayTogether Ecosystem"
+  banner "Spinning Down SyncTogether Ecosystem"
 
   # 1. Kill Webhook Tunnels (Hookdeck / Paddle CLI)
   info "Stopping webhook tunnels..."
@@ -92,10 +92,10 @@ spin_down() {
   info "Stopping Supabase local containers..."
   supabase stop 2>/dev/null || true
 
-  # 5. Stop running Flutter desktop app instances (PlayTogether / PlayTogether B)
+  # 5. Stop running Flutter desktop app instances (SyncTogether / SyncTogether B)
   info "Checking for running desktop app instances..."
-  pkill -f "PlayTogether B.app" 2>/dev/null || true
-  pkill -f "PlayTogether.app/Contents/MacOS/PlayTogether" 2>/dev/null || true
+  pkill -f "SyncTogether B.app" 2>/dev/null || true
+  pkill -f "SyncTogether.app/Contents/MacOS/SyncTogether" 2>/dev/null || true
 
   # 6. Cleanup any remaining listeners on dev ports
   info "Verifying ports are clean..."
@@ -189,7 +189,7 @@ spin_up() {
   spin_down
   check_prereqs
 
-  banner "Spinning Up PlayTogether Ecosystem"
+  banner "Spinning Up SyncTogether Ecosystem"
 
   # 1. Start Supabase Stack
   info "Starting Supabase local stack (PostgreSQL, Auth, Realtime, Storage, Studio)..."
@@ -253,7 +253,7 @@ spin_up() {
   if [ "$launch_tunnel" = true ]; then
     if command -v hookdeck &>/dev/null; then
       info "Starting Hookdeck webhook tunnel for Paddle -> http://localhost:3000/api/paddle/webhook..."
-      nohup hookdeck listen 3000 playtogether-webhooks --path /api/paddle/webhook > "$TUNNEL_LOG" 2>&1 &
+      nohup hookdeck listen 3000 synctogether-webhooks --path /api/paddle/webhook > "$TUNNEL_LOG" 2>&1 &
       echo $! > "$TUNNEL_PID_FILE"
       tunnel_name="Hookdeck"
       success "Hookdeck tunnel running (Log: $TUNNEL_LOG)"
@@ -269,7 +269,7 @@ spin_up() {
   fi
 
   # 5. Dashboard Summary
-  echo -e "\n${BOLD}${GREEN}✨ PlayTogether Development Ecosystem is LIVE! ✨${NC}\n"
+  echo -e "\n${BOLD}${GREEN}✨ SyncTogether Development Ecosystem is LIVE! ✨${NC}\n"
   echo -e "  🌐 ${BOLD}Website & Billing:${NC}      http://localhost:3000"
   echo -e "  🗄️ ${BOLD}Supabase Studio:${NC}        $studio_url"
   echo -e "  ⚡ ${BOLD}Supabase API:${NC}           $api_url"
@@ -303,10 +303,10 @@ spin_up() {
 # Status
 # ------------------------------------------------------------------------------
 status() {
-  banner "PlayTogether Ecosystem Status"
+  banner "SyncTogether Ecosystem Status"
 
   # Supabase
-  if docker ps --filter "name=supabase_db_playtogether" --format "{{.Names}}" | grep -q "supabase_db"; then
+  if docker ps --filter "name=supabase_db_synctogether" --format "{{.Names}}" | grep -q "supabase_db"; then
     success "Supabase Local Stack: RUNNING (Studio: http://127.0.0.1:54323)"
   else
     warn "Supabase Local Stack: STOPPED"
@@ -339,7 +339,7 @@ status() {
 # Test Runner (All 3 suites)
 # ------------------------------------------------------------------------------
 run_tests() {
-  banner "Running PlayTogether Full Test Suite"
+  banner "Running SyncTogether Full Test Suite"
 
   info "1/3 Running Flutter Dart & Sync tests..."
   fvm flutter test
@@ -410,7 +410,7 @@ case "$COMMAND" in
     spin_up "$@"
     ;;
   help|-h|--help)
-    echo -e "PlayTogether Dev Ecosystem Script\n"
+    echo -e "SyncTogether Dev Ecosystem Script\n"
     echo -e "Usage:"
     echo -e "  ./scripts/dev.sh [command] [flags]\n"
     echo -e "Commands:"

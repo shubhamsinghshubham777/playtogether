@@ -4,7 +4,7 @@ import { FAQAccordion } from "@/components/FAQAccordion";
 
 export const metadata: Metadata = {
   title: "Frequently Asked Questions (FAQ)",
-  description: "Find answers to all questions about PlayTogether rooms, media synchronization, facecams, and premium subscriptions.",
+  description: "Find answers to all questions about SyncTogether rooms, media synchronization, facecams, and premium subscriptions.",
 };
 
 export default function FAQPage() {
@@ -40,7 +40,7 @@ export default function FAQPage() {
           Frequently Asked <span className="text-gradient-brand">Questions.</span>
         </h1>
         <p className="text-base text-gray-300">
-          Everything you need to know about PlayTogether features, room synchronization, and account options.
+          Everything you need to know about SyncTogether features, room synchronization, and account options.
         </p>
       </div>
 

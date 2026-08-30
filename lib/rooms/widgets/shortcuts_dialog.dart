@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
-import 'package:playtogether/platform.dart';
-import 'package:playtogether/ui/buttons.dart';
-import 'package:playtogether/ui/pt_theme.dart';
+import 'package:synctogether/platform.dart';
+import 'package:synctogether/ui/buttons.dart';
+import 'package:synctogether/ui/pt_theme.dart';
 
 class ShortcutsDialog extends StatelessWidget {
   const ShortcutsDialog({super.key, this.facecams = false});

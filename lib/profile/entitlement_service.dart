@@ -1,8 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
-import 'package:playtogether/diagnostics.dart';
-import 'package:playtogether/rooms/room_models.dart';
+import 'package:synctogether/diagnostics.dart';
+import 'package:synctogether/rooms/room_models.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 const kGuestTier = 'guest';

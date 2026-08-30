@@ -2,7 +2,7 @@
 # https://supabase.com/docs/guides/local-development/cli/config
 # A string used to distinguish different Supabase projects on the same host. Defaults to the
 # working directory name when running `supabase init`.
-project_id = "playtogether"
+project_id = "synctogether"
 
 [api]
 enabled = true
@@ -161,12 +161,12 @@ site_url = "http://localhost:3000"
 # external_url = ""
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
 additional_redirect_urls = [
-  "playtogether://auth-callback",
-  "playtogether://join/*",
+  "synctogether://auth-callback",
+  "synctogether://join/*",
   "http://localhost:3000/**",
   "http://127.0.0.1:3000/**",
-  "https://playtogether.app/**",
-  "https://*.playtogether.app/**",
+  "https://synctogether.app/**",
+  "https://*.synctogether.app/**",
   "https://*.vercel.app/**",
   "https://*.vercel.app",
 ]

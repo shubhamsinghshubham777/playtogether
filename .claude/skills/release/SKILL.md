@@ -1,6 +1,6 @@
 ---
 name: release
-description: Cut a PlayTogether release or pre-release — analyze commits since the last release tag, bump the pubspec version accordingly, push to main, and trigger the build_installers GitHub workflow. Use when the user says "cut a release", "ship a release", "cut a pre-release", "bump the version and build installers", or "/release". Optional arg overrides the computed version (e.g. "/release 0.5.0" or "/release patch"); a "pre" arg (alone or combined, e.g. "/release pre" or "/release pre minor") publishes it as a GitHub pre-release.
+description: Cut a SyncTogether release or pre-release — analyze commits since the last release tag, bump the pubspec version accordingly, push to main, and trigger the build_installers GitHub workflow. Use when the user says "cut a release", "ship a release", "cut a pre-release", "bump the version and build installers", or "/release". Optional arg overrides the computed version (e.g. "/release 0.5.0" or "/release patch"); a "pre" arg (alone or combined, e.g. "/release pre" or "/release pre minor") publishes it as a GitHub pre-release.
 ---
 
 # Cut a release
@@ -30,7 +30,7 @@ unconditionally — but do not "tidy" any of it:
 - **The asset filenames and the tag format are a published contract.**
   `.github/scripts/generate-appcast.sh` composes the enclosure URLs from
   `tag_name` (`v<version>_<run_id>`) and the exact names
-  `PlayTogether-<version>-{Windows.exe,macOS.dmg}`. Renaming either publishes a
+  `SyncTogether-<version>-{Windows.exe,macOS.dmg}`. Renaming either publishes a
   feed pointing at 404s, and every installed copy silently stops updating.
 - **Every release must carry `appcast.xml`.** Apps read it through the
   `releases/latest/download/appcast.xml` permalink, which resolves to the newest
@@ -157,6 +157,6 @@ stable later means cutting a new, higher version, not re-tagging.
    watch the build (it takes 15–30 min); the workflow will create the GitHub
    release, tag, and installer artifacts on its own. Remind the user the
    release will appear at
-   `https://github.com/shubhamsinghshubham777/playtogether/releases` when the
+   `https://github.com/shubhamsinghshubham777/synctogether/releases` when the
    run finishes. For a pre-release, say so and note it will carry the
    Pre-release badge and stay excluded from "Latest".
