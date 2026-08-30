@@ -13,7 +13,6 @@ import {
   ArrowRight,
   Sparkles,
   Layers,
-  XCircle,
 } from "lucide-react";
 
 function DesktopCallbackContent() {
@@ -21,7 +20,6 @@ function DesktopCallbackContent() {
   const [deepLinkUrl, setDeepLinkUrl] = useState<string>("synctogether://auth-callback");
   const [isError, setIsError] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [launchStatus, setLaunchStatus] = useState<"launching" | "launched">("launching");
 
   useEffect(() => {
     // Extract query and hash fragments
@@ -64,8 +62,6 @@ function DesktopCallbackContent() {
         window.location.href = targetUri;
       } catch (err) {
         console.error("Deep link navigation error:", err);
-      } finally {
-        setLaunchStatus("launched");
       }
     }, 250);
 
@@ -76,10 +72,6 @@ function DesktopCallbackContent() {
     if (deepLinkUrl) {
       window.location.href = deepLinkUrl;
     }
-  };
-
-  const handleCloseWindow = () => {
-    window.close();
   };
 
   if (isError) {
@@ -162,16 +154,8 @@ function DesktopCallbackContent() {
         </p>
       </div>
 
-      {/* Dynamic Status Indicator */}
-      <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/[0.04] border border-white/[0.08] text-xs text-gray-400">
-        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-        <span>
-          {launchStatus === "launching" ? "Opening desktop app..." : "Ready in SyncTogether"}
-        </span>
-      </div>
-
-      {/* Action Buttons */}
-      <div className="space-y-2.5 pt-1">
+      {/* Action Area */}
+      <div className="space-y-3 pt-1">
         <PTButton
           variant="primary"
           size="lg"
@@ -182,13 +166,9 @@ function DesktopCallbackContent() {
           Open SyncTogether
         </PTButton>
 
-        <button
-          onClick={handleCloseWindow}
-          className="w-full py-2 text-xs text-gray-400 hover:text-gray-200 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-        >
-          <XCircle className="w-3.5 h-3.5 opacity-60" />
-          <span>Close this tab</span>
-        </button>
+        <p className="text-xs text-gray-400 leading-relaxed">
+          If SyncTogether didn&apos;t open automatically, click the button above. You can safely close this browser tab.
+        </p>
       </div>
 
       {/* Helpful Subtle Footer Links */}
