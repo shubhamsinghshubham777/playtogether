@@ -279,9 +279,9 @@ To test the complete stack locally with automated hot reloading:
 ---
 
 ## 7. License & Commercial Notice
-
-SyncTogether is licensed under the **Business Source License 1.1 (BUSL-1.1)**.
-
-- **Permitted**: You are 100% free to self-host, run, inspect, and modify SyncTogether for yourself, your family, your community, or your internal organization.
-- **Prohibited**: You may not sell SyncTogether, offer it as a commercial hosted service (SaaS), or distribute rebranded paid copies without an explicit commercial license.
-- See the [LICENSE](file:///Users/shubham/Projects/Personal/synctogether/LICENSE) file for complete legal terms.
+ 
+SyncTogether is licensed under the **PolyForm Noncommercial License 1.0.0 (PolyForm-Noncommercial-1.0.0)**.
+ 
+- **Permitted**: You are 100% free to self-host, run, inspect, and modify SyncTogether for yourself, your family, your community, or non-commercial/educational purposes.
+- **Prohibited**: You may not sell SyncTogether, offer it as a commercial hosted service (SaaS), or use it for commercial organizational purposes without an explicit commercial license.
+- See the [LICENSE](LICENSE) file for complete legal terms.

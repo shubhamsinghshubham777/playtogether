@@ -55,7 +55,7 @@ npm --prefix website test               # Run webhook idempotency & signature te
    - **Diagnostics (`lib/diagnostics.dart`)**: Use `reportNonFatal` for unexpected caught errors and `trace(msg, category:, data:)` at state transitions. Never log per-tick or per-frame.
    - **Analytics (`lib/analytics.dart`)**: Use `Analytics.track` **only when an action was explicitly initiated by a human**. Never trigger analytics from background sync, remote actions, or gate evaluations.
 5. **Generated Assets**: Never manually edit `assets/sfx/splash.wav`, `assets/emoji/*.json`, `assets/ca/cacert.pem`, or icon PNGs. Use the generator scripts in `tool/`.
-6. **Licensing & Self-Hosting**: Licensed under Business Source License 1.1 (`LICENSE`). Self-hosting documentation lives in `docs/self-hosting.md`. Commercial SaaS/resale is restricted.
+6. **Licensing & Self-Hosting**: Licensed under PolyForm Noncommercial License 1.0.0 (`LICENSE`). Self-hosting documentation lives in `docs/self-hosting.md`. Commercial SaaS/resale and commercial use are restricted.
 
 ---
 

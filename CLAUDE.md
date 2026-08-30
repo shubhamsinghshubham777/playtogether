@@ -239,5 +239,5 @@ macOS and Windows replace themselves in place: `auto_updater` wraps Sparkle 2.9.
 
 ### Licensing & Self-Hosting
 
-The project is licensed under **Business Source License 1.1** (`LICENSE`), which permits personal, internal, and self-hosted use, but prohibits commercial SaaS or resale. Full production self-hosting and Docker deployment instructions are documented in `docs/self-hosting.md`.
+The project is licensed under **PolyForm Noncommercial License 1.0.0** (`LICENSE`), which permits personal, educational, and non-commercial self-hosted use, but prohibits commercial SaaS, resale, or commercial use without a separate license. Full production self-hosting and Docker deployment instructions are documented in `docs/self-hosting.md`.
 
