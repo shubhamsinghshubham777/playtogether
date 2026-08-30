@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import 'package:synctogether/auth/auth_service.dart';
+import 'package:synctogether/diagnostics.dart';
 import 'package:synctogether/profile/entitlement_service.dart';
 import 'package:synctogether/profile/profile_models.dart';
 import 'package:synctogether/profile/profile_service.dart';
@@ -223,32 +225,73 @@ class MediaQuotaDialogBody extends StatelessWidget {
         // Action Buttons
         Padding(
           padding: const EdgeInsets.only(top: 4),
-          child: Row(
-            spacing: 10,
-            children: [
-              if (!isPrem) ...[
-                Expanded(
-                  child: PTButton(
-                    label: 'Get Unlimited with Premium',
-                    icon: Symbols.crown_rounded,
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                      context.go('/lobby/profile');
-                    },
-                  ),
+          child: isGuest
+              ? Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  spacing: 10,
+                  children: [
+                    GoogleButton(
+                      label: 'Sign in with Google (Free 2.5 GB)',
+                      onPressed: () async {
+                        Navigator.of(context).pop();
+                        try {
+                          await AuthService.instance.linkGoogleIdentity();
+                        } catch (e, s) {
+                          reportNonFatal(e, s, during: 'linking Google identity from media quota dialog');
+                        }
+                      },
+                    ),
+                    Row(
+                      spacing: 10,
+                      children: [
+                        Expanded(
+                          child: PTButton(
+                            label: 'Go Premium (Unlimited)',
+                            icon: Symbols.crown_rounded,
+                            variant: .secondary,
+                            onPressed: () {
+                              Navigator.of(context).pop();
+                              context.push('/lobby/subscribe?source=quota_dialog');
+                            },
+                          ),
+                        ),
+                        PTButton(
+                          label: 'Got it',
+                          variant: .secondary,
+                          expand: false,
+                          onPressed: () => Navigator.of(context).pop(),
+                        ),
+                      ],
+                    ),
+                  ],
+                )
+              : Row(
+                  spacing: 10,
+                  children: [
+                    if (!isPrem) ...[
+                      Expanded(
+                        child: PTButton(
+                          label: 'Get Unlimited with Premium',
+                          icon: Symbols.crown_rounded,
+                          onPressed: () {
+                            Navigator.of(context).pop();
+                            context.push('/lobby/subscribe?source=quota_dialog');
+                          },
+                        ),
+                      ),
+                      PTButton(
+                        label: 'Got it',
+                        variant: .secondary,
+                        expand: false,
+                        onPressed: () => Navigator.of(context).pop(),
+                      ),
+                    ] else
+                      Expanded(
+                        child: PTButton(label: 'Got it', onPressed: () => Navigator.of(context).pop()),
+                      ),
+                  ],
                 ),
-                PTButton(
-                  label: 'Got it',
-                  variant: .secondary,
-                  expand: false,
-                  onPressed: () => Navigator.of(context).pop(),
-                ),
-              ] else
-                Expanded(
-                  child: PTButton(label: 'Got it', onPressed: () => Navigator.of(context).pop()),
-                ),
-            ],
-          ),
         ),
       ],
     );

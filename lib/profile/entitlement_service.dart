@@ -184,4 +184,10 @@ class EntitlementService extends ChangeNotifier {
     _limits = null;
     notifyListeners();
   }
+
+  @visibleForTesting
+  void setLimitsForTesting(TierLimits? limits) {
+    _limits = limits;
+    notifyListeners();
+  }
 }

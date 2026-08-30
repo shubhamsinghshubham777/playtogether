@@ -143,6 +143,13 @@ class _LobbyScreenState extends State<LobbyScreen> {
   }
 
   Future<void> _pickStagedMedia() async {
+    final profile = ProfileService.instance.profile;
+    final isGuest = profile?.isGuest ?? true;
+    if (isGuest) {
+      if (mounted) showMediaQuotaDialog(context);
+      return;
+    }
+
     const videoTypeGroup = XTypeGroup(label: 'Videos', extensions: ['mp4', 'mkv']);
     final FastFilePickerPath? response;
     try {
@@ -168,7 +175,6 @@ class _LobbyScreenState extends State<LobbyScreen> {
     }
 
     final weeklyLimit = limits?.mediaSharingWeeklyBytes;
-    final profile = ProfileService.instance.profile;
     if (weeklyLimit != null && profile != null) {
       final remaining = profile.remainingWeeklyBytes(weeklyLimit);
       if (fileSize > remaining) {
@@ -533,8 +539,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
             children: [
               const _Wordmark(),
               const Spacer(),
-              _mediaQuotaChip(),
-              const SizedBox(width: 12),
+              if (_showQuotaChip) ...[_mediaQuotaChip(), const SizedBox(width: 12)],
               if (_showPremiumChip) ...[_premiumChip(), const SizedBox(width: 12)],
               _profilePill(),
               const SizedBox(width: 12),
@@ -574,20 +579,21 @@ class _LobbyScreenState extends State<LobbyScreen> {
                   // IntrinsicHeight: equal-height cards; a bare .stretch Row here
                   // would receive unbounded height from the scroll view and crash.
                   IntrinsicHeight(
-                    child: Row(
-                      mainAxisAlignment: .center,
-                      crossAxisAlignment: .stretch,
-                      spacing: 28,
-                      children: [
-                        SizedBox(
-                          width: 430,
-                          child: _createCard(delay: const Duration(milliseconds: 120)),
-                        ),
-                        SizedBox(
-                          width: 430,
-                          child: _joinCard(delay: const Duration(milliseconds: 180)),
-                        ),
-                      ],
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 888),
+                      child: Row(
+                        mainAxisAlignment: .center,
+                        crossAxisAlignment: .stretch,
+                        spacing: 28,
+                        children: [
+                          Expanded(
+                            child: _createCard(delay: const Duration(milliseconds: 120)),
+                          ),
+                          Expanded(
+                            child: _joinCard(delay: const Duration(milliseconds: 180)),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                   if (RoomService.instance.myRooms.isNotEmpty) ...[
@@ -624,8 +630,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
                 children: [
                   const _Wordmark(compact: true),
                   const Spacer(),
-                  _mediaQuotaChip(compact: true),
-                  const SizedBox(width: 8),
+                  if (_showQuotaChip) ...[_mediaQuotaChip(compact: true), const SizedBox(width: 8)],
                   if (_showPremiumChip) ...[_premiumChip(), const SizedBox(width: 8)],
                   _avatarButton(),
                 ],
@@ -673,8 +678,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
                   child: _Greeting(style: PTText.panelHeading, align: .centerLeft),
                 ),
                 const SizedBox(width: 8),
-                _mediaQuotaChip(compact: true),
-                const SizedBox(width: 8),
+                if (_showQuotaChip) ...[_mediaQuotaChip(compact: true), const SizedBox(width: 8)],
                 if (_showPremiumChip) ...[_premiumChip(), const SizedBox(width: 8)],
                 _avatarButton(size: 36),
               ],
@@ -750,9 +754,11 @@ class _LobbyScreenState extends State<LobbyScreen> {
     }
   }
 
-  bool get _showPremiumChip {
+  bool get _showPremiumChip => !EntitlementService.instance.isPremium;
+
+  bool get _showQuotaChip {
     final profile = ProfileService.instance.profile;
-    return profile != null && !profile.isGuest && !EntitlementService.instance.isPremium;
+    return profile != null && !profile.isGuest;
   }
 
   Widget _premiumChip() {
@@ -807,8 +813,6 @@ class _LobbyScreenState extends State<LobbyScreen> {
           Text(
             isPrem
                 ? (compact ? 'Unlimited' : 'Unlimited quota')
-                : isGuest
-                ? 'Quota info'
                 : '${Profile.formatBytes(remainingBytes)} quota',
             style: PTText.body.copyWith(
               fontSize: 13,
@@ -869,7 +873,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
     final content = Column(
       mainAxisSize: .min,
       crossAxisAlignment: .start,
-      spacing: compact ? 18 : 24,
+      spacing: compact ? 14 : 18,
       children: [
         _cardHeader(
           Symbols.add_circle_rounded,
@@ -955,8 +959,6 @@ class _LobbyScreenState extends State<LobbyScreen> {
   }
 
   Widget _stagedMediaSection(bool compact) {
-    if (!EntitlementService.instance.limitsOrFallback.canShareMedia) return const SizedBox.shrink();
-
     if (_stagedSession != null && _stagedFile != null) {
       final fileName = p.basename(_stagedFile!.path);
       return Container(
@@ -1087,7 +1089,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
     final quotaSubtitle = isPrem
         ? 'Unlimited uploads with Premium • Up to 10 GB'
         : isGuest
-        ? 'Sign in to stream local video files with guests'
+        ? 'Sign in for free 2.5 GB streaming'
         : '${Profile.formatBytes(remainingBytes)} weekly quota available • Up to 2 GB';
 
     return Material(
@@ -1116,6 +1118,8 @@ class _LobbyScreenState extends State<LobbyScreen> {
                     ),
                     Text(
                       quotaSubtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: PTText.caption.copyWith(
                         fontSize: 10,
                         color: isLow ? PTColors.warning : PTColors.white(0.5),
@@ -1124,12 +1128,38 @@ class _LobbyScreenState extends State<LobbyScreen> {
                   ],
                 ),
               ),
-              IconButton(
-                tooltip: 'Bandwidth quota info',
-                icon: Icon(Symbols.info_rounded, size: 18, color: PTColors.textAccent),
-                onPressed: () => showMediaQuotaDialog(context),
-              ),
-              Icon(Symbols.add_rounded, color: PTColors.white(0.6), size: 18),
+              if (isGuest)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: PTColors.primary.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0x4DA78BFA)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    spacing: 4,
+                    children: [
+                      const Icon(Symbols.lock_rounded, size: 14, fill: 1, color: PTColors.textAccent),
+                      Text(
+                        'Unlock',
+                        style: PTText.caption.copyWith(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: PTColors.textAccent,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else ...[
+                IconButton(
+                  tooltip: 'Bandwidth quota info',
+                  icon: const Icon(Symbols.info_rounded, size: 18, color: PTColors.textAccent),
+                  onPressed: () => showMediaQuotaDialog(context),
+                ),
+                Icon(Symbols.add_rounded, color: PTColors.white(0.6), size: 18),
+              ],
             ],
           ),
         ),
@@ -1141,7 +1171,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
     final content = Column(
       mainAxisSize: .min,
       crossAxisAlignment: .start,
-      spacing: compact ? 16 : 24,
+      spacing: compact ? 14 : 18,
       children: [
         _cardHeader(
           Symbols.login_rounded,
@@ -1212,7 +1242,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
         radius: compact ? 24 : 26,
         opacity: compact ? 0.55 : 0.5,
         blur: compact ? 28 : 32,
-        padding: EdgeInsets.all(compact ? 22 : 34),
+        padding: EdgeInsets.all(compact ? 22 : 28),
         child: scroll ? SingleChildScrollView(child: content) : content,
       ),
     );

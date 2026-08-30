@@ -41,6 +41,12 @@ class ProfileService extends ChangeNotifier {
     notifyListeners();
   }
 
+  @visibleForTesting
+  void setProfileForTesting(Profile? p) {
+    _profile = p;
+    notifyListeners();
+  }
+
   Future<void> updateDisplayName(String name) async {
     final uid = _client.auth.currentUser!.id;
     await _client.from('profiles').update({'display_name': name.trim()}).eq('id', uid);
