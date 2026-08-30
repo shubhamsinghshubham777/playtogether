@@ -1,7 +1,9 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:synctogether/analytics.dart';
 import 'package:synctogether/diagnostics.dart';
+import 'package:synctogether/env.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// Thin wrapper over Supabase auth. Session persistence and token refresh are
@@ -114,12 +116,17 @@ class AuthService {
     _oauthWindow = null;
   }
 
+  static String get _authRedirectUrl =>
+      kDebugMode && Env.usingLocalStack
+          ? 'http://localhost:3000/auth/desktop-callback'
+          : 'https://synctogether.app/auth/desktop-callback';
+
   /// Browser OAuth + deep-link callback — the one flow that works on every
   /// platform (plan Phase 1). supabase_flutter handles the callback URI.
   Future<void> signInWithGoogle() => _startOAuth(
     () => _client.auth.signInWithOAuth(
       OAuthProvider.google,
-      redirectTo: 'synctogether://auth-callback',
+      redirectTo: _authRedirectUrl,
       authScreenLaunchMode: LaunchMode.externalApplication,
     ),
   );
@@ -128,7 +135,7 @@ class AuthService {
   Future<void> linkGoogleIdentity() => _startOAuth(
     () => _client.auth.linkIdentity(
       OAuthProvider.google,
-      redirectTo: 'synctogether://auth-callback',
+      redirectTo: _authRedirectUrl,
       authScreenLaunchMode: LaunchMode.externalApplication,
     ),
   );
