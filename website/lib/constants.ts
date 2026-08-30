@@ -108,7 +108,7 @@ export const PRICING_TIERS = {
       "Up to 16 participants per room",
       "Up to 24-hour continuous sessions",
       "Unlimited media streaming quota (up to 10.0 GB file)",
-      "HD Video + Voice facecams",
+      "Video + Voice facecams",
       "24 animated Lottie reaction emoji",
       "Persistent rooms (never expire or delete)",
       "Room host privileges denormalized to all joiners",
@@ -165,7 +165,7 @@ export const FAQ_ITEMS = [
     questions: [
       {
         q: "What do I get with SyncTogether Premium?",
-        a: "Premium unlocks 20 persistent rooms, up to 16 participants per room, up to 24-hour sessions, crystal-clear HD Video facecams, 24 animated emoji reactions, and persistent room memory."
+        a: "Premium unlocks 20 persistent rooms, up to 16 participants per room, up to 24-hour sessions, crystal-clear Voice & Video facecams, 24 animated emoji reactions, and persistent room memory."
       },
       {
         q: "How do I subscribe?",

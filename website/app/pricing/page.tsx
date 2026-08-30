@@ -5,7 +5,7 @@ import { FAQAccordion } from "@/components/FAQAccordion";
 export const metadata: Metadata = {
   title: "Pricing & Plans — SyncTogether Premium",
   description:
-    "Upgrade to SyncTogether Premium for 20 persistent rooms, 16 members, 24-hour sessions, HD video facecams, and extended emoji reactions.",
+    "Upgrade to SyncTogether Premium for 20 persistent rooms, 16 members, 24-hour sessions, video facecams, and extended emoji reactions.",
 };
 
 export default function PricingPage() {
@@ -43,7 +43,7 @@ export default function PricingPage() {
           Simple, transparent <span className="text-gradient-brand">pricing.</span>
         </h1>
         <p className="text-lg text-gray-300">
-          Unlock the ultimate theater experience with HD video facecams, 16-member rooms, and persistent memory.
+          Unlock the ultimate theater experience with real-time video facecams, 16-member rooms, and persistent memory.
         </p>
       </div>
 

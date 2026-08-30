@@ -325,7 +325,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> with WidgetsBin
       ('Up to 20 rooms active at once', Symbols.meeting_room_rounded),
       ('Persistent rooms that stay saved forever', Symbols.save_rounded),
       ('Up to 16 watchers per room', Symbols.groups_rounded),
-      ('HD video facecams & crystal-clear voice', Symbols.videocam_rounded),
+      ('Video facecams & crystal-clear voice', Symbols.videocam_rounded),
       ('Extended animated emoji reactions', Symbols.add_reaction_rounded),
       ('Watch party sessions up to 24 hours', Symbols.schedule_rounded),
     ];

@@ -249,7 +249,7 @@ export function PricingTable() {
                 <td className="p-4 sm:p-5 font-semibold text-white">Voice & Video Facecams</td>
                 <td className="p-4 sm:p-5 text-gray-500"><Minus className="w-4 h-4" /></td>
                 <td className="p-4 sm:p-5 text-purple-300">Voice only</td>
-                <td className="p-4 sm:p-5 text-amber-300 font-bold">HD Video + Voice</td>
+                <td className="p-4 sm:p-5 text-amber-300 font-bold">Video + Voice</td>
               </tr>
               <tr>
                 <td className="p-4 sm:p-5 font-semibold text-white">Room Nap & Resume</td>

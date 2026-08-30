@@ -100,11 +100,11 @@ export function TierPreviewSection() {
               )}
             </div>
             <p className="text-xs text-gray-400">
-              20 persistent rooms • 16 members • 24h • HD Video
+              20 persistent rooms • 16 members • 24h • Video Cams
             </p>
             <ul className="text-xs text-gray-300 space-y-2 pt-2 border-t border-white/5">
               <li className="flex items-center gap-2">
-                <Check className="w-3.5 h-3.5 text-amber-400" /> HD Video &amp; Voice Facecams
+                <Check className="w-3.5 h-3.5 text-amber-400" /> Video &amp; Voice Facecams
               </li>
               <li className="flex items-center gap-2">
                 <Check className="w-3.5 h-3.5 text-amber-400" /> 24 Animated Emoji Reactions

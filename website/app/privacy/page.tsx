@@ -125,7 +125,7 @@ export default function PrivacyPage() {
           </p>
           <ul className="space-y-2 text-gray-400 list-disc list-inside">
             <li>
-              The SyncTogether desktop client applications (macOS, Windows, and Linux).
+              The SyncTogether desktop client applications (macOS and Windows).
             </li>
             <li>
               The official website, documentation, and subscription management portal located at{" "}

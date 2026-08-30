@@ -21,7 +21,7 @@ export default async function ChangelogPage() {
       name: "SyncTogether 0.11.0 — Facecams & Persistent Rooms",
       published_at: "2026-08-11T12:00:00Z",
       body: `### New Features
-- **Video & Voice Facecams**: Real-time HD Video and low-latency Voice facecams integrated directly into rooms.
+- **Video & Voice Facecams**: Real-time Video and low-latency Voice facecams integrated directly into rooms.
 - **Persistent Rooms**: Premium hosts can now create named, permanent rooms that never expire.
 - **Animated Lottie Reactions**: 24 expressive Google Noto animated emoji reactions floating dynamically over video.
 - **Room Dormancy & Nap**: Free rooms nap for 24h upon expiration, resuming local file timestamps seamlessly.

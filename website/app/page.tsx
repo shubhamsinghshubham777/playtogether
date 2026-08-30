@@ -177,7 +177,7 @@ export default async function HomePage() {
             </h3>
             <p className="text-sm text-gray-400 leading-relaxed">
               Ultra-low latency real-time facecams. See and hear your friends with
-              crisp 1080p video, active speaker detection, and low CPU overhead.
+              smooth real-time video, active speaker detection, and low CPU overhead.
             </p>
           </GlassPanel>
 

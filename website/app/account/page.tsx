@@ -395,7 +395,7 @@ function AccountDashboard() {
             ) : (
               <div className="p-4 rounded-xl bg-purple-500/10 border border-purple-400/20 space-y-2 text-xs text-purple-200">
                 <p className="text-gray-300">
-                  You are currently on the Free tier. Upgrade to unlock 20 persistent rooms, 16 members, and HD video facecams.
+                  You are currently on the Free tier. Upgrade to unlock 20 persistent rooms, 16 members, and video facecams.
                 </p>
               </div>
             )}
@@ -478,7 +478,7 @@ function AccountDashboard() {
                 </span>
                 <span className="font-bold text-white">
                   {entitlement?.av_level === "video"
-                    ? "HD Video"
+                    ? "Video + Voice"
                     : entitlement?.av_level === "voice"
                     ? "Voice"
                     : "None"}
