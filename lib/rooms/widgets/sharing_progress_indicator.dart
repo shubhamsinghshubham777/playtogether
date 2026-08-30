@@ -78,22 +78,20 @@ class SharingProgressIndicator extends StatelessWidget {
                     isDone
                         ? Icons.check_circle_outline
                         : isFailed
-                            ? Icons.error_outline
-                            : Icons.cloud_upload_outlined,
+                        ? Icons.error_outline
+                        : Icons.cloud_upload_outlined,
                     size: 18,
                     color: isDone
                         ? Colors.green
                         : isFailed
-                            ? theme.colorScheme.error
-                            : theme.colorScheme.primary,
+                        ? theme.colorScheme.error
+                        : theme.colorScheme.primary,
                   ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       label,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
+                      style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -106,8 +104,8 @@ class SharingProgressIndicator extends StatelessWidget {
                       color: isDone
                           ? Colors.green
                           : isFailed
-                              ? theme.colorScheme.error
-                              : theme.colorScheme.primary,
+                          ? theme.colorScheme.error
+                          : theme.colorScheme.primary,
                     ),
                   ),
                   if (onCancel != null && !isDone) ...[
@@ -143,8 +141,8 @@ class SharingProgressIndicator extends StatelessWidget {
                     isDone
                         ? Colors.green
                         : isFailed
-                            ? theme.colorScheme.error
-                            : theme.colorScheme.primary,
+                        ? theme.colorScheme.error
+                        : theme.colorScheme.primary,
                   ),
                 ),
               ),

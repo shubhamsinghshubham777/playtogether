@@ -55,10 +55,8 @@ GoRouter buildRouter(Player player) {
           ),
           GoRoute(
             path: 'subscribe',
-            pageBuilder: (context, state) => _sharedAxis(
-              state,
-              SubscriptionScreen(source: state.uri.queryParameters['source']),
-            ),
+            pageBuilder: (context, state) =>
+                _sharedAxis(state, SubscriptionScreen(source: state.uri.queryParameters['source'])),
           ),
           GoRoute(
             path: 'room/:id',

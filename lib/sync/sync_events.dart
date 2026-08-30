@@ -524,4 +524,3 @@ class RoomExtendedEvent extends SyncEvent {
     'durationMinutes': durationMinutes,
   };
 }
-

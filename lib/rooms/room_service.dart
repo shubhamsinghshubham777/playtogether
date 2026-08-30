@@ -42,17 +42,11 @@ class RoomService extends ChangeNotifier {
     String? stagedId,
   }) async {
     try {
-      final params = <String, dynamic>{
-        'p_name': name,
-        'p_duration_minutes': durationMinutes,
-      };
+      final params = <String, dynamic>{'p_name': name, 'p_duration_minutes': durationMinutes};
       if (stagedId != null) {
         params['p_staged_id'] = stagedId;
       }
-      final row = await _client.rpc(
-        'create_room',
-        params: params,
-      );
+      final row = await _client.rpc('create_room', params: params);
       final room = Room.fromJson(_singleRow(row));
       _currentRoom = room;
       notifyListeners();

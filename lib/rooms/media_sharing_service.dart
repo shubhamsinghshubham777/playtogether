@@ -60,13 +60,16 @@ class MediaSharingException implements Exception {
     if (code.contains('quota_exceeded') || code.contains('upload_quota_exceeded')) {
       final used = detailsMap?['used_bytes'] as num?;
       final limit = detailsMap?['weekly_limit'] as num?;
-      final resets = detailsMap?['resets_at'] != null ? DateTime.tryParse(detailsMap!['resets_at'].toString()) : null;
+      final resets = detailsMap?['resets_at'] != null
+          ? DateTime.tryParse(detailsMap!['resets_at'].toString())
+          : null;
 
       String msg;
       if (used != null && limit != null) {
         final usedStr = Profile.formatBytes(used.toInt());
         final limitStr = Profile.formatBytes(limit.toInt());
-        msg = 'Weekly upload quota reached ($usedStr of $limitStr used). Upgrade to Premium for unlimited bandwidth.';
+        msg =
+            'Weekly upload quota reached ($usedStr of $limitStr used). Upgrade to Premium for unlimited bandwidth.';
       } else {
         msg = 'Weekly upload quota reached. Upgrade to Premium for unlimited uploads.';
       }
@@ -83,7 +86,8 @@ class MediaSharingException implements Exception {
     if (code.contains('concurrent_upload_active')) {
       return const MediaSharingException(
         code: 'concurrent_upload_active',
-        message: 'Another upload is already in progress on your account. Please wait for it to finish or cancel it.',
+        message:
+            'Another upload is already in progress on your account. Please wait for it to finish or cancel it.',
       );
     }
 
@@ -102,10 +106,7 @@ class MediaSharingException implements Exception {
     }
 
     if (code.contains('Upload cancelled') || code.contains('cancelled')) {
-      return const MediaSharingException(
-        code: 'cancelled',
-        message: 'Upload was cancelled.',
-      );
+      return const MediaSharingException(code: 'cancelled', message: 'Upload was cancelled.');
     }
 
     return MediaSharingException(
@@ -121,11 +122,7 @@ class MediaSharingException implements Exception {
 }
 
 class FileSlice {
-  const FileSlice({
-    required this.partNumber,
-    required this.startOffset,
-    required this.endOffset,
-  });
+  const FileSlice({required this.partNumber, required this.startOffset, required this.endOffset});
 
   final int partNumber;
   final int startOffset;
@@ -187,9 +184,7 @@ class StagedUploadSession {
   final int partSizeBytes;
   final Map<int, String> completedParts;
 
-  StagedUploadSession copyWith({
-    Map<int, String>? completedParts,
-  }) {
+  StagedUploadSession copyWith({Map<int, String>? completedParts}) {
     return StagedUploadSession(
       stagedId: stagedId,
       fileName: fileName,
@@ -212,7 +207,8 @@ class CancellationToken {
   }
 }
 
-typedef EdgeFunctionCaller = Future<Map<String, dynamic>> Function(String action, Map<String, dynamic> body);
+typedef EdgeFunctionCaller =
+    Future<Map<String, dynamic>> Function(String action, Map<String, dynamic> body);
 typedef HttpClientFactory = HttpClient Function();
 
 class MediaSharingService {
@@ -220,9 +216,9 @@ class MediaSharingService {
     LocalMediaStore? mediaStore,
     EdgeFunctionCaller? edgeFunctionCaller,
     HttpClientFactory? httpClientFactory,
-  })  : _mediaStore = mediaStore ?? LocalMediaStore.instance,
-        _edgeCaller = edgeFunctionCaller ?? _defaultEdgeCaller,
-        _httpClientFactory = httpClientFactory ?? HttpClient.new;
+  }) : _mediaStore = mediaStore ?? LocalMediaStore.instance,
+       _edgeCaller = edgeFunctionCaller ?? _defaultEdgeCaller,
+       _httpClientFactory = httpClientFactory ?? HttpClient.new;
 
   static const int kPartSizeBytes = 10 * 1024 * 1024; // 10 MB
 
@@ -230,7 +226,10 @@ class MediaSharingService {
   final EdgeFunctionCaller _edgeCaller;
   final HttpClientFactory _httpClientFactory;
 
-  static Future<Map<String, dynamic>> _defaultEdgeCaller(String action, Map<String, dynamic> body) async {
+  static Future<Map<String, dynamic>> _defaultEdgeCaller(
+    String action,
+    Map<String, dynamic> body,
+  ) async {
     try {
       final response = await Supabase.instance.client.functions.invoke(
         'media-share',
@@ -246,10 +245,7 @@ class MediaSharingService {
     }
   }
 
-  static List<FileSlice> calculateSlices({
-    required int fileSize,
-    required int partSizeBytes,
-  }) {
+  static List<FileSlice> calculateSlices({required int fileSize, required int partSizeBytes}) {
     if (fileSize <= 0) return const [];
     final slices = <FileSlice>[];
     int start = 0;
@@ -257,11 +253,7 @@ class MediaSharingService {
 
     while (start < fileSize) {
       final end = min(start + partSizeBytes, fileSize);
-      slices.add(FileSlice(
-        partNumber: partNumber,
-        startOffset: start,
-        endOffset: end,
-      ));
+      slices.add(FileSlice(partNumber: partNumber, startOffset: start, endOffset: end));
       start = end;
       partNumber++;
     }
@@ -406,7 +398,9 @@ class MediaSharingService {
 
       final remainingBytes = session.fileSize - totalUploadedBytes;
       final etaSeconds = currentSpeedBps > 0 ? (remainingBytes / currentSpeedBps).ceil() : 0;
-      final fraction = session.fileSize > 0 ? (totalUploadedBytes / session.fileSize).clamp(0.0, 1.0) : 0.0;
+      final fraction = session.fileSize > 0
+          ? (totalUploadedBytes / session.fileSize).clamp(0.0, 1.0)
+          : 0.0;
 
       final p = UploadProgress(
         bytesUploaded: totalUploadedBytes,
@@ -480,8 +474,7 @@ class MediaSharingService {
     }
 
     // Complete upload: sort parts strictly ascending by partNumber
-    final sortedParts = completed.entries.toList()
-      ..sort((a, b) => a.key.compareTo(b.key));
+    final sortedParts = completed.entries.toList()..sort((a, b) => a.key.compareTo(b.key));
 
     await _edgeCaller('complete', {
       'roomId': session.roomId,
@@ -577,7 +570,10 @@ class MediaSharingService {
     int etaSeconds = 0;
 
     void reportProgress(String state) {
-      final elapsedSec = max(0.001, (DateTime.now().millisecondsSinceEpoch - uploadStartTime) / 1000.0);
+      final elapsedSec = max(
+        0.001,
+        (DateTime.now().millisecondsSinceEpoch - uploadStartTime) / 1000.0,
+      );
       currentSpeedBps = totalUploadedBytes / elapsedSec;
       final remainingBytes = max(0, fileSize - totalUploadedBytes);
       etaSeconds = currentSpeedBps > 0 ? (remainingBytes / currentSpeedBps).ceil() : 0;
@@ -655,8 +651,7 @@ class MediaSharingService {
         }
       }
 
-      final sortedParts = completed.entries.toList()
-        ..sort((a, b) => a.key.compareTo(b.key));
+      final sortedParts = completed.entries.toList()..sort((a, b) => a.key.compareTo(b.key));
 
       await _edgeCaller('staged-complete', {
         'stagedId': stagedId,

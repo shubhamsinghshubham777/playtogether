@@ -45,9 +45,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> with WidgetsBin
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    Analytics.instance.track('subscription_screen_viewed', {
-      'source': widget.source ?? 'direct',
-    });
+    Analytics.instance.track('subscription_screen_viewed', {'source': widget.source ?? 'direct'});
   }
 
   @override
@@ -64,9 +62,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> with WidgetsBin
   }
 
   Future<void> _openCheckout() async {
-    Analytics.instance.track('checkout_opened', {
-      'source': widget.source ?? 'direct',
-    });
+    Analytics.instance.track('checkout_opened', {'source': widget.source ?? 'direct'});
     setState(() => _awaitingCheckout = true);
     final uri = Uri.parse(checkoutUrl);
     try {
@@ -131,10 +127,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> with WidgetsBin
     return Scaffold(
       body: AmbientBackground(
         child: ListenableBuilder(
-          listenable: Listenable.merge([
-            ProfileService.instance,
-            EntitlementService.instance,
-          ]),
+          listenable: Listenable.merge([ProfileService.instance, EntitlementService.instance]),
           builder: (context, _) {
             return PTResponsive(
               desktop: (_) => _layout(compact: false),
@@ -151,10 +144,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> with WidgetsBin
     return Column(
       children: [
         Padding(
-          padding: EdgeInsets.symmetric(
-            horizontal: compact ? 20 : 48,
-            vertical: compact ? 12 : 28,
-          ),
+          padding: EdgeInsets.symmetric(horizontal: compact ? 20 : 48, vertical: compact ? 12 : 28),
           child: _backHeader(compact: compact),
         ),
         Expanded(
@@ -282,13 +272,9 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> with WidgetsBin
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       decoration: BoxDecoration(
-        color: isPremium
-            ? PTColors.primary.withValues(alpha: 0.15)
-            : PTColors.white(0.04),
+        color: isPremium ? PTColors.primary.withValues(alpha: 0.15) : PTColors.white(0.04),
         border: Border.all(
-          color: isPremium
-              ? const Color(0xFFA78BFA).withValues(alpha: 0.4)
-              : PTColors.white(0.1),
+          color: isPremium ? const Color(0xFFA78BFA).withValues(alpha: 0.4) : PTColors.white(0.1),
         ),
         borderRadius: BorderRadius.circular(18),
       ),
@@ -363,12 +349,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> with WidgetsBin
                   color: PTColors.primary.withValues(alpha: 0.15),
                   shape: .circle,
                 ),
-                child: Icon(
-                  perk.$2,
-                  size: 17,
-                  fill: 1,
-                  color: PTColors.textAccent,
-                ),
+                child: Icon(perk.$2, size: 17, fill: 1, color: PTColors.textAccent),
               ),
               Expanded(
                 child: Text(

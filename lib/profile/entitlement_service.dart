@@ -59,7 +59,8 @@ class TierLimits {
 
   bool get canShareMedia => mediaSharing != 'none';
   bool get hasUnlimitedSharing => mediaSharing == 'full';
-  int get mediaSharingMaxSizeBytes => isPremium ? 10737418240 : 2147483648; // 10 GB for Premium, 2 GB for Free
+  int get mediaSharingMaxSizeBytes =>
+      isPremium ? 10737418240 : 2147483648; // 10 GB for Premium, 2 GB for Free
 
   factory TierLimits.fromJson(Map<String, dynamic> json) => TierLimits(
     tier: json['tier'] as String,

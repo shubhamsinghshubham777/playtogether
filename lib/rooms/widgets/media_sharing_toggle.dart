@@ -25,9 +25,7 @@ class MediaSharingToggle extends StatelessWidget {
       decoration: BoxDecoration(
         color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
-        ),
+        border: Border.all(color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -44,9 +42,7 @@ class MediaSharingToggle extends StatelessWidget {
             children: [
               Text(
                 'Share file with room',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
+                style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
               ),
               Text(
                 tierLabel,
@@ -59,10 +55,7 @@ class MediaSharingToggle extends StatelessWidget {
           ),
           const SizedBox(width: 12),
           if (canShare)
-            Switch.adaptive(
-              value: enabled,
-              onChanged: onChanged,
-            )
+            Switch.adaptive(value: enabled, onChanged: onChanged)
           else if (onUpgradeTap != null)
             TextButton(
               onPressed: onUpgradeTap,

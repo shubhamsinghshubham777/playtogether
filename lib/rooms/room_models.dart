@@ -360,10 +360,22 @@ enum RoomErrorCode {
   cannotKickSelf('cannot_kick_self', "You can't remove yourself — leave the room instead."),
   invalidDuration('invalid_duration', 'Pick a duration between 5 minutes and 4 hours.'),
   invalidMedia('invalid_media', "Hmm, we couldn't set that as the room's video."),
-  activeUploadInProgress('active_upload_in_progress', 'You already have another file upload in progress.'),
-  uploadQuotaExceeded('upload_quota_exceeded', "You've reached your weekly sharing quota (2.5 GB). Upgrade to Premium for unlimited sharing."),
-  uploadCooldownActive('upload_cooldown_active', 'Uploads are temporarily cooling down. Please try again in a few minutes.'),
-  mediaSharingDisabled('media_sharing_disabled', 'Media sharing is temporarily undergoing maintenance.'),
+  activeUploadInProgress(
+    'active_upload_in_progress',
+    'You already have another file upload in progress.',
+  ),
+  uploadQuotaExceeded(
+    'upload_quota_exceeded',
+    "You've reached your weekly sharing quota (2.5 GB). Upgrade to Premium for unlimited sharing.",
+  ),
+  uploadCooldownActive(
+    'upload_cooldown_active',
+    'Uploads are temporarily cooling down. Please try again in a few minutes.',
+  ),
+  mediaSharingDisabled(
+    'media_sharing_disabled',
+    'Media sharing is temporarily undergoing maintenance.',
+  ),
   unknown('unknown', "Something went sideways. Give it another try.");
 
   const RoomErrorCode(this.code, this.message);

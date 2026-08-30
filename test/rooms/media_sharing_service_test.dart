@@ -24,8 +24,9 @@ class _MockHttpClient implements HttpClient {
   String? userAgent;
 
   @override
-  Future<HttpClientRequest> openUrl(String method, Uri url) =>
-      requestHandler != null ? requestHandler!(url, method) : Future.value(_MockHttpClientRequest());
+  Future<HttpClientRequest> openUrl(String method, Uri url) => requestHandler != null
+      ? requestHandler!(url, method)
+      : Future.value(_MockHttpClientRequest());
 
   @override
   Future<HttpClientRequest> putUrl(Uri url) =>
@@ -36,8 +37,9 @@ class _MockHttpClient implements HttpClient {
       requestHandler != null ? requestHandler!(url, 'GET') : Future.value(_MockHttpClientRequest());
 
   @override
-  Future<HttpClientRequest> postUrl(Uri url) =>
-      requestHandler != null ? requestHandler!(url, 'POST') : Future.value(_MockHttpClientRequest());
+  Future<HttpClientRequest> postUrl(Uri url) => requestHandler != null
+      ? requestHandler!(url, 'POST')
+      : Future.value(_MockHttpClientRequest());
 
   @override
   void close({bool force = false}) {}
@@ -47,11 +49,8 @@ class _MockHttpClient implements HttpClient {
 }
 
 class _MockHttpClientRequest implements HttpClientRequest {
-  _MockHttpClientRequest({
-    Uri? uri,
-    this.method = 'PUT',
-    this.responseBuilder,
-  }) : uri = uri ?? Uri.parse('http://localhost');
+  _MockHttpClientRequest({Uri? uri, this.method = 'PUT', this.responseBuilder})
+    : uri = uri ?? Uri.parse('http://localhost');
 
   @override
   final Uri uri;
@@ -112,10 +111,8 @@ class _MockHttpHeaders implements HttpHeaders {
 }
 
 class _MockHttpClientResponse extends Stream<List<int>> implements HttpClientResponse {
-  _MockHttpClientResponse({
-    this.statusCode = HttpStatus.ok,
-    Map<String, Object>? headersMap,
-  }) : headersMap = headersMap ?? {'etag': '"mock-etag-1"'};
+  _MockHttpClientResponse({this.statusCode = HttpStatus.ok, Map<String, Object>? headersMap})
+    : headersMap = headersMap ?? {'etag': '"mock-etag-1"'};
 
   @override
   final int statusCode;
@@ -225,82 +222,87 @@ void main() {
   });
 
   group('MediaSharingService - Room Multipart Upload & Download', () {
-    test('full upload flow initiates, uploads parts with contentLength, and completes sorted', () async {
-      final uploadedPartLengths = <int, int>{};
-      final uploadedPartETags = <int, String>{};
-      var completePayloadReceived = <String, dynamic>{};
+    test(
+      'full upload flow initiates, uploads parts with contentLength, and completes sorted',
+      () async {
+        final uploadedPartLengths = <int, int>{};
+        final uploadedPartETags = <int, String>{};
+        var completePayloadReceived = <String, dynamic>{};
 
-      Future<Map<String, dynamic>> mockEdgeFunctionCaller(String action, Map<String, dynamic> body) async {
-        if (action == 'initiate') {
-          return {
-            'uploadId': 'upload_abc_123',
-            'r2Key': 'rooms/r1/test_movie.mp4',
-            'partSizeBytes': 10 * 1024 * 1024,
-            'totalParts': 3,
-          };
-        } else if (action == 'part-urls') {
-          final partNumbers = (body['partNumbers'] as List).cast<int>();
-          return {
-            'parts': partNumbers.map((p) => {
-              'partNumber': p,
-              'url': 'https://r2.example.com/upload?part=$p',
-            }).toList(),
-          };
-        } else if (action == 'complete') {
-          completePayloadReceived = body;
-          return {'success': true, 'state': 'ready'};
+        Future<Map<String, dynamic>> mockEdgeFunctionCaller(
+          String action,
+          Map<String, dynamic> body,
+        ) async {
+          if (action == 'initiate') {
+            return {
+              'uploadId': 'upload_abc_123',
+              'r2Key': 'rooms/r1/test_movie.mp4',
+              'partSizeBytes': 10 * 1024 * 1024,
+              'totalParts': 3,
+            };
+          } else if (action == 'part-urls') {
+            final partNumbers = (body['partNumbers'] as List).cast<int>();
+            return {
+              'parts': partNumbers
+                  .map((p) => {'partNumber': p, 'url': 'https://r2.example.com/upload?part=$p'})
+                  .toList(),
+            };
+          } else if (action == 'complete') {
+            completePayloadReceived = body;
+            return {'success': true, 'state': 'ready'};
+          }
+          throw UnimplementedError('Action $action');
         }
-        throw UnimplementedError('Action $action');
-      }
 
-      final service = MediaSharingService(
-        mediaStore: mediaStore,
-        edgeFunctionCaller: mockEdgeFunctionCaller,
-        httpClientFactory: () => _MockHttpClient((url, method) async {
-          final partNum = int.parse(url.queryParameters['part']!);
-          return _MockHttpClientRequest(
-            uri: url,
-            method: method,
-            responseBuilder: (req) async {
-              expect(req.contentLength, greaterThan(0));
-              uploadedPartLengths[partNum] = req.contentLength;
-              final etag = 'etag-part-$partNum';
-              uploadedPartETags[partNum] = etag;
-              return _MockHttpClientResponse(
-                statusCode: 200,
-                headersMap: {HttpHeaders.etagHeader: '"$etag"'},
-              );
-            },
-          );
-        }),
-      );
+        final service = MediaSharingService(
+          mediaStore: mediaStore,
+          edgeFunctionCaller: mockEdgeFunctionCaller,
+          httpClientFactory: () => _MockHttpClient((url, method) async {
+            final partNum = int.parse(url.queryParameters['part']!);
+            return _MockHttpClientRequest(
+              uri: url,
+              method: method,
+              responseBuilder: (req) async {
+                expect(req.contentLength, greaterThan(0));
+                uploadedPartLengths[partNum] = req.contentLength;
+                final etag = 'etag-part-$partNum';
+                uploadedPartETags[partNum] = etag;
+                return _MockHttpClientResponse(
+                  statusCode: 200,
+                  headersMap: {HttpHeaders.etagHeader: '"$etag"'},
+                );
+              },
+            );
+          }),
+        );
 
-      final progressEvents = <UploadProgress>[];
-      final session = await service.uploadFile(
-        roomId: 'r1',
-        file: testVideoFile,
-        onProgress: progressEvents.add,
-      );
+        final progressEvents = <UploadProgress>[];
+        final session = await service.uploadFile(
+          roomId: 'r1',
+          file: testVideoFile,
+          onProgress: progressEvents.add,
+        );
 
-      expect(session.uploadId, 'upload_abc_123');
-      expect(session.r2Key, 'rooms/r1/test_movie.mp4');
-      expect(uploadedPartLengths.length, 3);
-      expect(uploadedPartLengths[1], 10 * 1024 * 1024);
-      expect(uploadedPartLengths[2], 10 * 1024 * 1024);
-      expect(uploadedPartLengths[3], 5 * 1024 * 1024);
+        expect(session.uploadId, 'upload_abc_123');
+        expect(session.r2Key, 'rooms/r1/test_movie.mp4');
+        expect(uploadedPartLengths.length, 3);
+        expect(uploadedPartLengths[1], 10 * 1024 * 1024);
+        expect(uploadedPartLengths[2], 10 * 1024 * 1024);
+        expect(uploadedPartLengths[3], 5 * 1024 * 1024);
 
-      final parts = (completePayloadReceived['parts'] as List).cast<Map<String, dynamic>>();
-      expect(parts.length, 3);
-      expect(parts[0]['partNumber'], 1);
-      expect(parts[0]['etag'], 'etag-part-1');
-      expect(parts[1]['partNumber'], 2);
-      expect(parts[1]['etag'], 'etag-part-2');
-      expect(parts[2]['partNumber'], 3);
-      expect(parts[2]['etag'], 'etag-part-3');
+        final parts = (completePayloadReceived['parts'] as List).cast<Map<String, dynamic>>();
+        expect(parts.length, 3);
+        expect(parts[0]['partNumber'], 1);
+        expect(parts[0]['etag'], 'etag-part-1');
+        expect(parts[1]['partNumber'], 2);
+        expect(parts[1]['etag'], 'etag-part-2');
+        expect(parts[2]['partNumber'], 3);
+        expect(parts[2]['etag'], 'etag-part-3');
 
-      expect(progressEvents.isNotEmpty, isTrue);
-      expect(progressEvents.last.fraction, 1.0);
-    });
+        expect(progressEvents.isNotEmpty, isTrue);
+        expect(progressEvents.last.fraction, 1.0);
+      },
+    );
 
     test('crash recovery lists parts from R2, resumes missing parts, and completes', () async {
       await mediaStore.saveUploadSession(
@@ -330,10 +332,9 @@ void main() {
         } else if (action == 'part-urls') {
           final partNumbers = (body['partNumbers'] as List).cast<int>();
           return {
-            'parts': partNumbers.map((p) => {
-              'partNumber': p,
-              'url': 'https://r2.example.com/upload?part=$p',
-            }).toList(),
+            'parts': partNumbers
+                .map((p) => {'partNumber': p, 'url': 'https://r2.example.com/upload?part=$p'})
+                .toList(),
           };
         } else if (action == 'complete') {
           completeCalled = true;
@@ -361,10 +362,7 @@ void main() {
         }),
       );
 
-      await service.resumeUpload(
-        roomId: 'r1',
-        file: testVideoFile,
-      );
+      await service.resumeUpload(roomId: 'r1', file: testVideoFile);
 
       expect(uploadedParts, [2, 3]);
       expect(completeCalled, isTrue);

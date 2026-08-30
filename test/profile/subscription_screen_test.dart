@@ -7,9 +7,7 @@ import 'package:playtogether/ui/responsive.dart';
 Widget _wrap(Widget child) {
   return MaterialApp(
     builder: buildResponsiveWrapper,
-    home: Scaffold(
-      body: child,
-    ),
+    home: Scaffold(body: child),
   );
 }
 
@@ -21,7 +19,10 @@ void main() {
 
       expect(find.text('PlayTogether Premium'), findsOneWidget);
       expect(find.text('Go Premium'), findsOneWidget);
-      expect(find.text("You'll be taken to our website to complete your purchase."), findsOneWidget);
+      expect(
+        find.text("You'll be taken to our website to complete your purchase."),
+        findsOneWidget,
+      );
       expect(find.byIcon(Symbols.workspace_premium_rounded), findsWidgets);
     });
 

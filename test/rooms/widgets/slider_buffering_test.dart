@@ -4,18 +4,18 @@ import 'package:playtogether/rooms/widgets/room_control_bar.dart';
 import 'package:playtogether/ui/inputs.dart';
 
 RoomControlBarActions _dummyActions() => RoomControlBarActions(
-      onPlayPause: () {},
-      onSeek: (_) {},
-      onSkip: (_) {},
-      onMicToggle: (_) {},
-      onCamToggle: (_) {},
-      onAudioTracks: () {},
-      onSubtitles: () {},
-      onSwitchSource: () {},
-      onOpenFile: () {},
-      onVolume: (_) {},
-      onToggleMute: () {},
-    );
+  onPlayPause: () {},
+  onSeek: (_) {},
+  onSkip: (_) {},
+  onMicToggle: (_) {},
+  onCamToggle: (_) {},
+  onAudioTracks: () {},
+  onSubtitles: () {},
+  onSwitchSource: () {},
+  onOpenFile: () {},
+  onVolume: (_) {},
+  onToggleMute: () {},
+);
 
 void main() {
   group('PTSlider Buffering', () {
@@ -25,16 +25,8 @@ void main() {
           home: Scaffold(
             body: Column(
               children: [
-                PTSlider(
-                  value: 0.3,
-                  bufferedValue: 0.6,
-                  onChanged: (_) {},
-                ),
-                PTSlider(
-                  value: 0.3,
-                  bufferedValue: null,
-                  onChanged: (_) {},
-                ),
+                PTSlider(value: 0.3, bufferedValue: 0.6, onChanged: (_) {}),
+                PTSlider(value: 0.3, bufferedValue: null, onChanged: (_) {}),
               ],
             ),
           ),

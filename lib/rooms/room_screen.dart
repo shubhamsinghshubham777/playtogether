@@ -466,7 +466,8 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
         if (event.uploadState != null) {
           setState(() => _uploadState = event.uploadState!);
         }
-        if (!(_sync?.isHost ?? false) && (event.uploadState == 'ready' || _sync?.mediaUploadState == 'ready')) {
+        if (!(_sync?.isHost ?? false) &&
+            (event.uploadState == 'ready' || _sync?.mediaUploadState == 'ready')) {
           final targetFileName = event.fileName ?? _canonicalMedia.name;
           if (targetFileName != null && _localFileName != targetFileName) {
             unawaited(_startStreamingSharedMedia(targetFileName));
@@ -479,10 +480,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
         if (parsed != null) {
           setState(() {
             if (_room != null) {
-              _room = _room!.copyWith(
-                expiresAt: parsed,
-                durationMinutes: event.durationMinutes,
-              );
+              _room = _room!.copyWith(expiresAt: parsed, durationMinutes: event.durationMinutes);
             }
             _warningDismissed = false;
           });
@@ -1293,11 +1291,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
       _isUploadingSharedMedia = false;
       _uploadState = 'failed';
       _sync?.setMediaUploadState('failed');
-      _sync?.broadcastSharingToggled(
-        enabled: false,
-        fileName: name,
-        uploadState: 'failed',
-      );
+      _sync?.broadcastSharingToggled(enabled: false, fileName: name, uploadState: 'failed');
       setState(() {});
       final error = MediaSharingException.fromError(e);
       _snack(error.message);
@@ -1331,10 +1325,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
 
     if (!(_sync?.isHost ?? false)) {
       if (_isStreamingRemoteSharedMedia) {
-        return const PTActionPill(
-          label: 'Streaming from host',
-          icon: Symbols.cloud_done_rounded,
-        );
+        return const PTActionPill(label: 'Streaming from host', icon: Symbols.cloud_done_rounded);
       }
       return null;
     }
@@ -1361,10 +1352,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
     }
 
     if (_uploadState == 'ready') {
-      return const PTActionPill(
-        label: 'Shared with room',
-        icon: Symbols.cloud_done_rounded,
-      );
+      return const PTActionPill(label: 'Shared with room', icon: Symbols.cloud_done_rounded);
     }
 
     if (_uploadState == 'none') {
@@ -1497,7 +1485,9 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
     }
 
     // Auto-stream shared media if room has ready shared media and local disk copy not found
-    if ((_sync?.mediaUploadState == 'ready' || _room?.mediaUploadState == 'ready' || _uploadState == 'ready') &&
+    if ((_sync?.mediaUploadState == 'ready' ||
+            _room?.mediaUploadState == 'ready' ||
+            _uploadState == 'ready') &&
         _localFileName != media.name) {
       trace(
         'auto-streaming shared media for local mode',
@@ -2854,10 +2844,12 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
         _warningDismissed = false;
       });
       _tickCountdown();
-      unawaited(_sync?.broadcastRoomExtended(
-        expiresAt: extended.expiresAt.toIso8601String(),
-        durationMinutes: extended.durationMinutes,
-      ));
+      unawaited(
+        _sync?.broadcastRoomExtended(
+          expiresAt: extended.expiresAt.toIso8601String(),
+          durationMinutes: extended.durationMinutes,
+        ),
+      );
       if (_limits.hasFreeExtension) unawaited(ProfileService.instance.load());
       _snack('More time — this room now runs until $_endsAtLabel.', kind: .success);
     } catch (e, s) {
@@ -3319,7 +3311,9 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
           Tooltip(
             message: (_sync?.isHost ?? false) ? 'Extend room duration' : 'Time remaining',
             child: MouseRegion(
-              cursor: (_sync?.isHost ?? false) ? SystemMouseCursors.click : SystemMouseCursors.basic,
+              cursor: (_sync?.isHost ?? false)
+                  ? SystemMouseCursors.click
+                  : SystemMouseCursors.basic,
               child: GestureDetector(
                 onTap: (_sync?.isHost ?? false) && !_extending ? _extendRoom : null,
                 child: Row(
@@ -3465,7 +3459,8 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
             kind: .info,
             icon: Symbols.check_circle_rounded,
             title: 'Everyone has a local copy!',
-            subtitle: 'Playback is ready. Cancel upload to save quota, or keep uploading for late joiners.',
+            subtitle:
+                'Playback is ready. Cancel upload to save quota, or keep uploading for late joiners.',
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
               spacing: 8,
@@ -3791,12 +3786,7 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
               ),
             ),
           if (_overlayChat.isNotEmpty)
-            Positioned(
-              left: 24,
-              bottom: 124,
-              width: 340,
-              child: _chatDisplaced(_chatOverlay()),
-            ),
+            Positioned(left: 24, bottom: 124, width: 340, child: _chatDisplaced(_chatOverlay())),
           Positioned(
             bottom: 24,
             left: 24,
@@ -3812,7 +3802,9 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
                     playing: _playing,
                     position: _position,
                     duration: _duration,
-                    bufferedPosition: _isStreamingRemoteSharedMedia && _mode == .local ? _bufferPosition : null,
+                    bufferedPosition: _isStreamingRemoteSharedMedia && _mode == .local
+                        ? _bufferPosition
+                        : null,
                     volume: _volume,
                     micOn: _av?.micEnabled ?? false,
                     camOn: _av?.camEnabled ?? false,
@@ -3861,10 +3853,17 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
                               mainAxisSize: .min,
                               spacing: 4,
                               children: [
-                                Icon(Symbols.schedule_rounded, size: 13, color: PTColors.white(0.6)),
+                                Icon(
+                                  Symbols.schedule_rounded,
+                                  size: 13,
+                                  color: PTColors.white(0.6),
+                                ),
                                 Text(
                                   _countdownLabel,
-                                  style: PTText.mono.copyWith(fontSize: 11, color: PTColors.white(0.6)),
+                                  style: PTText.mono.copyWith(
+                                    fontSize: 11,
+                                    color: PTColors.white(0.6),
+                                  ),
                                 ),
                               ],
                             ),
@@ -3911,7 +3910,9 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
                   playing: _playing,
                   position: _position,
                   duration: _duration,
-                  bufferedPosition: _isStreamingRemoteSharedMedia && _mode == .local ? _bufferPosition : null,
+                  bufferedPosition: _isStreamingRemoteSharedMedia && _mode == .local
+                      ? _bufferPosition
+                      : null,
                   volume: _volume,
                   micOn: _av?.micEnabled ?? false,
                   camOn: _av?.camEnabled ?? false,
@@ -4066,7 +4067,9 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
                         playing: _playing,
                         position: _position,
                         duration: _duration,
-                        bufferedPosition: _isStreamingRemoteSharedMedia && _mode == .local ? _bufferPosition : null,
+                        bufferedPosition: _isStreamingRemoteSharedMedia && _mode == .local
+                            ? _bufferPosition
+                            : null,
                         volume: _volume,
                         micOn: _av?.micEnabled ?? false,
                         camOn: _av?.camEnabled ?? false,

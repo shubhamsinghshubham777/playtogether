@@ -2,10 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 
 class MediaSharingPromptResult {
-  const MediaSharingPromptResult({
-    required this.shouldShare,
-    required this.rememberChoice,
-  });
+  const MediaSharingPromptResult({required this.shouldShare, required this.rememberChoice});
 
   final bool shouldShare;
   final bool rememberChoice;
@@ -19,18 +16,12 @@ Future<MediaSharingPromptResult?> showMediaSharingPromptDialog({
   return showDialog<MediaSharingPromptResult>(
     context: context,
     barrierDismissible: false,
-    builder: (context) => _MediaSharingPromptDialog(
-      fileName: fileName,
-      fileSize: fileSize,
-    ),
+    builder: (context) => _MediaSharingPromptDialog(fileName: fileName, fileSize: fileSize),
   );
 }
 
 class _MediaSharingPromptDialog extends StatefulWidget {
-  const _MediaSharingPromptDialog({
-    required this.fileName,
-    required this.fileSize,
-  });
+  const _MediaSharingPromptDialog({required this.fileName, required this.fileSize});
 
   final String fileName;
   final int fileSize;
@@ -116,10 +107,9 @@ class _MediaSharingPromptDialogState extends State<_MediaSharingPromptDialog> {
         actions: [
           TextButton(
             onPressed: () {
-              Navigator.of(context).pop(MediaSharingPromptResult(
-                shouldShare: false,
-                rememberChoice: _rememberChoice,
-              ));
+              Navigator.of(
+                context,
+              ).pop(MediaSharingPromptResult(shouldShare: false, rememberChoice: _rememberChoice));
             },
             child: const Text('Play Locally Only'),
           ),
@@ -127,10 +117,9 @@ class _MediaSharingPromptDialogState extends State<_MediaSharingPromptDialog> {
             icon: const Icon(Icons.cloud_upload, size: 18),
             label: const Text('Share with Room'),
             onPressed: () {
-              Navigator.of(context).pop(MediaSharingPromptResult(
-                shouldShare: true,
-                rememberChoice: _rememberChoice,
-              ));
+              Navigator.of(
+                context,
+              ).pop(MediaSharingPromptResult(shouldShare: true, rememberChoice: _rememberChoice));
             },
           ),
         ],

@@ -252,17 +252,21 @@ class _LobbyScreenState extends State<LobbyScreen> {
     });
 
     if (active != null) {
-      unawaited(_mediaSharingService.abortStagedUpload(
-        stagedId: active.stagedId,
-        uploadId: active.uploadId,
-        r2Key: active.r2Key,
-      ));
+      unawaited(
+        _mediaSharingService.abortStagedUpload(
+          stagedId: active.stagedId,
+          uploadId: active.uploadId,
+          r2Key: active.r2Key,
+        ),
+      );
     } else if (ready != null) {
-      unawaited(_mediaSharingService.abortStagedUpload(
-        stagedId: ready.stagedId,
-        uploadId: ready.uploadId,
-        r2Key: ready.r2Key,
-      ));
+      unawaited(
+        _mediaSharingService.abortStagedUpload(
+          stagedId: ready.stagedId,
+          uploadId: ready.uploadId,
+          r2Key: ready.r2Key,
+        ),
+      );
     }
   }
 
@@ -421,7 +425,10 @@ class _LobbyScreenState extends State<LobbyScreen> {
           'Up to 16 watchers, with video facecams',
         ],
         onUpgrade: () {
-          Analytics.instance.track('upgrade_cta_clicked', {'surface': 'room_limit', 'action': 'subscribe'});
+          Analytics.instance.track('upgrade_cta_clicked', {
+            'surface': 'room_limit',
+            'action': 'subscribe',
+          });
           context.go('/lobby/subscribe?source=room_limit');
         },
       ),
@@ -528,10 +535,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
               const Spacer(),
               _mediaQuotaChip(),
               const SizedBox(width: 12),
-              if (_showPremiumChip) ...[
-                _premiumChip(),
-                const SizedBox(width: 12),
-              ],
+              if (_showPremiumChip) ...[_premiumChip(), const SizedBox(width: 12)],
               _profilePill(),
               const SizedBox(width: 12),
               PTIconButton(
@@ -622,10 +626,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
                   const Spacer(),
                   _mediaQuotaChip(compact: true),
                   const SizedBox(width: 8),
-                  if (_showPremiumChip) ...[
-                    _premiumChip(),
-                    const SizedBox(width: 8),
-                  ],
+                  if (_showPremiumChip) ...[_premiumChip(), const SizedBox(width: 8)],
                   _avatarButton(),
                 ],
               ),
@@ -674,10 +675,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
                 const SizedBox(width: 8),
                 _mediaQuotaChip(compact: true),
                 const SizedBox(width: 8),
-                if (_showPremiumChip) ...[
-                  _premiumChip(),
-                  const SizedBox(width: 8),
-                ],
+                if (_showPremiumChip) ...[_premiumChip(), const SizedBox(width: 8)],
                 _avatarButton(size: 36),
               ],
             ),
@@ -765,12 +763,7 @@ class _LobbyScreenState extends State<LobbyScreen> {
         mainAxisSize: .min,
         spacing: 6,
         children: [
-          const Icon(
-            Symbols.crown_rounded,
-            size: 16,
-            fill: 1,
-            color: PTColors.textAccent,
-          ),
+          const Icon(Symbols.crown_rounded, size: 16, fill: 1, color: PTColors.textAccent),
           Text(
             'Go Premium',
             style: PTText.body.copyWith(
@@ -808,23 +801,23 @@ class _LobbyScreenState extends State<LobbyScreen> {
             color: isPrem
                 ? PTColors.textAccent
                 : isLow
-                    ? PTColors.warning
-                    : PTColors.white(0.75),
+                ? PTColors.warning
+                : PTColors.white(0.75),
           ),
           Text(
             isPrem
                 ? (compact ? 'Unlimited' : 'Unlimited quota')
                 : isGuest
-                    ? 'Quota info'
-                    : '${Profile.formatBytes(remainingBytes)} quota',
+                ? 'Quota info'
+                : '${Profile.formatBytes(remainingBytes)} quota',
             style: PTText.body.copyWith(
               fontSize: 13,
               fontWeight: FontWeight.w600,
               color: isPrem
                   ? PTColors.textAccent
                   : isLow
-                      ? PTColors.warning
-                      : PTColors.white(0.85),
+                  ? PTColors.warning
+                  : PTColors.white(0.85),
             ),
           ),
         ],
@@ -1094,8 +1087,8 @@ class _LobbyScreenState extends State<LobbyScreen> {
     final quotaSubtitle = isPrem
         ? 'Unlimited uploads with Premium • Up to 10 GB'
         : isGuest
-            ? 'Sign in to stream local video files with guests'
-            : '${Profile.formatBytes(remainingBytes)} weekly quota available • Up to 2 GB';
+        ? 'Sign in to stream local video files with guests'
+        : '${Profile.formatBytes(remainingBytes)} weekly quota available • Up to 2 GB';
 
     return Material(
       color: Colors.transparent,

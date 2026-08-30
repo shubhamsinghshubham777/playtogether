@@ -61,13 +61,17 @@ class MediaSharingCache {
   }
 
   Future<bool> isCached(String r2Key) async {
-    final path = _cacheDir != null ? getCacheFilePath(r2Key) : await getResolvedCacheFilePath(r2Key);
+    final path = _cacheDir != null
+        ? getCacheFilePath(r2Key)
+        : await getResolvedCacheFilePath(r2Key);
     final file = File(path);
     return file.exists();
   }
 
   Future<void> evict(String r2Key) async {
-    final path = _cacheDir != null ? getCacheFilePath(r2Key) : await getResolvedCacheFilePath(r2Key);
+    final path = _cacheDir != null
+        ? getCacheFilePath(r2Key)
+        : await getResolvedCacheFilePath(r2Key);
     final file = File(path);
     if (await file.exists()) {
       await file.delete();
@@ -96,12 +100,14 @@ class MediaSharingCache {
     final finalPath = await getResolvedCacheFilePath(r2Key);
     final finalFile = File(finalPath);
     if (await finalFile.exists()) {
-      onProgress?.call(CacheProgress(
-        bytesReceived: totalBytes,
-        totalBytes: totalBytes,
-        speedBps: 0,
-        etaSeconds: 0,
-      ));
+      onProgress?.call(
+        CacheProgress(
+          bytesReceived: totalBytes,
+          totalBytes: totalBytes,
+          speedBps: 0,
+          etaSeconds: 0,
+        ),
+      );
       return finalFile;
     }
 
@@ -151,12 +157,14 @@ class MediaSharingCache {
         final remainingBytes = totalBytes - receivedBytes;
         final etaSeconds = currentSpeedBps > 0 ? (remainingBytes / currentSpeedBps).ceil() : 0;
 
-        onProgress?.call(CacheProgress(
-          bytesReceived: receivedBytes,
-          totalBytes: totalBytes,
-          speedBps: currentSpeedBps,
-          etaSeconds: etaSeconds,
-        ));
+        onProgress?.call(
+          CacheProgress(
+            bytesReceived: receivedBytes,
+            totalBytes: totalBytes,
+            speedBps: currentSpeedBps,
+            etaSeconds: etaSeconds,
+          ),
+        );
       }
     }
 
@@ -168,12 +176,14 @@ class MediaSharingCache {
     }
 
     await tempFile.rename(finalPath);
-    onProgress?.call(CacheProgress(
-      bytesReceived: totalBytes,
-      totalBytes: totalBytes,
-      speedBps: currentSpeedBps,
-      etaSeconds: 0,
-    ));
+    onProgress?.call(
+      CacheProgress(
+        bytesReceived: totalBytes,
+        totalBytes: totalBytes,
+        speedBps: currentSpeedBps,
+        etaSeconds: 0,
+      ),
+    );
 
     return finalFile;
   }

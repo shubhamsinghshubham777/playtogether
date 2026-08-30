@@ -312,9 +312,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       decoration: BoxDecoration(
         color: isPrem ? PTColors.primary.withValues(alpha: 0.12) : PTColors.white(0.04),
         border: Border.all(
-          color: isPrem
-              ? const Color(0xFFA78BFA).withValues(alpha: 0.35)
-              : PTColors.white(0.08),
+          color: isPrem ? const Color(0xFFA78BFA).withValues(alpha: 0.35) : PTColors.white(0.08),
         ),
         borderRadius: BorderRadius.circular(16),
       ),

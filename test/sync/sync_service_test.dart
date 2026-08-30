@@ -1249,47 +1249,73 @@ void main() {
       });
     });
 
-    test('late joiner is automatically waived by authority when room is playing ready shared media', () {
-      fakeAsync((async) {
-        final h = _Harness(role: 'host', media: const RoomMedia(kind: .local, name: 'movie.mkv'))..connect();
-        h.service.setMediaUploadState('ready');
-        h.service.broadcastPlay();
-        async.flushMicrotasks();
+    test(
+      'late joiner is automatically waived by authority when room is playing ready shared media',
+      () {
+        fakeAsync((async) {
+          final h = _Harness(
+            role: 'host',
+            media: const RoomMedia(kind: .local, name: 'movie.mkv'),
+          )..connect();
+          h.service.setMediaUploadState('ready');
+          h.service.broadcastPlay();
+          async.flushMicrotasks();
 
-        expect(h.service.roomPlaying, isTrue);
+          expect(h.service.roomPlaying, isTrue);
 
-        // Host is ready
-        h.channel.syncPresence([
-          {'user_id': _me, 'role': 'host', 'ready_status': 'ready', 'loaded_file_name': 'movie.mkv'},
-        ]);
-        async.flushMicrotasks();
+          // Host is ready
+          h.channel.syncPresence([
+            {
+              'user_id': _me,
+              'role': 'host',
+              'ready_status': 'ready',
+              'loaded_file_name': 'movie.mkv',
+            },
+          ]);
+          async.flushMicrotasks();
 
-        expect(h.service.gateState, GateState.open);
+          expect(h.service.gateState, GateState.open);
 
-        // Late joiner arrives not ready
-        h.channel.syncPresence([
-          {'user_id': _me, 'role': 'host', 'ready_status': 'ready', 'loaded_file_name': 'movie.mkv'},
-          {'user_id': 'late_joiner', 'role': 'member', 'ready_status': 'none'},
-        ]);
-        async.flushMicrotasks();
+          // Late joiner arrives not ready
+          h.channel.syncPresence([
+            {
+              'user_id': _me,
+              'role': 'host',
+              'ready_status': 'ready',
+              'loaded_file_name': 'movie.mkv',
+            },
+            {'user_id': 'late_joiner', 'role': 'member', 'ready_status': 'none'},
+          ]);
+          async.flushMicrotasks();
 
-        // Late joiner is waived, gate stays open (no pause!)
-        expect(h.service.waivedMembers, contains('late_joiner'));
-        expect(h.service.gateState, GateState.open);
+          // Late joiner is waived, gate stays open (no pause!)
+          expect(h.service.waivedMembers, contains('late_joiner'));
+          expect(h.service.gateState, GateState.open);
 
-        // Late joiner becomes ready: waiver is cleared, gate still open
-        h.channel.syncPresence([
-          {'user_id': _me, 'role': 'host', 'ready_status': 'ready', 'loaded_file_name': 'movie.mkv'},
-          {'user_id': 'late_joiner', 'role': 'member', 'ready_status': 'ready', 'loaded_file_name': 'movie.mkv'},
-        ]);
-        async.flushMicrotasks();
+          // Late joiner becomes ready: waiver is cleared, gate still open
+          h.channel.syncPresence([
+            {
+              'user_id': _me,
+              'role': 'host',
+              'ready_status': 'ready',
+              'loaded_file_name': 'movie.mkv',
+            },
+            {
+              'user_id': 'late_joiner',
+              'role': 'member',
+              'ready_status': 'ready',
+              'loaded_file_name': 'movie.mkv',
+            },
+          ]);
+          async.flushMicrotasks();
 
-        expect(h.service.waivedMembers, isNot(contains('late_joiner')));
-        expect(h.service.gateState, GateState.open);
+          expect(h.service.waivedMembers, isNot(contains('late_joiner')));
+          expect(h.service.gateState, GateState.open);
 
-        h.dispose();
-      });
-    });
+          h.dispose();
+        });
+      },
+    );
 
     test('broadcastRoomExtended broadcasts and notifies listeners', () {
       fakeAsync((async) {

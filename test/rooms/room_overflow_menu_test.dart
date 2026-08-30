@@ -6,7 +6,9 @@ import 'package:playtogether/sync/sync_service.dart';
 
 void main() {
   group('RoomOverflowMenu', () {
-    testWidgets('displays Extend room duration for host and invokes callback on tap', (tester) async {
+    testWidgets('displays Extend room duration for host and invokes callback on tap', (
+      tester,
+    ) async {
       var extendTapped = false;
       final data = ValueNotifier<RoomMenuData?>(
         RoomMenuData(

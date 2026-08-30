@@ -7,15 +7,9 @@ void main() {
     testWidgets('renders media quota dialog body with tier explanations', (tester) async {
       await tester.pumpWidget(
         MaterialApp(
-          theme: ThemeData.dark().copyWith(
-            scaffoldBackgroundColor: const Color(0xFF0D0B14),
-          ),
+          theme: ThemeData.dark().copyWith(scaffoldBackgroundColor: const Color(0xFF0D0B14)),
           home: const Scaffold(
-            body: Center(
-              child: SingleChildScrollView(
-                child: MediaQuotaDialogBody(),
-              ),
-            ),
+            body: Center(child: SingleChildScrollView(child: MediaQuotaDialogBody())),
           ),
         ),
       );
@@ -31,9 +25,7 @@ void main() {
         findsOneWidget,
       );
       expect(
-        find.byWidgetPredicate(
-          (w) => w is RichText && w.text.toPlainText().contains('Free Plan'),
-        ),
+        find.byWidgetPredicate((w) => w is RichText && w.text.toPlainText().contains('Free Plan')),
         findsOneWidget,
       );
       expect(

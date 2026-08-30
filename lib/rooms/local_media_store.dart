@@ -30,9 +30,7 @@ class UploadSession {
   final int totalParts;
   final Map<int, String> completedParts; // partNumber -> etag
 
-  UploadSession copyWith({
-    Map<int, String>? completedParts,
-  }) {
+  UploadSession copyWith({Map<int, String>? completedParts}) {
     return UploadSession(
       roomId: roomId,
       uploadId: uploadId,
@@ -53,9 +51,11 @@ class UploadSession {
     fileSize: (json['file_size'] as num).toInt(),
     partSizeBytes: (json['part_size_bytes'] as num).toInt(),
     totalParts: (json['total_parts'] as num).toInt(),
-    completedParts: (json['completed_parts'] as Map<String, dynamic>?)?.map(
-      (k, v) => MapEntry(int.parse(k), v as String),
-    ) ?? const {},
+    completedParts:
+        (json['completed_parts'] as Map<String, dynamic>?)?.map(
+          (k, v) => MapEntry(int.parse(k), v as String),
+        ) ??
+        const {},
   );
 
   Map<String, Object?> toJson() => {
@@ -105,7 +105,8 @@ class LocalMediaStore {
   static final instance = LocalMediaStore._();
 
   final SharedPreferences? _prefs;
-  Future<SharedPreferences> get _asyncPrefs async => _prefs ?? await SharedPreferences.getInstance();
+  Future<SharedPreferences> get _asyncPrefs async =>
+      _prefs ?? await SharedPreferences.getInstance();
 
   Map<String, LocalMediaEntry>? _cache;
   Map<String, UploadSession>? _uploadSessionCache;
@@ -152,9 +153,7 @@ class LocalMediaStore {
       if (raw != null && raw.isNotEmpty) {
         final decoded = jsonDecode(raw) as Map<String, dynamic>;
         for (final entry in decoded.entries) {
-          entries[entry.key] = UploadSession.fromJson(
-            (entry.value as Map).cast<String, dynamic>(),
-          );
+          entries[entry.key] = UploadSession.fromJson((entry.value as Map).cast<String, dynamic>());
         }
       }
     } catch (e, s) {
@@ -178,10 +177,7 @@ class LocalMediaStore {
 
   Future<UploadSession?> loadUploadSession(String roomId) async => (await _readSessions())[roomId];
 
-  Future<void> saveUploadSession({
-    required String roomId,
-    required UploadSession session,
-  }) async {
+  Future<void> saveUploadSession({required String roomId, required UploadSession session}) async {
     final entries = Map<String, UploadSession>.from(await _readSessions());
     entries[roomId] = session;
     await _writeSessions(entries);

@@ -45,9 +45,7 @@ class MediaQuotaDialogBody extends StatelessWidget {
               width: 46,
               height: 46,
               decoration: BoxDecoration(
-                color: isPrem
-                    ? PTColors.primary.withValues(alpha: 0.25)
-                    : PTColors.white(0.08),
+                color: isPrem ? PTColors.primary.withValues(alpha: 0.25) : PTColors.white(0.08),
                 border: Border.all(
                   color: isPrem
                       ? const Color(0xFFA78BFA).withValues(alpha: 0.5)
@@ -71,15 +69,15 @@ class MediaQuotaDialogBody extends StatelessWidget {
                     isPrem
                         ? 'Unlimited with Premium'
                         : isGuest
-                            ? 'Sign in to unlock weekly quota'
-                            : '${Profile.formatBytes(remainingBytes)} of ${Profile.formatBytes(weeklyLimit)} remaining',
+                        ? 'Sign in to unlock weekly quota'
+                        : '${Profile.formatBytes(remainingBytes)} of ${Profile.formatBytes(weeklyLimit)} remaining',
                     style: PTText.caption.copyWith(
                       fontSize: 12,
                       color: isPrem
                           ? PTColors.textAccent
                           : remainingBytes < 1024 * 1024 * 1024 && !isGuest
-                              ? PTColors.warning
-                              : PTColors.white(0.6),
+                          ? PTColors.warning
+                          : PTColors.white(0.6),
                     ),
                   ),
                 ],
@@ -195,21 +193,27 @@ class MediaQuotaDialogBody extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             spacing: 8,
             children: [
-              Text('How Quotas Work', style: PTText.caption.copyWith(fontSize: 11, fontWeight: FontWeight.w600)),
+              Text(
+                'How Quotas Work',
+                style: PTText.caption.copyWith(fontSize: 11, fontWeight: FontWeight.w600),
+              ),
               _FeatureRow(
                 icon: Symbols.schedule_rounded,
                 title: 'Rolling 7-Day Window',
-                description: 'Uploaded bytes automatically clear 7 days after the upload completed.',
+                description:
+                    'Uploaded bytes automatically clear 7 days after the upload completed.',
               ),
               _FeatureRow(
                 icon: Symbols.person_rounded,
                 title: 'Free Plan (\$0/mo)',
-                description: '2.5 GB weekly quota • Up to 2.0 GB single file • Room duration up to 4 hrs.',
+                description:
+                    '2.5 GB weekly quota • Up to 2.0 GB single file • Room duration up to 4 hrs.',
               ),
               _FeatureRow(
                 icon: Symbols.workspace_premium_rounded,
                 title: 'Premium Plan',
-                description: 'Unlimited weekly uploads • Up to 10.0 GB single file • 24h rooms & facecams.',
+                description:
+                    'Unlimited weekly uploads • Up to 10.0 GB single file • 24h rooms & facecams.',
                 highlight: true,
               ),
             ],
@@ -241,10 +245,7 @@ class MediaQuotaDialogBody extends StatelessWidget {
                 ),
               ] else
                 Expanded(
-                  child: PTButton(
-                    label: 'Got it',
-                    onPressed: () => Navigator.of(context).pop(),
-                  ),
+                  child: PTButton(label: 'Got it', onPressed: () => Navigator.of(context).pop()),
                 ),
             ],
           ),
@@ -285,11 +286,7 @@ class _FeatureRow extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       spacing: 8,
       children: [
-        Icon(
-          icon,
-          size: 16,
-          color: highlight ? PTColors.textAccent : PTColors.white(0.5),
-        ),
+        Icon(icon, size: 16, color: highlight ? PTColors.textAccent : PTColors.white(0.5)),
         Expanded(
           child: RichText(
             text: TextSpan(
