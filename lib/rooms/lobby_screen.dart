@@ -1425,7 +1425,7 @@ class _Wordmark extends StatelessWidget {
                   Text(
                     Env.usingLocalStack ? '$version · local' : version,
                     style: PTText.mono.copyWith(
-                       fontSize: compact ? 10 : 11,
+                      fontSize: compact ? 10 : 11,
                       color: Env.usingLocalStack ? PTColors.warning : PTColors.white(0.4),
                     ),
                   ),
