@@ -60,7 +60,11 @@ void main() {
     });
 
     test('free user subtitle shows available weekly quota', () {
-      final sub = formatPreUploadSubtitle(isPremium: false, isGuest: false, remainingBytes: 2 * 1024 * 1024 * 1024);
+      final sub = formatPreUploadSubtitle(
+        isPremium: false,
+        isGuest: false,
+        remainingBytes: 2 * 1024 * 1024 * 1024,
+      );
       expect(sub, contains('2.0 GB weekly quota available'));
     });
 
@@ -70,4 +74,3 @@ void main() {
     });
   });
 }
-

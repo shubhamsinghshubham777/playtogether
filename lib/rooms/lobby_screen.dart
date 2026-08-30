@@ -586,12 +586,8 @@ class _LobbyScreenState extends State<LobbyScreen> {
                         crossAxisAlignment: .stretch,
                         spacing: 28,
                         children: [
-                          Expanded(
-                            child: _createCard(delay: const Duration(milliseconds: 120)),
-                          ),
-                          Expanded(
-                            child: _joinCard(delay: const Duration(milliseconds: 180)),
-                          ),
+                          Expanded(child: _createCard(delay: const Duration(milliseconds: 120))),
+                          Expanded(child: _joinCard(delay: const Duration(milliseconds: 180))),
                         ],
                       ),
                     ),
@@ -1140,7 +1136,12 @@ class _LobbyScreenState extends State<LobbyScreen> {
                     mainAxisSize: MainAxisSize.min,
                     spacing: 4,
                     children: [
-                      const Icon(Symbols.lock_rounded, size: 14, fill: 1, color: PTColors.textAccent),
+                      const Icon(
+                        Symbols.lock_rounded,
+                        size: 14,
+                        fill: 1,
+                        color: PTColors.textAccent,
+                      ),
                       Text(
                         'Unlock',
                         style: PTText.caption.copyWith(

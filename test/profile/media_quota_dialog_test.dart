@@ -49,7 +49,9 @@ void main() {
       expect(find.text('Go Premium (Unlimited)'), findsOneWidget);
     });
 
-    testWidgets('renders signed-in free user view with quota usage and upgrade button', (tester) async {
+    testWidgets('renders signed-in free user view with quota usage and upgrade button', (
+      tester,
+    ) async {
       ProfileService.instance.setProfileForTesting(
         const Profile(
           id: 'user-1',
@@ -108,9 +110,11 @@ void main() {
 
       expect(find.text('Media Sharing Quota'), findsOneWidget);
       expect(find.text('Unlimited with Premium'), findsOneWidget);
-      expect(find.text('No upload limits! Share videos up to 10.0 GB each with high-speed priority.'), findsOneWidget);
+      expect(
+        find.text('No upload limits! Share videos up to 10.0 GB each with high-speed priority.'),
+        findsOneWidget,
+      );
       expect(find.text('Got it'), findsOneWidget);
     });
   });
 }
-

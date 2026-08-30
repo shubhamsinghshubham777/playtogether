@@ -238,7 +238,11 @@ class MediaQuotaDialogBody extends StatelessWidget {
                         try {
                           await AuthService.instance.linkGoogleIdentity();
                         } catch (e, s) {
-                          reportNonFatal(e, s, during: 'linking Google identity from media quota dialog');
+                          reportNonFatal(
+                            e,
+                            s,
+                            during: 'linking Google identity from media quota dialog',
+                          );
                         }
                       },
                     ),
@@ -288,7 +292,10 @@ class MediaQuotaDialogBody extends StatelessWidget {
                       ),
                     ] else
                       Expanded(
-                        child: PTButton(label: 'Got it', onPressed: () => Navigator.of(context).pop()),
+                        child: PTButton(
+                          label: 'Got it',
+                          onPressed: () => Navigator.of(context).pop(),
+                        ),
                       ),
                   ],
                 ),

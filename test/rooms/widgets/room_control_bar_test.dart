@@ -6,7 +6,9 @@ import 'package:synctogether/ui/buttons.dart';
 
 void main() {
   group('RoomControlBar AV Controls (TDD)', () {
-    testWidgets('disables mic and cam buttons with comic tooltips when avEnabled is false', (tester) async {
+    testWidgets('disables mic and cam buttons with comic tooltips when avEnabled is false', (
+      tester,
+    ) async {
       bool micToggled = false;
       bool camToggled = false;
 
@@ -75,7 +77,9 @@ void main() {
       expect(camToggled, isFalse);
     });
 
-    testWidgets('enables mic and cam buttons with standard tooltips when avEnabled is true', (tester) async {
+    testWidgets('enables mic and cam buttons with standard tooltips when avEnabled is true', (
+      tester,
+    ) async {
       bool? micToggledValue;
       bool? camToggledValue;
 
@@ -124,10 +128,7 @@ void main() {
       expect(micButton.onPressed, isNotNull);
       expect(camButton.onPressed, isNotNull);
 
-      expect(
-        find.byWidgetPredicate((w) => w is Tooltip && w.message == 'Mic on'),
-        findsOneWidget,
-      );
+      expect(find.byWidgetPredicate((w) => w is Tooltip && w.message == 'Mic on'), findsOneWidget);
       expect(
         find.byWidgetPredicate((w) => w is Tooltip && w.message == 'Camera on'),
         findsOneWidget,
@@ -186,7 +187,9 @@ void main() {
       );
     });
 
-    testWidgets('compact mode disables mic and cam with comic tooltips when avEnabled is false', (tester) async {
+    testWidgets('compact mode disables mic and cam with comic tooltips when avEnabled is false', (
+      tester,
+    ) async {
       bool micToggled = false;
       bool camToggled = false;
 
