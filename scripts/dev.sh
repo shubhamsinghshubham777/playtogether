@@ -91,22 +91,26 @@ spin_down() {
   # 4. Stop Supabase Docker Stack
   info "Stopping Supabase local containers..."
   supabase stop 2>/dev/null || true
+  if docker info >/dev/null 2>&1; then
+    local lingering
+    lingering=$(docker ps -q --filter "name=supabase_" 2>/dev/null || true)
+    if [ -n "$lingering" ]; then
+      docker stop $lingering 2>/dev/null || true
+    fi
+  fi
 
   # 5. Stop running Flutter desktop app instances (SyncTogether / SyncTogether B)
   info "Checking for running desktop app instances..."
   pkill -f "SyncTogether B.app" 2>/dev/null || true
   pkill -f "SyncTogether.app/Contents/MacOS/SyncTogether" 2>/dev/null || true
 
-  # 6. Cleanup any remaining listeners on dev ports
+  # 6. Cleanup any remaining listeners on dev ports (e.g. Next.js on port 3000)
   info "Verifying ports are clean..."
-  local ports=(3000 54321 54322 54323 54324 54327)
-  for port in "${ports[@]}"; do
-    local pids
-    pids=$(lsof -ti :"$port" 2>/dev/null || true)
-    if [ -n "$pids" ]; then
-      kill -9 $pids 2>/dev/null || true
-    fi
-  done
+  local pids
+  pids=$(lsof -ti :3000 2>/dev/null || true)
+  if [ -n "$pids" ]; then
+    kill -9 $pids 2>/dev/null || true
+  fi
 
   success "All services & apps spun down cleanly."
 }
@@ -119,8 +123,15 @@ check_prereqs() {
 
   # Docker check
   if ! docker info >/dev/null 2>&1; then
-    error "Docker is not running. Please start Docker (or OrbStack) and try again."
-    exit 1
+    local retries=0
+    while ! docker info >/dev/null 2>&1 && [ $retries -lt 5 ]; do
+      sleep 1
+      retries=$((retries+1))
+    done
+    if ! docker info >/dev/null 2>&1; then
+      error "Docker is not running. Please start Docker (or OrbStack) and try again."
+      exit 1
+    fi
   fi
 
   # Supabase CLI check
@@ -281,7 +292,7 @@ spin_up() {
   fi
   echo -e "\n${BOLD}${CYAN}Available Dev Commands:${NC}"
   echo -e "  • Primary Flutter Client (A):  ${YELLOW}fvm flutter run -d macos${NC} (or ./scripts/dev.sh -f)"
-  echo -e "  • Second Isolated Client (B):  ${YELLOW}./scripts/pt-instance-b.sh${NC} (or ./scripts/dev.sh -b)"
+  echo -e "  • Second Isolated Client (B):  ${YELLOW}./scripts/st-instance-b.sh${NC} (or ./scripts/dev.sh -b)"
   echo -e "  • Run All Test Suites:         ${YELLOW}./scripts/dev.sh test${NC}"
   echo -e "  • Reset Local Database:        ${YELLOW}./scripts/dev.sh reset${NC}"
   echo -e "  • Spin Down Everything:        ${YELLOW}./scripts/dev.sh down${NC}"
@@ -290,7 +301,7 @@ spin_up() {
   # Optional client launches
   if [ "$launch_instance_b" = true ]; then
     info "Launching secondary isolated instance (Instance B)..."
-    ./scripts/pt-instance-b.sh &
+    ./scripts/st-instance-b.sh &
   fi
 
   if [ "$launch_flutter" = true ]; then
@@ -306,7 +317,7 @@ status() {
   banner "SyncTogether Ecosystem Status"
 
   # Supabase
-  if docker ps --filter "name=supabase_db_synctogether" --format "{{.Names}}" | grep -q "supabase_db"; then
+  if docker ps --filter "name=supabase_db" --format "{{.Names}}" | grep -q "supabase_db"; then
     success "Supabase Local Stack: RUNNING (Studio: http://127.0.0.1:54323)"
   else
     warn "Supabase Local Stack: STOPPED"
