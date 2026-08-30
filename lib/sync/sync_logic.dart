@@ -123,22 +123,31 @@ bool memberSatisfiesGate(PresentMember member, RoomMedia media) {
   return true;
 }
 
+bool memberClearsGate(PresentMember member, RoomMedia media, Set<String> waived) =>
+    memberSatisfiesGate(member, media) || waived.contains(member.userId);
+
 /// Nobody may start or scrub until every present member has the room's
 /// canonical media loaded.
 GateState evaluateGateState({
   required bool hasPresenceSynced,
   required RoomMedia media,
   required List<PresentMember> members,
+  Set<String> waived = const {},
+  String mediaUploadState = 'none',
 }) {
   if (!hasPresenceSynced) return .indeterminate;
   if (!media.isSet) return .closed;
+  if (mediaUploadState == 'uploading') return .closed;
   if (members.isEmpty) return .indeterminate;
-  return members.every((m) => memberSatisfiesGate(m, media)) ? .open : .closed;
+  return members.every((m) => memberClearsGate(m, media, waived)) ? .open : .closed;
 }
 
 /// Everyone the room is still waiting on, for overlay/banner copy.
-List<PresentMember> gateBlockersOf(RoomMedia media, List<PresentMember> members) =>
-    media.isSet ? members.where((m) => !memberSatisfiesGate(m, media)).toList() : const [];
+List<PresentMember> gateBlockersOf(
+  RoomMedia media,
+  List<PresentMember> members, {
+  Set<String> waived = const {},
+}) => media.isSet ? members.where((m) => !memberClearsGate(m, media, waived)).toList() : const [];
 
 /// What the gate derives from a state change. Only the authority acts on it,
 /// else the room gets one pause per member.
@@ -173,6 +182,33 @@ Duration? gateHeldPosition({
   required String userId,
   required Duration? Function() position,
 }) => subjectUserId == userId ? null : position();
+
+bool shouldAutoReopenLocalFile({
+  required RoomMedia media,
+  required String? storedFileName,
+  required bool storedFileExists,
+  required String? loadedFileName,
+  required bool isPickerOpen,
+}) {
+  if (media.kind != .local || media.name == null) return false;
+  if (isPickerOpen) return false;
+  if (loadedFileName == media.name) return false;
+  if (storedFileName != media.name) return false;
+  return storedFileExists;
+}
+
+Duration playablePosition(Duration reported) => reported < Duration.zero ? Duration.zero : reported;
+
+const kResumeTailWindow = Duration(seconds: 15);
+
+Duration? resumeSeekPosition({required Duration? held, required Duration? mediaDuration}) {
+  if (held == null || held <= Duration.zero) return null;
+  if (mediaDuration != null && mediaDuration > Duration.zero) {
+    if (held >= mediaDuration - kResumeTailWindow) return null;
+    return held;
+  }
+  return held;
+}
 
 /// Host if present, else the earliest joiner; user id breaks ties so every
 /// client elects the same person.
@@ -258,46 +294,111 @@ class SyncOrdering {
   }
 }
 
-/// Outgoing reactions are capped at one per [interval], with the excess
-/// *coalesced* rather than dropped — the last emoji in a burst still goes out,
-/// so tapping two different ones quickly doesn't lose the second. The cap
-/// exists because this channel also carries play/pause/seek. Local echo is not
-/// routed through here and is never throttled.
-class ReactionThrottle {
-  ReactionThrottle({
+bool presencePayloadsMatch(Map<String, dynamic> a, Map<String, dynamic> b) {
+  if (a.length != b.length) return false;
+  for (final entry in a.entries) {
+    if (!b.containsKey(entry.key)) return false;
+    if (b[entry.key] != entry.value) return false;
+  }
+  return true;
+}
+
+class TrailingThrottle<T> {
+  TrailingThrottle({
     this.interval = const Duration(milliseconds: 250),
+    this.maxCalls,
+    this.window = const Duration(milliseconds: 250),
+    this.equals,
     DateTime Function()? now,
     Timer Function(Duration, void Function())? schedule,
   }) : _now = now ?? DateTime.now,
        _schedule = schedule ?? Timer.new;
 
   final Duration interval;
+  final int? maxCalls;
+  final Duration window;
+  final bool Function(T, T)? equals;
   final DateTime Function() _now;
   final Timer Function(Duration, void Function()) _schedule;
 
-  int _lastSentMs = 0;
+  final _sendTimes = <int>[];
   Timer? _flushTimer;
-  String? _queued;
+  T? _queued;
+  bool _hasQueued = false;
+  T? _lastSent;
+  bool _hasSent = false;
+  bool _waiveSpacing = false;
   bool _disposed = false;
 
-  void submit(String emoji, void Function(String) send) {
+  bool get hasPending => _hasQueued;
+
+  int _deferralMs(int now) {
+    _sendTimes.removeWhere((t) => now - t >= window.inMilliseconds);
+    var wait = 0;
+    if (_sendTimes.isNotEmpty && !_waiveSpacing) {
+      final spacing = interval.inMilliseconds - (now - _sendTimes.last);
+      if (spacing > wait) wait = spacing;
+    }
+    final budget = maxCalls;
+    if (budget != null && _sendTimes.length >= budget) {
+      final freeAt = window.inMilliseconds - (now - _sendTimes.first);
+      if (freeAt > wait) wait = freeAt;
+    }
+    return wait;
+  }
+
+  bool _isRedundant(T value) => _hasSent && (equals?.call(_lastSent as T, value) ?? false);
+
+  void _emit(T value, int now, void Function(T) send) {
+    _waiveSpacing = false;
+    _sendTimes.add(now);
+    _lastSent = value;
+    _hasSent = true;
+    send(value);
+  }
+
+  void submit(T value, void Function(T) send) {
     if (_disposed) return;
-    final now = _now().millisecondsSinceEpoch;
-    final wait = interval.inMilliseconds - (now - _lastSentMs);
-    if (wait <= 0) {
-      _lastSentMs = now;
-      send(emoji);
+    if (_isRedundant(value)) {
+      discardPending();
       return;
     }
-    _queued = emoji;
+    final now = _now().millisecondsSinceEpoch;
+    final wait = _deferralMs(now);
+    if (wait <= 0) {
+      _emit(value, now, send);
+      return;
+    }
+    _queued = value;
+    _hasQueued = true;
     if (_flushTimer?.isActive ?? false) return;
-    _flushTimer = _schedule(Duration(milliseconds: wait), () {
-      final queued = _queued;
-      _queued = null;
-      if (_disposed || queued == null) return;
-      _lastSentMs = _now().millisecondsSinceEpoch;
-      send(queued);
-    });
+    _flushTimer = _schedule(Duration(milliseconds: wait), () => _flush(send));
+  }
+
+  void _flush(void Function(T) send) {
+    if (!_hasQueued) return;
+    final queued = _queued as T;
+    _queued = null;
+    _hasQueued = false;
+    if (_disposed) return;
+    if (_isRedundant(queued)) return;
+    final now = _now().millisecondsSinceEpoch;
+    _deferralMs(now);
+    _emit(queued, now, send);
+  }
+
+  void discardPending() {
+    _flushTimer?.cancel();
+    _flushTimer = null;
+    _queued = null;
+    _hasQueued = false;
+  }
+
+  void renew() {
+    discardPending();
+    _lastSent = null;
+    _hasSent = false;
+    _waiveSpacing = true;
   }
 
   void dispose() {
@@ -305,3 +406,5 @@ class ReactionThrottle {
     _flushTimer?.cancel();
   }
 }
+
+typedef ReactionThrottle = TrailingThrottle<String>;

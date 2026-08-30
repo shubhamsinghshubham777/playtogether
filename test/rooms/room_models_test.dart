@@ -241,4 +241,191 @@ void main() {
       expect(RoomErrorCode.values.last, RoomErrorCode.unknown);
     });
   });
+
+  group('tier-shaped room fields', () {
+    Map<String, dynamic> row(Map<String, dynamic> extra) => {
+      'id': 'r1',
+      'code': 'ABCDEF',
+      'name': 'Movie night',
+      'created_by': 'u1',
+      'created_at': '2026-08-04T12:00:00Z',
+      'duration_minutes': 60,
+      'expires_at': '2026-08-04T13:00:00Z',
+      ...extra,
+    };
+
+    test('a row without the tier columns reads as a free-shaped room', () {
+      final room = Room.fromJson(row(const {}));
+      expect(room.persistent, isFalse);
+      expect(room.avLevel, AvLevel.none);
+      expect(room.maxMembers, 8);
+      expect(room.mediaPosition, isNull);
+    });
+
+    test('the tier columns round-trip', () {
+      final room = Room.fromJson(
+        row(const {
+          'persistent': true,
+          'dormant_hours': 24,
+          'av_level': 'video',
+          'max_members': 16,
+          'media_position_ms': 90000,
+          'media_position_at': '2026-08-04T12:30:00Z',
+          'resumable_until': '2026-08-05T13:00:00Z',
+        }),
+      );
+      expect(room.persistent, isTrue);
+      expect(room.avLevel, AvLevel.video);
+      expect(room.maxMembers, 16);
+      expect(room.mediaPosition, const Duration(seconds: 90));
+      expect(room.resumableUntil, isNotNull);
+      expect(room.goesDormant, isTrue);
+    });
+
+    test('a room with no dormancy and no persistence simply ends', () {
+      final room = Room.fromJson(row(const {'dormant_hours': 0, 'persistent': false}));
+      expect(room.goesDormant, isFalse);
+    });
+
+    test('av levels widen in order', () {
+      expect(AvLevel.none.allowsVoice, isFalse);
+      expect(AvLevel.none.allowsVideo, isFalse);
+      expect(AvLevel.voice.allowsVoice, isTrue);
+      expect(AvLevel.voice.allowsVideo, isFalse);
+      expect(AvLevel.video.allowsVoice, isTrue);
+      expect(AvLevel.video.allowsVideo, isTrue);
+    });
+
+    test('an unknown av level degrades to none rather than granting anything', () {
+      expect(AvLevel.fromWire('ultra'), AvLevel.none);
+      expect(AvLevel.fromWire(null), AvLevel.none);
+    });
+
+    test('an unknown state degrades to expired rather than looking usable', () {
+      expect(RoomState.fromWire('live'), RoomState.live);
+      expect(RoomState.fromWire('dormant'), RoomState.dormant);
+      expect(RoomState.fromWire('who knows'), RoomState.expired);
+      expect(RoomState.fromWire(null), RoomState.expired);
+    });
+
+    test('a listing row carries the caller standing alongside the room', () {
+      final entry = MyRoom.fromJson(
+        row(const {'state': 'dormant', 'role': 'host', 'member_count': 3, 'is_owner': true}),
+      );
+      expect(entry.room.name, 'Movie night');
+      expect(entry.isDormant, isTrue);
+      expect(entry.isLive, isFalse);
+      expect(entry.isHost, isTrue);
+      expect(entry.isOwner, isTrue);
+      expect(entry.memberCount, 3);
+    });
+
+    test('an acting host is not the owner, so deletion stays with the creator', () {
+      final entry = MyRoom.fromJson(
+        row(const {'state': 'live', 'role': 'host', 'member_count': 2, 'is_owner': false}),
+      );
+      expect(entry.isHost, isTrue);
+      expect(entry.isOwner, isFalse);
+    });
+
+    test('ownership is never assumed when the server did not say so', () {
+      final entry = MyRoom.fromJson(row(const {'state': 'live', 'role': 'host'}));
+      expect(entry.isOwner, isFalse);
+    });
+
+    test('a room you created but left reads as owned and not joined', () {
+      final entry = MyRoom.fromJson(
+        row(const {'state': 'live', 'is_owner': true, 'is_member': false}),
+      );
+      expect(entry.isOwner, isTrue);
+      expect(entry.isMember, isFalse);
+    });
+
+    test('membership is assumed when absent, since every listed room used to imply it', () {
+      final entry = MyRoom.fromJson(row(const {'state': 'live', 'role': 'host'}));
+      expect(entry.isMember, isTrue);
+    });
+  });
+
+  group('RoomExitEdge', () {
+    test('fires once when the room is left', () {
+      final edge = RoomExitEdge(true);
+      expect(edge.observe(inRoom: false), isTrue);
+      expect(edge.observe(inRoom: false), isFalse);
+    });
+
+    test('does not fire on entry, or while staying put', () {
+      final edge = RoomExitEdge(false);
+      expect(edge.observe(inRoom: true), isFalse);
+      expect(edge.observe(inRoom: true), isFalse);
+      expect(edge.observe(inRoom: false), isTrue);
+    });
+
+    test('fires again on a later exit', () {
+      final edge = RoomExitEdge(true);
+      expect(edge.observe(inRoom: false), isTrue);
+      expect(edge.observe(inRoom: true), isFalse);
+      expect(edge.observe(inRoom: false), isTrue);
+    });
+
+    test('a reaction that re-observes synchronously terminates', () {
+      final edge = RoomExitEdge(true);
+      var fired = 0;
+      void react() {
+        fired++;
+        if (fired > 20) return;
+        if (edge.observe(inRoom: false)) react();
+      }
+
+      if (edge.observe(inRoom: false)) react();
+      expect(fired, 1);
+    });
+  });
+
+  group('Media Sharing Room Models & Errors', () {
+    test('Room.fromJson parses media sharing fields', () {
+      final room = Room.fromJson({
+        ..._minimalRow(),
+        'media_file_size': 524288000,
+        'media_r2_key': 'rooms/r1/abc-movie.mp4',
+        'media_upload_id': 'upload_123',
+        'media_upload_state': 'uploading',
+        'media_sharing_level': 'limited',
+      });
+
+      expect(room.mediaFileSize, 524288000);
+      expect(room.mediaR2Key, 'rooms/r1/abc-movie.mp4');
+      expect(room.mediaUploadId, 'upload_123');
+      expect(room.mediaUploadState, 'uploading');
+      expect(room.mediaSharingLevel, 'limited');
+    });
+
+    test('Room.fromJson defaults media sharing state and level to none', () {
+      final room = Room.fromJson(_minimalRow());
+      expect(room.mediaFileSize, isNull);
+      expect(room.mediaR2Key, isNull);
+      expect(room.mediaUploadId, isNull);
+      expect(room.mediaUploadState, 'none');
+      expect(room.mediaSharingLevel, 'none');
+    });
+
+    test('RoomErrorCode maps media sharing errors correctly', () {
+      expect(
+        RoomErrorCode.fromError('error: active_upload_in_progress'),
+        RoomErrorCode.activeUploadInProgress,
+      );
+      expect(
+        RoomErrorCode.fromError('error: upload_quota_exceeded'),
+        RoomErrorCode.uploadQuotaExceeded,
+      );
+      expect(
+        RoomErrorCode.fromError('error: upload_cooldown_active'),
+        RoomErrorCode.uploadCooldownActive,
+      );
+      expect(
+        RoomErrorCode.fromError('error: media_sharing_disabled'),
+        RoomErrorCode.mediaSharingDisabled,
+      );
+    });
+  });
 }

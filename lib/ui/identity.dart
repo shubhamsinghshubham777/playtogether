@@ -17,6 +17,7 @@ class PTAvatar extends StatelessWidget {
     this.size = 36,
     this.presence,
     this.ringColor,
+    this.premium = false,
   });
 
   final String userId;
@@ -27,6 +28,7 @@ class PTAvatar extends StatelessWidget {
   /// null = no dot; true = online (green); false = away (grey).
   final bool? presence;
   final Color? ringColor;
+  final bool premium;
 
   @override
   Widget build(BuildContext context) {
@@ -57,20 +59,46 @@ class PTAvatar extends StatelessWidget {
           : null,
     );
 
-    if (presence != null) {
+    if (presence != null || premium) {
       avatar = Stack(
         clipBehavior: Clip.none,
         children: [
           avatar,
-          Positioned(
-            bottom: 0,
-            right: 0,
-            child: _PresenceDot(online: presence!, size: size * 0.29),
-          ),
+          if (premium)
+            Positioned(
+              top: -size * 0.13,
+              right: -size * 0.09,
+              child: PremiumCrown(size: size),
+            ),
+          if (presence != null)
+            Positioned(
+              bottom: 0,
+              right: 0,
+              child: _PresenceDot(online: presence!, size: size * 0.29),
+            ),
         ],
       );
     }
     return avatar;
+  }
+}
+
+class PremiumCrown extends StatelessWidget {
+  const PremiumCrown({super.key, this.size = 36});
+
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return Icon(
+      Symbols.crown_rounded,
+      size: size * 0.46,
+      fill: 1,
+      weight: 600,
+      color: PTColors.premium,
+      semanticLabel: 'Premium',
+      shadows: const [Shadow(color: PTColors.canvas, blurRadius: 4)],
+    );
   }
 }
 
@@ -344,6 +372,40 @@ class GuestBadge extends StatelessWidget {
           Text(
             label,
             style: TextStyle(fontFamily: PTFonts.body, fontSize: 12, color: PTColors.white(0.55)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class PremiumBadge extends StatelessWidget {
+  const PremiumBadge({super.key, this.label = 'Premium'});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      decoration: BoxDecoration(
+        color: PTColors.premium.withValues(alpha: 0.14),
+        border: Border.all(color: PTColors.premiumBorder.withValues(alpha: 0.5)),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: .min,
+        spacing: 6,
+        children: [
+          const Icon(Symbols.crown_rounded, size: 14, fill: 1, color: PTColors.premium),
+          Text(
+            label,
+            style: const TextStyle(
+              fontFamily: PTFonts.body,
+              fontSize: 12,
+              fontWeight: .w600,
+              color: PTColors.premium,
+            ),
           ),
         ],
       ),

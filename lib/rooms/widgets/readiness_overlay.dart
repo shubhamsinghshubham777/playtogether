@@ -52,8 +52,12 @@ class ReadinessOverlay extends StatelessWidget {
     required this.selfIsHost,
     required this.onLocateFile,
     required this.onKick,
+    this.onStartWithout,
+    this.startWithoutLabel,
     this.compact = false,
     this.reveal = 1,
+    this.premiumMembers = const {},
+    this.uploadProgressWidget,
   });
 
   final String headline;
@@ -61,12 +65,17 @@ class ReadinessOverlay extends StatelessWidget {
   final RoomMedia media;
   final String selfId;
   final bool selfIsHost;
+  final Widget? uploadProgressWidget;
 
   /// Null unless *we* are the one who needs to find their copy.
   final VoidCallback? onLocateFile;
   final void Function(PresentMember member)? onKick;
+
+  final VoidCallback? onStartWithout;
+  final String? startWithoutLabel;
   final bool compact;
   final double reveal;
+  final Set<String> premiumMembers;
 
   @override
   Widget build(BuildContext context) {
@@ -128,6 +137,7 @@ class ReadinessOverlay extends StatelessWidget {
                         ),
                       ],
                     ),
+                    if (uploadProgressWidget != null) uploadProgressWidget!,
                     if (members.isNotEmpty)
                       Column(
                         mainAxisSize: .min,
@@ -142,6 +152,7 @@ class ReadinessOverlay extends StatelessWidget {
                               child: _MemberStatusRow(
                                 member: member,
                                 media: media,
+                                premium: premiumMembers.contains(member.userId),
                                 isSelf: member.userId == selfId,
                                 compact: compact,
                                 // Reserve the kick column on every row, not just the
@@ -165,6 +176,14 @@ class ReadinessOverlay extends StatelessWidget {
                         expand: true,
                         onPressed: onLocateFile,
                       ),
+                    if (onStartWithout != null)
+                      PTButton(
+                        label: startWithoutLabel ?? 'Start without them',
+                        icon: Symbols.fast_forward_rounded,
+                        variant: .secondary,
+                        expand: true,
+                        onPressed: onStartWithout,
+                      ),
                   ],
                 ),
               ),
@@ -180,6 +199,7 @@ class _MemberStatusRow extends StatelessWidget {
   const _MemberStatusRow({
     required this.member,
     required this.media,
+    required this.premium,
     required this.isSelf,
     required this.compact,
     required this.reserveKickSlot,
@@ -188,6 +208,7 @@ class _MemberStatusRow extends StatelessWidget {
 
   final PresentMember member;
   final RoomMedia media;
+  final bool premium;
   final bool isSelf;
   final bool compact;
   final bool reserveKickSlot;
@@ -208,6 +229,7 @@ class _MemberStatusRow extends StatelessWidget {
             displayName: member.displayName,
             avatarUrl: member.avatarUrl,
             size: 30,
+            premium: premium,
           ),
           Expanded(
             child: Text.rich(

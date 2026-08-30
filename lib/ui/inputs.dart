@@ -305,6 +305,7 @@ class PTSlider extends StatefulWidget {
   const PTSlider({
     super.key,
     required this.value,
+    this.bufferedValue,
     required this.onChanged,
     this.onChangeEnd,
     this.onHover,
@@ -315,6 +316,10 @@ class PTSlider extends StatefulWidget {
 
   /// Normalized 0–1.
   final double value;
+
+  /// Optional normalized 0–1 buffer progress (for streaming media).
+  final double? bufferedValue;
+
   final ValueChanged<double> onChanged;
   final ValueChanged<double>? onChangeEnd;
 
@@ -345,6 +350,7 @@ class _PTSliderState extends State<PTSlider> {
     final enabled = widget.enabled;
     final onHover = widget.onHover;
     final clamped = widget.value.clamp(0.0, 1.0);
+    final clampedBuffered = widget.bufferedValue?.clamp(0.0, 1.0);
     // No LayoutBuilder here: it can't answer intrinsic-size queries, so it
     // would crash inside IntrinsicHeight (e.g. the lobby's equal-height cards).
     void update(Offset local, {bool end = false}) {
@@ -398,6 +404,7 @@ class _PTSliderState extends State<PTSlider> {
               builder: (context, grow, _) => CustomPaint(
                 painter: _PTSliderPainter(
                   value: clamped,
+                  bufferedValue: clampedBuffered,
                   trackHeight: widget.trackHeight,
                   thumbRadius: widget.thumbRadius + 2 * grow,
                 ),
@@ -413,11 +420,13 @@ class _PTSliderState extends State<PTSlider> {
 class _PTSliderPainter extends CustomPainter {
   const _PTSliderPainter({
     required this.value,
+    this.bufferedValue,
     required this.trackHeight,
     required this.thumbRadius,
   });
 
   final double value;
+  final double? bufferedValue;
   final double trackHeight;
   final double thumbRadius;
 
@@ -431,6 +440,17 @@ class _PTSliderPainter extends CustomPainter {
       RRect.fromRectAndRadius(trackRect, radius),
       Paint()..color = PTColors.white(0.13),
     );
+
+    if (bufferedValue != null && bufferedValue! > 0) {
+      final bufferedWidth = size.width * bufferedValue!.clamp(0.0, 1.0);
+      if (bufferedWidth > 0) {
+        final bufferedRect = Rect.fromLTWH(0, trackTop, bufferedWidth, trackHeight);
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(bufferedRect, radius),
+          Paint()..color = PTColors.white(0.26),
+        );
+      }
+    }
 
     if (value > 0) {
       final fillRect = Rect.fromLTWH(0, trackTop, size.width * value, trackHeight);
@@ -457,6 +477,112 @@ class _PTSliderPainter extends CustomPainter {
   @override
   bool shouldRepaint(_PTSliderPainter oldDelegate) =>
       oldDelegate.value != value ||
+      oldDelegate.bufferedValue != bufferedValue ||
       oldDelegate.trackHeight != trackHeight ||
       oldDelegate.thumbRadius != thumbRadius;
+}
+
+class PTToggleRow extends StatelessWidget {
+  const PTToggleRow({
+    super.key,
+    required this.title,
+    required this.subtitle,
+    required this.value,
+    required this.onChanged,
+    this.icon,
+  });
+
+  final String title;
+  final String subtitle;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+  final IconData? icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        behavior: .opaque,
+        onTap: () => onChanged(!value),
+        child: Row(
+          spacing: 14,
+          children: [
+            if (icon != null)
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: PTColors.white(0.06),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, size: 19, color: PTColors.white(0.6)),
+              ),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: .start,
+                spacing: 3,
+                children: [
+                  Text(title, style: PTText.body.copyWith(fontSize: 14, fontWeight: .w600)),
+                  Text(
+                    subtitle,
+                    style: PTText.body.copyWith(
+                      fontSize: 12.5,
+                      color: PTColors.white(0.5),
+                      height: 1.45,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            _PTSwitch(value: value, onChanged: onChanged),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PTSwitch extends StatelessWidget {
+  const _PTSwitch({required this.value, required this.onChanged});
+
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  static const _width = 46.0;
+  static const _height = 27.0;
+  static const _knob = 21.0;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => onChanged(!value),
+      child: AnimatedContainer(
+        duration: PTMotion.functional(context, PTMotion.state),
+        curve: PTMotion.enter,
+        width: _width,
+        height: _height,
+        padding: const EdgeInsets.all(3),
+        decoration: BoxDecoration(
+          gradient: value ? PTColors.buttonGradient : null,
+          color: value ? null : PTColors.white(0.1),
+          border: Border.all(color: PTColors.white(value ? 0.0 : 0.14)),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: AnimatedAlign(
+          duration: PTMotion.functional(context, PTMotion.state),
+          curve: PTMotion.enter,
+          alignment: value ? .centerRight : .centerLeft,
+          child: Container(
+            width: _knob,
+            height: _knob,
+            decoration: BoxDecoration(
+              color: value ? Colors.white : PTColors.white(0.55),
+              shape: .circle,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }

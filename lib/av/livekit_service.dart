@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:livekit_client/livekit_client.dart' as lk;
 import 'package:playtogether/diagnostics.dart';
 import 'package:playtogether/env.dart';
+import 'package:playtogether/rooms/room_models.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 enum AvConnectionState { disconnected, connecting, connected, reconnecting }
@@ -11,13 +12,26 @@ enum AvConnectionState { disconnected, connecting, connected, reconnecting }
 /// Voice/video layer per room. Identity = Supabase user id (the token minted
 /// by the livekit-token edge function enforces room membership server-side).
 class LiveKitService extends ChangeNotifier {
-  LiveKitService({required this.roomId});
+  LiveKitService({required this.roomId, this.avLevel = AvLevel.voice});
 
   final String roomId;
+
+  final AvLevel avLevel;
 
   /// AV is available only when the client knows the LiveKit URL; without it
   /// the whole facecam UI stays hidden.
   static bool get isConfigured => (Env.livekitUrl ?? '').isNotEmpty;
+
+  static bool isAvailableFor(AvLevel level) => isConfigured && level.allowsVoice;
+
+  bool get canPublishCamera => avLevel.allowsVideo;
+
+  static const _cameraCapture = lk.CameraCaptureOptions(
+    params: lk.VideoParameters(
+      dimensions: lk.VideoDimensionsPresets.h360_169,
+      encoding: lk.VideoEncoding(maxFramerate: 24, maxBitrate: 400 * 1000),
+    ),
+  );
 
   lk.Room? _room;
   lk.Room? get room => _room;
@@ -35,7 +49,7 @@ class LiveKitService extends ChangeNotifier {
   lk.EventsListener<lk.RoomEvent>? _listener;
 
   Future<void> connect() async {
-    if (!isConfigured || _state == .connecting || _state == .connected) return;
+    if (!isAvailableFor(avLevel) || _state == .connecting || _state == .connected) return;
     _setState(.connecting);
     try {
       final response = await Supabase.instance.client.functions.invoke(
@@ -50,9 +64,7 @@ class LiveKitService extends ChangeNotifier {
         roomOptions: const lk.RoomOptions(
           adaptiveStream: true,
           dynacast: true,
-          defaultCameraCaptureOptions: lk.CameraCaptureOptions(
-            params: lk.VideoParametersPresets.h360_169,
-          ),
+          defaultCameraCaptureOptions: _cameraCapture,
         ),
       );
       _listener = room.createListener()
@@ -79,7 +91,11 @@ class LiveKitService extends ChangeNotifier {
   }
 
   Future<void> setCamEnabled(bool enabled) async {
-    await _room?.localParticipant?.setCameraEnabled(enabled);
+    if (enabled && !canPublishCamera) return;
+    await _room?.localParticipant?.setCameraEnabled(
+      enabled,
+      cameraCaptureOptions: enabled ? _cameraCapture : null,
+    );
     notifyListeners();
   }
 

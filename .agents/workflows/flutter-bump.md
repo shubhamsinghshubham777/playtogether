@@ -1,0 +1,1 @@
+../../.claude/skills/flutter-bump/SKILL.md

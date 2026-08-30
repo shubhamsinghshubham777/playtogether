@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:clock/clock.dart';
 import 'package:playtogether/analytics.dart';
 import 'package:playtogether/diagnostics.dart';
 import 'package:playtogether/profile/profile_models.dart';
@@ -32,6 +33,7 @@ class SyncService {
     // ignore: prefer_initializing_formals
     : _role = role {
     _canonicalMedia = RoomMedia.fromRoom(room);
+    _mediaUploadState = room.mediaUploadState;
   }
 
   final SyncPlayer _player;
@@ -78,6 +80,24 @@ class SyncService {
   final _fileInfoController = StreamController<FileInfoEvent>.broadcast();
   Stream<FileInfoEvent> get fileInfoStream => _fileInfoController.stream;
 
+  final _uploadProgressController = StreamController<UploadProgressEvent>.broadcast();
+  Stream<UploadProgressEvent> get uploadProgressStream => _uploadProgressController.stream;
+
+  final _sharingToggledController = StreamController<SharingToggledEvent>.broadcast();
+  Stream<SharingToggledEvent> get sharingToggledStream => _sharingToggledController.stream;
+
+  final _roomExtendedController = StreamController<RoomExtendedEvent>.broadcast();
+  Stream<RoomExtendedEvent> get roomExtendedStream => _roomExtendedController.stream;
+
+  String _mediaUploadState = 'none';
+  String get mediaUploadState => _mediaUploadState;
+
+  void setMediaUploadState(String state) {
+    if (_mediaUploadState == state) return;
+    _mediaUploadState = state;
+    _evaluateGate();
+  }
+
   RoomMedia _canonicalMedia = RoomMedia.none;
   final _canonicalMediaController = StreamController<RoomMedia>.broadcast();
 
@@ -106,18 +126,61 @@ class SyncService {
   bool memberSatisfiesGate(PresentMember member) =>
       logic.memberSatisfiesGate(member, _canonicalMedia);
 
+  /// Members the host chose to start without. Cleared whenever the room changes
+  /// media, so a waiver can never carry across to something else.
+  final _waived = <String>{};
+
+  Set<String> get waivedMembers => Set.unmodifiable(_waived);
+
   GateState get gateState => logic.evaluateGateState(
     hasPresenceSynced: _hasPresenceSynced,
     media: _canonicalMedia,
     members: _presentMembers,
+    waived: _waived,
+    mediaUploadState: _mediaUploadState,
   );
 
-  List<PresentMember> get gateBlockers => logic.gateBlockersOf(_canonicalMedia, _presentMembers);
+  List<PresentMember> get gateBlockers =>
+      logic.gateBlockersOf(_canonicalMedia, _presentMembers, waived: _waived);
+
+  /// Everyone not yet ready, waiver or not — what the host is deciding about.
+  List<PresentMember> get gateStragglers => logic.gateBlockersOf(_canonicalMedia, _presentMembers);
 
   PresentMember? get gateBlocker => gateBlockers.firstOrNull;
 
-  final _roomEndedController = StreamController<void>.broadcast();
-  Stream<void> get roomEndedStream => _roomEndedController.stream;
+  /// Host only. Agrees to start without whoever is holding the gate right now.
+  /// Scoped to those exact members: anyone who arrives afterwards shuts the
+  /// gate again, which is the lockstep contract still doing its job.
+  Future<void> waiveGateBlockers() async {
+    if (_disposed || !isHost) return;
+    final ids = gateBlockers.map((m) => m.userId).where((id) => id != userId).toList();
+    if (ids.isEmpty) return;
+    trace('host started without stragglers', category: 'gate', data: {'count': ids.length});
+    _applyWaiver(ids);
+    await _channel?.sendBroadcastMessage(
+      event: SyncEventType.gateWaiver,
+      payload: {'senderId': userId, 'timestamp': _nextTimestamp(), 'userIds': ids},
+    );
+  }
+
+  void _handleGateWaiver(Map<String, dynamic> payload) {
+    if (_disposed) return;
+    final raw = payload['userIds'];
+    if (raw is! List) return;
+    _applyWaiver(raw.whereType<String>().toList());
+  }
+
+  void _applyWaiver(List<String> userIds) {
+    if (userIds.isEmpty) return;
+    _waived.addAll(userIds);
+    _evaluateGate();
+  }
+
+  final _roomEndedController = StreamController<String?>.broadcast();
+
+  /// Carries the server's reason, so eviction copy can tell "the session is
+  /// over, see you in the lobby" apart from "this room no longer exists".
+  Stream<String?> get roomEndedStream => _roomEndedController.stream;
 
   final _gateResumedController = StreamController<void>.broadcast();
 
@@ -211,6 +274,10 @@ class SyncService {
     on(SyncEventType.transportLock, _handleTransportLock);
     on(SyncEventType.reaction, _handleReaction);
     on(SyncEventType.roomEnded, _handleRoomEnded);
+    on(SyncEventType.gateWaiver, _handleGateWaiver);
+    on(SyncEventType.uploadProgress, _handleUploadProgress);
+    on(SyncEventType.sharingToggled, _handleSharingToggled);
+    on(SyncEventType.roomExtended, _handleRoomExtended);
 
     channel.onPresenceSync(_handlePresenceSync).subscribe((status, error) {
       // Statuses from a superseded channel (reconnect replaced it) are stale.
@@ -224,6 +291,7 @@ class SyncService {
           );
           _reconnectAttempts = 0;
           _connectionController.add(true);
+          _presenceThrottle.renew();
           _trackPresence();
           _reannounceFileInfo();
           unawaited(refreshCanonicalMedia());
@@ -269,7 +337,7 @@ class SyncService {
 
   void _handleRoomEnded(Map<String, dynamic> payload) {
     if (_disposed) return;
-    _roomEndedController.add(null);
+    _roomEndedController.add(payload['reason'] as String?);
   }
 
   bool _transportLock = false;
@@ -335,17 +403,29 @@ class SyncService {
   String? get loadedFileName => _loadedFileName;
   bool get privacyMode => _privacyMode;
 
+  static const kPresenceMaxCalls = 4;
+  static const kPresenceWindow = Duration(seconds: 30);
+
+  final _presenceThrottle = TrailingThrottle<Map<String, dynamic>>(
+    interval: const Duration(seconds: 2),
+    maxCalls: kPresenceMaxCalls,
+    window: kPresenceWindow,
+    equals: presencePayloadsMatch,
+  );
+
+  late final DateTime _presenceJoinedFallback = DateTime.now();
+
   void _trackPresence() {
-    _channel?.track({
+    _presenceThrottle.submit({
       'user_id': userId,
       'display_name': profile.displayName,
       'avatar_url': profile.avatarUrl,
       'role': _role,
-      'joined_at': (_membershipJoinedAt ?? DateTime.now()).toIso8601String(),
+      'joined_at': (_membershipJoinedAt ?? _presenceJoinedFallback).toIso8601String(),
       'ready_status': _readyStatus.wire,
       'loaded_file_name': _loadedFileName,
       'privacy_mode': _privacyMode,
-    });
+    }, (payload) => _channel?.track(payload));
   }
 
   /// Host succession: re-announce presence with the new role.
@@ -369,7 +449,9 @@ class SyncService {
   void retrackReadiness(ReadyStatus status, {String? loadedFileName}) {
     if (_readyStatus == status && _loadedFileName == loadedFileName) return;
     trace(
-      'readiness ${_readyStatus.wire} -> ${status.wire}',
+      _readyStatus == status
+          ? 'readiness ${status.wire}, file changed'
+          : 'readiness ${_readyStatus.wire} -> ${status.wire}',
       category: 'gate',
       data: {'file': loadedFileName},
     );
@@ -433,8 +515,28 @@ class SyncService {
     final states = _channel?.presenceState();
     if (states == null) return;
     _hasPresenceSynced = true;
+    final prevMembers = _presentMembers;
     _presentMembers = logic.mergePresence(states);
     _presenceController.add(_presentMembers);
+
+    // Late Joiner Auto-Waiver:
+    // When a member joins a live playing room where shared media is ready,
+    // authority waives them until they reach ReadyStatus.ready so gate doesn't close.
+    if (_isAuthority && _roomPlaying && _canonicalMedia.isSet && _mediaUploadState == 'ready') {
+      final prevIds = prevMembers.map((m) => m.userId).toSet();
+      for (final member in _presentMembers) {
+        if (member.userId != userId && !member.isReady && !prevIds.contains(member.userId)) {
+          _waived.add(member.userId);
+        }
+      }
+    }
+    // Clear waiver once member is ready
+    for (final member in _presentMembers) {
+      if (member.isReady && _waived.contains(member.userId)) {
+        _waived.remove(member.userId);
+      }
+    }
+
     _evaluateGate();
   }
 
@@ -536,9 +638,11 @@ class SyncService {
 
   final _reactionThrottle = ReactionThrottle();
 
+  String? entitlementTier;
+
   void sendReaction(String emoji) {
     if (_disposed) return;
-    if (reactionForEmoji(emoji) == null) return;
+    if (!reactionAllowedForTier(emoji, entitlementTier)) return;
     Analytics.instance.track('reaction_sent', {'emoji': emoji, 'room_id': room.id});
     // Local echo is mandatory (the channel is self:false) and never throttled.
     _reactionController.add(
@@ -669,6 +773,7 @@ class SyncService {
       },
     );
     _canonicalMedia = media;
+    _waived.clear();
     _canonicalMediaController.add(media);
     _checkSelfGateSatisfaction();
     _evaluateGate();
@@ -760,6 +865,7 @@ class SyncService {
       final fresh = await backend.fetchRoom(room.id);
       if (_disposed || fresh == null) return;
       _setTransportLock(fresh.transportLock);
+      _mediaUploadState = fresh.mediaUploadState;
       _adoptCanonicalMedia(RoomMedia.fromRoom(fresh));
     } catch (e, s) {
       // The row is the source of truth for the readiness gate, and this refetch
@@ -836,6 +942,103 @@ class SyncService {
     );
   }
 
+  double _lastBroadcastFraction = 0.0;
+  int _lastBroadcastProgressMs = -10000;
+
+  /// Host only: broadcast upload progress, throttled to >= 3.0s or delta >= 5%.
+  Future<void> broadcastUploadProgress({
+    required double fraction,
+    required double speedBps,
+    required int etaSeconds,
+    required String state,
+  }) async {
+    final now = clock.now().millisecondsSinceEpoch;
+    final deltaFraction = (fraction - _lastBroadcastFraction).abs();
+    final timeSinceLastMs = now - _lastBroadcastProgressMs;
+
+    final isFinal = fraction >= 1.0 || state == 'ready' || state == 'failed';
+    if (!isFinal && timeSinceLastMs < 3000 && deltaFraction < 0.05) {
+      return;
+    }
+
+    _lastBroadcastFraction = fraction;
+    _lastBroadcastProgressMs = now;
+
+    await _channel?.sendBroadcastMessage(
+      event: SyncEventType.uploadProgress,
+      payload: UploadProgressEvent(
+        senderId: userId,
+        timestamp: _nextTimestamp(),
+        fraction: fraction,
+        speedBps: speedBps,
+        etaSeconds: etaSeconds,
+        state: state,
+      ).toPayload(),
+    );
+  }
+
+  void _handleUploadProgress(Map<String, dynamic> payload) {
+    if (_disposed) return;
+    final event = UploadProgressEvent.fromPayload(payload);
+    if (event.state != _mediaUploadState) {
+      _mediaUploadState = event.state;
+      _evaluateGate();
+    }
+    _uploadProgressController.add(event);
+  }
+
+  /// Host only: broadcast sharing toggled on/off.
+  Future<void> broadcastSharingToggled({
+    required bool enabled,
+    String? fileName,
+    int? fileSize,
+    String? uploadState,
+  }) async {
+    await _channel?.sendBroadcastMessage(
+      event: SyncEventType.sharingToggled,
+      payload: SharingToggledEvent(
+        senderId: userId,
+        timestamp: _nextTimestamp(),
+        enabled: enabled,
+        fileName: fileName,
+        fileSize: fileSize,
+        uploadState: uploadState,
+      ).toPayload(),
+    );
+  }
+
+  void _handleSharingToggled(Map<String, dynamic> payload) {
+    if (_disposed) return;
+    final event = SharingToggledEvent.fromPayload(payload);
+    if (event.uploadState != null && event.uploadState != _mediaUploadState) {
+      _mediaUploadState = event.uploadState!;
+      _evaluateGate();
+    }
+    _sharingToggledController.add(event);
+  }
+
+  /// Host only: broadcast room extended with new expiry and duration.
+  Future<void> broadcastRoomExtended({
+    required String expiresAt,
+    required int durationMinutes,
+  }) async {
+    await _channel?.sendBroadcastMessage(
+      event: SyncEventType.roomExtended,
+      payload: RoomExtendedEvent(
+        senderId: userId,
+        timestamp: _nextTimestamp(),
+        expiresAt: expiresAt,
+        durationMinutes: durationMinutes,
+      ).toPayload(),
+    );
+  }
+
+  void _handleRoomExtended(Map<String, dynamic> payload) {
+    if (_disposed) return;
+    final event = RoomExtendedEvent.fromPayload(payload);
+    _roomExtendedController.add(event);
+  }
+
   void updatePlaybackState(String mode, String? youtubeUrl) {
     _currentMode = mode;
     _currentYoutubeUrl = youtubeUrl;
@@ -891,6 +1094,12 @@ class SyncService {
   ];
 
   bool get _isAuthority => logic.authorityAmong(_authorityCandidates) == userId;
+
+  bool get isAuthority => _isAuthority;
+
+  bool get roomPlaying => _roomPlaying;
+
+  bool get hasReceivedInitialState => _hasReceivedInitialState;
 
   void _handleStateRequest(Map<String, dynamic> payload) {
     // The authority answers — except when the authority is the one asking (a
@@ -1163,6 +1372,7 @@ class SyncService {
       t.cancel();
     }
     _reactionThrottle.dispose();
+    _presenceThrottle.dispose();
     _chatController.close();
     _presenceController.close();
     _typingController.close();
@@ -1177,6 +1387,9 @@ class SyncService {
     _connectionController.close();
     _remoteActionController.close();
     _reactionController.close();
+    _uploadProgressController.close();
+    _sharingToggledController.close();
+    _roomExtendedController.close();
     disconnect();
   }
 }

@@ -1,10 +1,27 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class Env {
   Env._();
 
-  static final supabaseUrl = dotenv.get("SUPABASE_URL");
-  static final supabasePublishableKey = dotenv.get("SUPABASE_PUBLISHABLE_KEY");
+  /// Debug builds talk to the local Supabase stack when one is configured, so
+  /// migrations, RPC changes and destructive testing never touch the project
+  /// real users are on. Release builds always take the production values, and
+  /// a debug build with no local stack configured falls back to them too.
+  static String get supabaseUrl => _local("SUPABASE_URL_LOCAL") ?? dotenv.get("SUPABASE_URL");
+
+  static String get supabasePublishableKey =>
+      _local("SUPABASE_PUBLISHABLE_KEY_LOCAL") ?? dotenv.get("SUPABASE_PUBLISHABLE_KEY");
+
+  /// True when this build is pointed at a local stack rather than production —
+  /// surfaced in the lobby so a debug session can never be mistaken for one.
+  static bool get usingLocalStack => kDebugMode && _local("SUPABASE_URL_LOCAL") != null;
+
+  static String? _local(String key) {
+    if (!kDebugMode) return null;
+    final value = dotenv.maybeGet(key);
+    return (value == null || value.isEmpty) ? null : value;
+  }
 
   /// Optional until LiveKit is configured; AV features are hidden without it.
   static final livekitUrl = dotenv.maybeGet("LIVEKIT_URL");

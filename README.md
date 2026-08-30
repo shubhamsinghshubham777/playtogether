@@ -18,29 +18,23 @@ broadcast to every member in real time, with chat and live facecams alongside.
 
 ## Features
 
-- **Rooms** — up to 8 members, join by code or invite link, fixed lifetime
-  (5 min – 4 h) with a live countdown, host role with succession when the host
-  leaves, and automatic eviction when time's up.
-- **Two playback modes** — local video files (via media_kit; each member opens
-  their own copy, with a mismatch warning if the files differ) and YouTube.
-- **Sync engine** — last-action-wins conflict resolution, authority-answered
-  state sync for late joiners, host drift-correction heartbeat, automatic
-  reconnection.
+- **Tiers & Room Limits** — Guest (up to 4 members, 1 h session), Free (up to 8 members, 4 h session, voice facecams, 24 h dormant room retention with 1 free 60-min extension), and Premium (up to 16 members, 24 h sessions, video facecams at 360p, persistent rooms, full extended animated reactions, custom duration extensions).
+- **Resumable Rooms** — Dormant rooms can be resumed by the host from the lobby with playback position seamlessly restored, or ended/deleted by the room creator.
+- **Two Playback Modes** — local video files (via media_kit; each member opens their own copy, with a mismatch warning if the files differ) and YouTube (via custom IFrame bridge).
+- **Sync Engine** — strict lockstep readiness gate, last-action-wins conflict resolution, authority-answered state sync for late joiners, host drift-correction heartbeat, automatic reconnection.
 - **Chat** — persisted per-room history, typing indicators, unread badge.
-- **Quick reactions** — Meet-style animated emoji that float up over the video
-  on everyone's screen, captioned with who sent them.
-- **Facecams** — voice + video tiles powered by LiveKit, with mic/cam toggles.
-- **Auth** — Google sign-in or instant guest accounts (Cloudflare Turnstile
-  protected); guests can upgrade to Google later without losing their identity.
-- **Self-updating desktop** — macOS and Windows check for new releases on
-  launch and offer a one-click "update & restart" from the lobby.
-- **Design** — dark violet glass aesthetic with desktop, portrait, and
-  landscape layouts.
+- **Quick Reactions** — Meet-style animated Noto Emoji (8 core bundled, extended collection streamed on demand via CDN with cryptographic SHA-256 verification for Premium).
+- **Facecams** — LiveKit-powered voice (Free/Premium) and video (Premium) tiles, with mic/cam toggles.
+- **Web & Subscriptions** — Next.js 15 marketing site and account portal (`website/`) with Paddle Billing checkout and real-time subscription reactivity in the Flutter client.
+- **Auth** — Google sign-in or instant guest accounts (Cloudflare Turnstile protected); guests can upgrade to Google in-place without losing their identity.
+- **Self-Updating Desktop** — macOS and Windows check for new releases on launch and offer a one-click "update & restart" from the lobby.
+- **Design** — dark violet glass aesthetic with desktop, portrait, and landscape layouts.
 
-Backend: Supabase (Postgres + RLS, private Realtime channels, edge functions,
-pg_cron sweeps). AV: LiveKit Cloud.
+Backend: Supabase (Postgres + RLS, private Realtime channels, edge functions, pg_cron sweeps). AV: LiveKit Cloud. Billing: Paddle Merchant of Record.
 
 ## Development setup
+
+### Flutter App
 
 The Flutter SDK is managed with [fvm](https://fvm.app) — prefix every
 `flutter`/`dart` command with `fvm`.
@@ -53,8 +47,25 @@ The Flutter SDK is managed with [fvm](https://fvm.app) — prefix every
    **Client-safe values only — `.env` ships inside the app bundle.**
 3. `fvm flutter run -d macos` (or `windows`, `linux`, `android`, `ios`)
 
-Lint with `fvm flutter analyze`; release-build with
+Lint with `fvm flutter analyze`; test with `fvm flutter test`; release-build with
 `fvm flutter build <platform> --release`.
+
+### Web App & Subscriptions (`website/`)
+
+The marketing site, download portal, and subscription checkout live in `website/`:
+
+```bash
+cd website
+npm install
+cp .env.example .env.local    # configure Supabase + Paddle sandbox credentials
+npm run dev                   # start Next.js 15 server at http://localhost:3000
+npm test                      # run webhook deduplication & signature tests
+```
+
+To test Paddle webhooks locally, use Hookdeck or the Paddle CLI:
+```bash
+hookdeck listen 3000 playtogether-webhooks --path /api/paddle/webhook
+```
 
 ### Backend (Supabase)
 
@@ -64,7 +75,7 @@ Server-side pieces live in `supabase/`. With a linked Supabase CLI:
 supabase db push                                          # schema, RLS, RPCs, cron jobs
 supabase functions deploy livekit-token                   # LiveKit token minting
 supabase secrets set --env-file supabase/functions/.env   # LiveKit key/secret, see .env.example
-supabase config push                                      # auth config (Google OAuth, captcha)
+supabase config push                                      # auth config (Google OAuth, captcha, redirect URLs)
 ```
 
 Server secrets go in `supabase/functions/.env` and `supabase/.env` (both
@@ -76,8 +87,8 @@ served from there).
 
 ### Testing sync on one machine
 
-Room sync needs two identities, but the sandboxed macOS app shares one
-container (and thus one session) across instances of the same bundle. Use the
+Room sync needs two identities, but the macOS app shares one
+preferences domain across instances of the same bundle id. Use the
 helper:
 
 ```bash
@@ -104,11 +115,12 @@ Pre-releases are excluded from that feed, so they never reach existing installs.
 | Path | What lives there |
 |---|---|
 | `lib/ui/` | Design system: theme/tokens, glass panels, buttons, inputs, dialogs |
-| `lib/auth/`, `lib/profile/` | Sign-in flows, Turnstile dialog, profile + avatar management |
-| `lib/rooms/` | Lobby, room screen and its widgets, room models/service |
+| `lib/auth/`, `lib/profile/` | Sign-in flows, Turnstile dialog, profile + avatar, `SubscriptionScreen`, `EntitlementService` |
+| `lib/rooms/` | Lobby, room screen and its widgets, room models/service, dormancy & resume |
 | `lib/sync/` | `SyncService` — the realtime sync engine (see `AGENTS.md` / `CLAUDE.md` for invariants) |
 | `lib/av/` | LiveKit connection + track management |
 | `lib/updates/` | Desktop self-update: appcast check + native updater handoff |
+| `website/` | Next.js 15 marketing site, download portal, changelog, FAQ, auth & Paddle billing portal |
 | `supabase/` | Migrations (schema/RLS/RPCs/cron), edge functions, auth config |
 
 `AGENTS.md` and `CLAUDE.md` document the architecture and the sync-engine invariants in depth.

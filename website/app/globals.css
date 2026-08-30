@@ -1,0 +1,160 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --pt-canvas: #08070C;
+    --pt-screen-bg: #0B0A14;
+    --pt-glass-base: rgba(22, 18, 38, 0.75);
+    --pt-glass-base-solid: #161226;
+    --pt-dialog-glass: rgba(24, 19, 42, 0.88);
+    --pt-glass-border: rgba(201, 184, 255, 0.12);
+    --pt-glass-border-hover: rgba(201, 184, 255, 0.25);
+    --pt-text-accent: #C9B8FF;
+    --pt-primary: #8B5CF6;
+    --pt-gradient-mid: #A855F7;
+    --pt-gradient-end: #C084FC;
+    --pt-deep: #7C3AED;
+    --pt-premium: #FBBF24;
+    --pt-premium-border: #D97706;
+    --pt-online: #4ADE80;
+    --pt-away: #6B7280;
+    --pt-warning: #FDE68A;
+    --pt-warning-border: #FACC15;
+    --pt-danger: #FCA5A5;
+    --pt-danger-border: #F87171;
+    --pt-cyan: #22D3EE;
+  }
+
+  body {
+    background-color: var(--pt-canvas);
+    color: #F3F4F6;
+    font-family: var(--font-outfit), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    overflow-x: hidden;
+  }
+}
+
+/* Glassmorphism primitives */
+.glass-panel {
+  background: var(--pt-glass-base);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--pt-glass-border);
+}
+
+.glass-panel-hover {
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.glass-panel-hover:hover {
+  border-color: var(--pt-glass-border-hover);
+  box-shadow: 0 8px 32px -8px rgba(139, 92, 246, 0.2);
+  transform: translateY(-2px);
+}
+
+.glass-dialog {
+  background: var(--pt-dialog-glass);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(201, 184, 255, 0.18);
+}
+
+/* Gradient text utilities */
+.text-gradient-brand {
+  background: linear-gradient(135deg, #FFFFFF 0%, #C9B8FF 50%, #C084FC 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.text-gradient-accent {
+  background: linear-gradient(135deg, #C9B8FF 0%, #A855F7 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.text-gradient-gold {
+  background: linear-gradient(135deg, #FDE68A 0%, #FBBF24 50%, #F59E0B 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Button & interactive gradients */
+.btn-primary-gradient {
+  background: linear-gradient(135deg, #8B5CF6 0%, #A855F7 100%);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.btn-primary-gradient:hover {
+  background: linear-gradient(135deg, #9D74FF 0%, #B86BFC 100%);
+  box-shadow: 0 0 24px rgba(168, 85, 247, 0.45);
+}
+
+.btn-gold-gradient {
+  background: linear-gradient(135deg, #FBBF24 0%, #D97706 100%);
+  color: #08070C;
+  font-weight: 600;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.btn-gold-gradient:hover {
+  background: linear-gradient(135deg, #FCD34D 0%, #F59E0B 100%);
+  box-shadow: 0 0 24px rgba(251, 191, 36, 0.5);
+}
+
+/* Ambient glow blobs */
+.glow-blob-purple {
+  position: absolute;
+  width: 600px;
+  height: 600px;
+  background: radial-gradient(circle, rgba(139, 92, 246, 0.18) 0%, rgba(124, 58, 237, 0.05) 45%, transparent 70%);
+  filter: blur(50px);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.glow-blob-cyan {
+  position: absolute;
+  width: 500px;
+  height: 500px;
+  background: radial-gradient(circle, rgba(34, 211, 238, 0.12) 0%, rgba(34, 211, 238, 0.02) 45%, transparent 70%);
+  filter: blur(50px);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #08070C;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(201, 184, 255, 0.15);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(201, 184, 255, 0.3);
+}
+
+/* Animations */
+@keyframes pulse-subtle {
+  0%, 100% { opacity: 0.8; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.03); }
+}
+
+.animate-pulse-subtle {
+  animation: pulse-subtle 4s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-6px); }
+}
+
+.animate-float {
+  animation: float 5s ease-in-out infinite;
+}

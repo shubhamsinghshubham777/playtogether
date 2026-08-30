@@ -13,6 +13,7 @@ class RoomControlBarActions {
     required this.onSkip,
     required this.onMicToggle,
     required this.onCamToggle,
+    this.onCamLocked,
     required this.onAudioTracks,
     required this.onSubtitles,
     required this.onSwitchSource,
@@ -28,6 +29,7 @@ class RoomControlBarActions {
   final ValueChanged<Duration> onSkip;
   final ValueChanged<bool> onMicToggle;
   final ValueChanged<bool> onCamToggle;
+  final VoidCallback? onCamLocked;
   final VoidCallback? onAudioTracks;
   final VoidCallback? onSubtitles;
 
@@ -50,10 +52,12 @@ class RoomControlBar extends StatefulWidget {
     required this.playing,
     required this.position,
     required this.duration,
+    this.bufferedPosition,
     required this.volume,
     required this.micOn,
     required this.camOn,
     required this.avAvailable,
+    this.camAvailable = true,
     required this.actions,
     this.compact = false,
     this.reactOpen = false,
@@ -64,10 +68,13 @@ class RoomControlBar extends StatefulWidget {
   final bool playing;
   final Duration position;
   final Duration duration;
+  final Duration? bufferedPosition;
   final double volume;
   final bool micOn;
   final bool camOn;
   final bool avAvailable;
+
+  final bool camAvailable;
   final RoomControlBarActions actions;
   final bool compact;
   final bool reactOpen;
@@ -101,6 +108,12 @@ class _RoomControlBarState extends State<RoomControlBar> {
   void _endScrub(double v) {
     setState(() => _dragValue = null);
     widget.actions.onSeek(Duration(milliseconds: (v * widget.duration.inMilliseconds).round()));
+  }
+
+  double? get _bufferedProgress {
+    final pos = widget.bufferedPosition;
+    if (pos == null || widget.duration.inMilliseconds <= 0) return null;
+    return (pos.inMilliseconds / widget.duration.inMilliseconds).clamp(0.0, 1.0);
   }
 
   @override
@@ -137,6 +150,7 @@ class _RoomControlBarState extends State<RoomControlBar> {
                       link: _sliderLink,
                       child: PTSlider(
                         value: drag ?? _progress,
+                        bufferedValue: _bufferedProgress,
                         trackHeight: compact ? 4 : 5,
                         thumbRadius: compact ? 6 : 7,
                         enabled: widget.transportEnabled,
@@ -256,15 +270,55 @@ class _RoomControlBarState extends State<RoomControlBar> {
                 tooltip: widget.micOn ? 'Mute mic' : 'Mic on',
                 onPressed: () => actions.onMicToggle(!widget.micOn),
               ),
-              PTIconButton(
-                icon: Symbols.videocam_rounded,
-                active: widget.camOn,
-                glass: false,
-                borderRadius: BorderRadius.circular(12),
-                size: 42,
-                tooltip: widget.camOn ? 'Camera off' : 'Camera on',
-                onPressed: () => actions.onCamToggle(!widget.camOn),
-              ),
+              if (widget.camAvailable)
+                PTIconButton(
+                  icon: Symbols.videocam_rounded,
+                  active: widget.camOn,
+                  glass: false,
+                  borderRadius: BorderRadius.circular(12),
+                  size: 42,
+                  tooltip: widget.camOn ? 'Camera off' : 'Camera on',
+                  onPressed: () => actions.onCamToggle(!widget.camOn),
+                )
+              else if (actions.onCamLocked != null)
+                Tooltip(
+                  message: 'Video facecams (Premium)',
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      PTIconButton(
+                        icon: Symbols.videocam_off_rounded,
+                        active: false,
+                        glass: false,
+                        borderRadius: BorderRadius.circular(12),
+                        size: 42,
+                        iconSize: 20,
+                        onPressed: actions.onCamLocked,
+                      ),
+                      Positioned(
+                        bottom: 4,
+                        right: 4,
+                        child: Container(
+                          padding: const EdgeInsets.all(2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xE61E1834),
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: const Color(0xFFA78BFA).withValues(alpha: 0.5),
+                              width: 1,
+                            ),
+                          ),
+                          child: const Icon(
+                            Symbols.lock_rounded,
+                            size: 9,
+                            fill: 1,
+                            color: PTColors.textAccent,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
             ],
             if (actions.onReact != null)
               PTIconButton(
@@ -409,14 +463,53 @@ class _RoomControlBarState extends State<RoomControlBar> {
                 iconSize: 20,
                 onPressed: () => actions.onMicToggle(!widget.micOn),
               ),
-              PTIconButton(
-                icon: Symbols.videocam_rounded,
-                active: widget.camOn,
-                glass: false,
-                borderRadius: BorderRadius.circular(12),
-                iconSize: 20,
-                onPressed: () => actions.onCamToggle(!widget.camOn),
-              ),
+              if (widget.camAvailable)
+                PTIconButton(
+                  icon: Symbols.videocam_rounded,
+                  active: widget.camOn,
+                  glass: false,
+                  borderRadius: BorderRadius.circular(12),
+                  iconSize: 20,
+                  onPressed: () => actions.onCamToggle(!widget.camOn),
+                )
+              else if (actions.onCamLocked != null)
+                Tooltip(
+                  message: 'Video facecams (Premium)',
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      PTIconButton(
+                        icon: Symbols.videocam_off_rounded,
+                        active: false,
+                        glass: false,
+                        borderRadius: BorderRadius.circular(12),
+                        iconSize: 18,
+                        onPressed: actions.onCamLocked,
+                      ),
+                      Positioned(
+                        bottom: 2,
+                        right: 2,
+                        child: Container(
+                          padding: const EdgeInsets.all(2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xE61E1834),
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: const Color(0xFFA78BFA).withValues(alpha: 0.5),
+                              width: 1,
+                            ),
+                          ),
+                          child: const Icon(
+                            Symbols.lock_rounded,
+                            size: 8,
+                            fill: 1,
+                            color: PTColors.textAccent,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
             ],
           ),
         if (actions.onReact != null)

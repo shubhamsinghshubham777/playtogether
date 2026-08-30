@@ -28,6 +28,7 @@ class FacecamRail extends StatefulWidget {
     this.onHide,
     this.maxTiles = 4,
     this.showNames = true,
+    this.premiumMembers = const {},
   });
 
   final LiveKitService av;
@@ -37,6 +38,7 @@ class FacecamRail extends StatefulWidget {
   final VoidCallback? onHide;
   final int maxTiles;
   final bool showNames;
+  final Set<String> premiumMembers;
 
   @override
   State<FacecamRail> createState() => _FacecamRailState();
@@ -103,6 +105,7 @@ class _FacecamRailState extends State<FacecamRail> {
               child: _FacecamTile(
                 member: member,
                 isSelf: member.userId == widget.selfId,
+                premium: widget.premiumMembers.contains(member.userId),
                 av: widget.av,
                 compact: widget.layout != .railLeft,
                 showNames: widget.showNames,
@@ -163,6 +166,7 @@ class _FacecamTile extends StatelessWidget {
   const _FacecamTile({
     required this.member,
     required this.isSelf,
+    required this.premium,
     required this.av,
     required this.compact,
     required this.showNames,
@@ -170,6 +174,7 @@ class _FacecamTile extends StatelessWidget {
 
   final PresentMember member;
   final bool isSelf;
+  final bool premium;
   final LiveKitService av;
   final bool compact;
   final bool showNames;
@@ -243,7 +248,12 @@ class _FacecamTile extends StatelessWidget {
                 ),
                 child: Center(
                   child: compact
-                      ? PTAvatar(userId: member.userId, displayName: member.displayName, size: 24)
+                      ? PTAvatar(
+                          userId: member.userId,
+                          displayName: member.displayName,
+                          size: 24,
+                          premium: premium,
+                        )
                       : Column(
                           mainAxisSize: .min,
                           spacing: 7,
@@ -252,6 +262,7 @@ class _FacecamTile extends StatelessWidget {
                               userId: member.userId,
                               displayName: member.displayName,
                               size: 40,
+                              premium: premium,
                             ),
                             Row(
                               mainAxisSize: .min,

@@ -1,0 +1,1 @@
+-- Local database seed data (empty by default)

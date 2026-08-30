@@ -15,6 +15,10 @@ abstract class SyncEventType {
   static const String transportLock = 'transport_lock';
   static const String reaction = 'reaction';
   static const String roomEnded = 'room_ended';
+  static const String gateWaiver = 'gate_waiver';
+  static const String uploadProgress = 'upload_progress';
+  static const String sharingToggled = 'sharing_toggled';
+  static const String roomExtended = 'room_extended';
 }
 
 /// Why a play/pause happened. Absent means a human pressed something — the
@@ -415,5 +419,108 @@ class FileInfoEvent extends SyncEvent {
     'timestamp': timestamp,
     'fileName': fileName,
     'durationMs': durationMs,
+  };
+}
+
+class UploadProgressEvent extends SyncEvent {
+  final double fraction;
+  final double speedBps;
+  final int etaSeconds;
+  final String state;
+
+  const UploadProgressEvent({
+    required super.senderId,
+    required super.timestamp,
+    required this.fraction,
+    required this.speedBps,
+    required this.etaSeconds,
+    required this.state,
+  });
+
+  factory UploadProgressEvent.fromPayload(Map<String, dynamic> payload) {
+    return UploadProgressEvent(
+      senderId: payload['senderId'] as String? ?? '',
+      timestamp: payload['timestamp'] as int? ?? 0,
+      fraction: (payload['fraction'] as num?)?.toDouble() ?? 0.0,
+      speedBps: (payload['speedBps'] as num?)?.toDouble() ?? 0.0,
+      etaSeconds: (payload['etaSeconds'] as num?)?.toInt() ?? 0,
+      state: payload['state'] as String? ?? 'uploading',
+    );
+  }
+
+  @override
+  Map<String, dynamic> toPayload() => {
+    'senderId': senderId,
+    'timestamp': timestamp,
+    'fraction': fraction,
+    'speedBps': speedBps,
+    'etaSeconds': etaSeconds,
+    'state': state,
+  };
+}
+
+class SharingToggledEvent extends SyncEvent {
+  final bool enabled;
+  final String? fileName;
+  final int? fileSize;
+  final String? uploadState;
+
+  const SharingToggledEvent({
+    required super.senderId,
+    required super.timestamp,
+    required this.enabled,
+    this.fileName,
+    this.fileSize,
+    this.uploadState,
+  });
+
+  factory SharingToggledEvent.fromPayload(Map<String, dynamic> payload) {
+    return SharingToggledEvent(
+      senderId: payload['senderId'] as String? ?? '',
+      timestamp: payload['timestamp'] as int? ?? 0,
+      enabled: payload['enabled'] as bool? ?? false,
+      fileName: payload['fileName'] as String?,
+      fileSize: (payload['fileSize'] as num?)?.toInt(),
+      uploadState: payload['uploadState'] as String?,
+    );
+  }
+
+  @override
+  Map<String, dynamic> toPayload() => {
+    'senderId': senderId,
+    'timestamp': timestamp,
+    'enabled': enabled,
+    'fileName': fileName,
+    'fileSize': fileSize,
+    'uploadState': uploadState,
+  };
+}
+
+class RoomExtendedEvent extends SyncEvent {
+  final String expiresAt;
+  final int durationMinutes;
+
+  const RoomExtendedEvent({
+    required super.senderId,
+    required super.timestamp,
+    required this.expiresAt,
+    required this.durationMinutes,
+  });
+
+  factory RoomExtendedEvent.fromPayload(Map<String, dynamic> payload) {
+    return RoomExtendedEvent(
+      senderId: payload['senderId'] as String? ?? '',
+      timestamp: payload['timestamp'] as int? ?? 0,
+      expiresAt: payload['expiresAt'] as String? ?? '',
+      durationMinutes: (payload['durationMinutes'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  @override
+  Map<String, dynamic> toPayload() => {
+    'senderId': senderId,
+    'timestamp': timestamp,
+    'expiresAt': expiresAt,
+    'durationMinutes': durationMinutes,
   };
 }

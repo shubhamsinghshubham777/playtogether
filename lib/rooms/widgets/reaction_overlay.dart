@@ -1,23 +1,40 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:lottie/lottie.dart';
 import 'package:playtogether/diagnostics.dart';
+import 'package:playtogether/rooms/reaction_cdn.dart';
 import 'package:playtogether/rooms/reactions.dart';
 import 'package:playtogether/sync/sync_events.dart';
 import 'package:playtogether/ui/pt_motion.dart';
 import 'package:playtogether/ui/pt_theme.dart';
 
 class ReactionAssets {
+  ReactionAssets({ReactionCdn? cdn}) : _cdn = cdn ?? ReactionCdn.instance;
+
+  final ReactionCdn _cdn;
   final _compositions = <String, LottieComposition>{};
+  final _resolving = <String>{};
   Future<void>? _preloading;
 
-  LottieComposition? of(PTReaction reaction) => _compositions[reaction.codepoint];
+  /// Null means "render the glyph for now". The overlay resolves compositions
+  /// per frame, so anything that lands later upgrades in place rather than
+  /// staying flat for the particle's whole life.
+  LottieComposition? of(PTReaction reaction) {
+    final ready = _compositions[reaction.codepoint];
+    if (ready != null) return ready;
+    if (!reaction.isBundled) unawaited(_resolveExtended(reaction));
+    return null;
+  }
 
   Future<void> preload() => _preloading ??= _load();
 
+  /// Only the bundled set is preloaded. The extended set is fetched on demand:
+  /// pulling two dozen animations off the network on room entry would spend
+  /// bandwidth the video wants, for emoji nobody may send.
   Future<void> _load() async {
     for (final reaction in kReactions) {
       try {
@@ -28,6 +45,29 @@ class ReactionAssets {
       } catch (e, s) {
         reportNonFatal(e, s, during: 'preloading the ${reaction.codepoint} reaction animation');
       }
+    }
+  }
+
+  Future<void> warmExtended(Iterable<PTReaction> reactions) async {
+    for (final reaction in reactions) {
+      if (reaction.isBundled || _compositions.containsKey(reaction.codepoint)) continue;
+      await _resolveExtended(reaction);
+    }
+  }
+
+  Future<void> _resolveExtended(PTReaction reaction) async {
+    if (_compositions.containsKey(reaction.codepoint)) return;
+    if (!_resolving.add(reaction.codepoint)) return;
+    try {
+      final bytes = await _cdn.load(reaction);
+      if (bytes == null) return;
+      _compositions[reaction.codepoint] = await LottieComposition.fromBytes(
+        Uint8List.fromList(bytes),
+      );
+    } catch (e, s) {
+      reportNonFatal(e, s, during: 'decoding the ${reaction.codepoint} reaction animation');
+    } finally {
+      _resolving.remove(reaction.codepoint);
     }
   }
 }
@@ -80,7 +120,7 @@ class _ReactionOverlayState extends State<ReactionOverlay> with SingleTickerProv
   final _particles = <_Particle>[];
   final _random = math.Random();
 
-  late final Ticker _ticker = createTicker(_onTick);
+  late final Ticker _ticker;
   final _clock = ValueNotifier<Duration>(Duration.zero);
 
   StreamSubscription<ReactionEvent>? _subscription;
@@ -91,6 +131,7 @@ class _ReactionOverlayState extends State<ReactionOverlay> with SingleTickerProv
   @override
   void initState() {
     super.initState();
+    _ticker = createTicker(_onTick);
     _subscription = widget.reactions.listen(_spawn);
     unawaited(widget.assets.preload());
   }

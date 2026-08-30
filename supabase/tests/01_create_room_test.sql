@@ -1,5 +1,5 @@
 begin;
-select plan(24);
+select plan(32);
 
 create function pg_temp.mk_user(p_guest boolean default false) returns uuid
 language plpgsql as $$
@@ -95,6 +95,26 @@ select is(
   'a new room is live');
 
 select is(
+  (select max_members from public.rooms where id = (select v from t where k = 'room')),
+  8,
+  'a free host stamps the 8-member cap onto the room');
+
+select is(
+  (select av_level from public.rooms where id = (select v from t where k = 'room')),
+  'voice',
+  'a free host stamps voice-only AV onto the room');
+
+select is(
+  (select persistent from public.rooms where id = (select v from t where k = 'room')),
+  false,
+  'a free room is not persistent');
+
+select is(
+  (select dormant_hours from public.rooms where id = (select v from t where k = 'room')),
+  24,
+  'a free room stays resumable for 24 hours after it expires');
+
+select is(
   (select name from public.create_room('   ', 60)),
   'Watch party',
   'a blank name falls back to the default');
@@ -103,6 +123,14 @@ select is(
   (select name from public.create_room('  Padded  ', 60)),
   'Padded',
   'the name is trimmed');
+
+do $$
+declare v_boundary uuid;
+begin
+  v_boundary := pg_temp.mk_user();
+  insert into t values ('boundary', v_boundary);
+  perform pg_temp.act_as(v_boundary);
+end $$;
 
 select lives_ok(
   $$ select public.create_room('Shortest', 5) $$,
@@ -120,7 +148,7 @@ select throws_ok(
 select throws_ok(
   $$ select public.create_room('Too long', 241) $$,
   'invalid_duration',
-  'a duration over 4 hours is rejected');
+  'a duration over the tier ceiling is rejected');
 
 select throws_ok(
   $$ select public.create_room('No duration', null) $$,
@@ -133,8 +161,17 @@ select throws_ok(
   'a negative duration is rejected');
 
 select lives_ok(
-  $$ select public.create_room('Second room', 60) $$,
+  $$ select public.create_room('Third room', 60) $$,
   'a signed-in user may hold several live rooms');
+
+select lives_ok(
+  $$ select public.create_room('Fourth room', 60) $$,
+  'the free tier allows four live rooms');
+
+select throws_ok(
+  $$ select public.create_room('Fifth room', 60) $$,
+  'room_limit_reached',
+  'a fifth room hits the free tier cap');
 
 do $$
 declare v_guest uuid;
@@ -144,9 +181,20 @@ begin
   perform pg_temp.act_as(v_guest);
 end $$;
 
+select throws_ok(
+  $$ select public.create_room('Guest marathon', 61) $$,
+  'invalid_duration',
+  'a guest cannot book longer than an hour');
+
 select lives_ok(
   $$ select public.create_room('Guest room', 60) $$,
   'a guest may host one live room');
+
+select is(
+  (select av_level || ':' || max_members::text from public.rooms
+   where created_by = (select v from t where k = 'guest')),
+  'none:4',
+  'a guest room carries no AV and a 4-watcher cap');
 
 select throws_ok(
   $$ select public.create_room('Guest second room', 60) $$,
@@ -161,7 +209,7 @@ end $$;
 
 select lives_ok(
   $$ select public.create_room('Guest room again', 60) $$,
-  'the guest limit counts live rooms only, so ending one frees the slot');
+  'the guest limit counts live and dormant rooms only, so ending one frees the slot');
 
 do $$ begin perform pg_temp.act_as_nobody(); end $$;
 

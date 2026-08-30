@@ -33,11 +33,23 @@ class Analytics {
   int _consecutiveFailures = 0;
   bool _failureTraced = false;
 
-  bool get isEnabled => _apiKey != null;
+  bool get isEnabled => _apiKey != null && !_optedOut;
 
   String? get distinctId => _distinctId;
 
   int get queuedCount => _queue.length;
+
+  bool _optedOut = false;
+
+  bool get optedOut => _optedOut;
+
+  void setOptedOut(bool value) {
+    if (_optedOut == value) return;
+    _optedOut = value;
+    if (!value) return;
+    _queue.clear();
+    _stopTimer();
+  }
 
   void init({
     required String? apiKey,
@@ -45,7 +57,9 @@ class Analytics {
     String? distinctId,
     Map<String, Object?> context = const {},
     AnalyticsTransport? transport,
+    bool optedOut = false,
   }) {
+    _optedOut = optedOut;
     if (apiKey == null || apiKey.isEmpty) return;
     _apiKey = apiKey;
     final base = (host == null || host.isEmpty) ? kAnalyticsDefaultHost : host;

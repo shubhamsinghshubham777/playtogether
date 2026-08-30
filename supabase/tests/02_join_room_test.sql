@@ -1,5 +1,5 @@
 begin;
-select plan(18);
+select plan(25);
 
 create function pg_temp.mk_user(p_guest boolean default false) returns uuid
 language plpgsql as $$
@@ -98,7 +98,7 @@ select throws_ok(
 
 select throws_ok(
   $$ select public.join_room((select v from c where k = 'expired_code')) $$,
-  'room_ended',
+  'room_dormant',
   'a room past its expiry cannot be joined, before the sweep has run');
 
 do $$
@@ -213,6 +213,116 @@ select throws_ok(
   $$ select public.join_room((select v from c where k = 'code')) $$,
   'not_authenticated',
   'an unauthenticated caller cannot join');
+
+do $$
+declare v_guest uuid; v_room public.rooms;
+begin
+  v_guest := pg_temp.mk_user(true);
+  insert into t values ('solo_guest', v_guest);
+  perform pg_temp.act_as(v_guest);
+  v_room := public.create_room('Guest movie', 60);
+  insert into t values ('solo_room', v_room.id);
+  insert into c values ('solo_code', v_room.code);
+  perform public.leave_room(v_room.id);
+end $$;
+
+select is(
+  (select count(*) from public.room_members
+   where room_id = (select v from t where k = 'solo_room') and role = 'host'),
+  0::bigint,
+  'the last member leaving leaves the room with nobody as host');
+
+do $$ begin perform public.join_room((select v from c where k = 'solo_code')); end $$;
+
+select is(
+  (select role from public.room_members
+   where room_id = (select v from t where k = 'solo_room')
+     and user_id = (select v from t where k = 'solo_guest')),
+  'host',
+  'walking back into your own empty room makes you its host again');
+
+do $$
+declare v_free uuid; v_other uuid; v_room public.rooms;
+begin
+  v_free := pg_temp.mk_user();
+  v_other := pg_temp.mk_user();
+  insert into t values ('free_owner', v_free), ('free_other', v_other);
+  perform pg_temp.act_as(v_free);
+  v_room := public.create_room('Free movie', 60);
+  insert into t values ('free_room', v_room.id);
+  insert into c values ('free_code', v_room.code);
+  perform public.leave_room(v_room.id);
+  perform pg_temp.act_as(v_other);
+  perform public.join_room(v_room.code);
+end $$;
+
+select is(
+  (select role from public.room_members
+   where room_id = (select v from t where k = 'free_room')
+     and user_id = (select v from t where k = 'free_other')),
+  'host',
+  'the rule is tier-blind and not creator-only — whoever enters an empty room hosts it');
+
+do $$ begin perform pg_temp.act_as((select v from t where k = 'free_owner')); end $$;
+do $$ begin perform public.join_room((select v from c where k = 'free_code')); end $$;
+
+select is(
+  (select role from public.room_members
+   where room_id = (select v from t where k = 'free_room')
+     and user_id = (select v from t where k = 'free_owner')),
+  'member',
+  'a creator returning to a room that already has a host does not take it back');
+
+select is(
+  (select count(*) from public.room_members
+   where room_id = (select v from t where k = 'free_room') and role = 'host'),
+  1::bigint,
+  'and the room still has exactly one host, which authority election depends on');
+
+do $$
+declare v_prem uuid; v_room public.rooms;
+begin
+  v_prem := pg_temp.mk_user();
+  insert into t values ('prem_owner', v_prem);
+  insert into public.subscriptions (user_id, tier, current_period_end)
+    values (v_prem, 'premium', now() + interval '30 days');
+  perform pg_temp.act_as(v_prem);
+  v_room := public.create_room('Premium movie', 60);
+  insert into t values ('prem_room', v_room.id);
+  insert into c values ('prem_code', v_room.code);
+  perform public.leave_room(v_room.id);
+  perform public.join_room(v_room.code);
+end $$;
+
+select is(
+  (select role from public.room_members
+   where room_id = (select v from t where k = 'prem_room')
+     and user_id = (select v from t where k = 'prem_owner')),
+  'host',
+  'premium re-entry restores the host role too');
+
+do $$
+declare v_heir uuid; v_room public.rooms;
+begin
+  v_heir := pg_temp.mk_user();
+  insert into t values ('succ_heir', v_heir);
+  perform pg_temp.act_as((select v from t where k = 'prem_owner'));
+  v_room := public.create_room('Succession movie', 60);
+  insert into t values ('succ_room2', v_room.id);
+  insert into c values ('succ_code2', v_room.code);
+  perform pg_temp.act_as(v_heir);
+  perform public.join_room(v_room.code);
+  perform pg_temp.act_as((select v from t where k = 'prem_owner'));
+  perform public.leave_room(v_room.id);
+  perform public.join_room(v_room.code);
+end $$;
+
+select is(
+  (select role from public.room_members
+   where room_id = (select v from t where k = 'succ_room2')
+     and user_id = (select v from t where k = 'succ_heir')),
+  'host',
+  'succession still wins: an heir who inherited the room keeps it when the creator returns');
 
 select * from finish();
 rollback;

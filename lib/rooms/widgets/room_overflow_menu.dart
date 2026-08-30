@@ -25,6 +25,7 @@ class RoomMenuData {
     required this.transportLock,
     required this.selfId,
     required this.selfIsHost,
+    this.premiumMembers = const {},
   });
 
   static const empty = RoomMenuData(
@@ -42,6 +43,7 @@ class RoomMenuData {
   final bool transportLock;
   final String selfId;
   final bool selfIsHost;
+  final Set<String> premiumMembers;
 
   /// Derived rather than passed alongside, so "who is online" and "who is
   /// ready" can never disagree.
@@ -62,6 +64,7 @@ Future<void> showRoomOverflowMenu({
   required VoidCallback onCopyInvite,
   required VoidCallback onLeave,
   required VoidCallback onEndRoom,
+  VoidCallback? onExtendRoom,
   required ValueChanged<bool> onTransportLockChanged,
   required void Function(RoomMember member) onKick,
 }) {
@@ -86,6 +89,7 @@ Future<void> showRoomOverflowMenu({
                   onCopyInvite: onCopyInvite,
                   onLeave: onLeave,
                   onEndRoom: onEndRoom,
+                  onExtendRoom: onExtendRoom,
                   onTransportLockChanged: onTransportLockChanged,
                   onKick: onKick,
                 ),
@@ -114,6 +118,7 @@ class _OverflowMenuPanel extends StatefulWidget {
     required this.onCopyInvite,
     required this.onLeave,
     required this.onEndRoom,
+    this.onExtendRoom,
     required this.onTransportLockChanged,
     required this.onKick,
   });
@@ -122,6 +127,7 @@ class _OverflowMenuPanel extends StatefulWidget {
   final VoidCallback onCopyInvite;
   final VoidCallback onLeave;
   final VoidCallback onEndRoom;
+  final VoidCallback? onExtendRoom;
   final ValueChanged<bool> onTransportLockChanged;
   final void Function(RoomMember member) onKick;
 
@@ -204,6 +210,7 @@ class _OverflowMenuPanelState extends State<_OverflowMenuPanel> {
                 children: [
                   for (final member in data.members)
                     _MemberRow(
+                      premium: data.premiumMembers.contains(member.userId),
                       key: ValueKey(member.userId),
                       member: member,
                       online: onlineIds.contains(member.userId),
@@ -231,6 +238,13 @@ class _OverflowMenuPanelState extends State<_OverflowMenuPanel> {
                     label: 'Copy invite link',
                     onTap: () => _dismiss(widget.onCopyInvite),
                   ),
+                  if (data.selfIsHost && widget.onExtendRoom != null)
+                    _ActionRow(
+                      icon: Symbols.more_time_rounded,
+                      iconColor: PTColors.textAccent,
+                      label: 'Extend room duration',
+                      onTap: () => _dismiss(widget.onExtendRoom!),
+                    ),
                   _ActionRow(
                     icon: Symbols.logout_rounded,
                     iconColor: PTColors.white(0.7),
@@ -267,6 +281,7 @@ class _MemberRow extends StatelessWidget {
   const _MemberRow({
     super.key,
     required this.member,
+    required this.premium,
     required this.online,
     required this.isSelf,
     required this.media,
@@ -275,6 +290,7 @@ class _MemberRow extends StatelessWidget {
   });
 
   final RoomMember member;
+  final bool premium;
   final bool online;
   final bool isSelf;
   final RoomMedia media;
@@ -299,6 +315,7 @@ class _MemberRow extends StatelessWidget {
               avatarUrl: member.profile?.avatarUrl,
               size: 34,
               presence: online,
+              premium: premium,
             ),
             Expanded(
               child: Text.rich(
@@ -417,9 +434,12 @@ class _ActionRowState extends State<_ActionRow> {
             spacing: 12,
             children: [
               Icon(widget.icon, size: 19, fill: 1, color: widget.iconColor),
-              Text(
-                widget.label,
-                style: PTText.body.copyWith(fontSize: 14, color: widget.labelColor),
+              Expanded(
+                child: Text(
+                  widget.label,
+                  overflow: TextOverflow.ellipsis,
+                  style: PTText.body.copyWith(fontSize: 14, color: widget.labelColor),
+                ),
               ),
             ],
           ),

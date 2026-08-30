@@ -25,6 +25,7 @@ class RoomChatPanel extends StatefulWidget {
     required this.onCopied,
     this.onPlaySharedVideo,
     this.embedded = false,
+    this.premiumMembers = const {},
   });
 
   final SyncService sync;
@@ -35,6 +36,7 @@ class RoomChatPanel extends StatefulWidget {
   final ValueChanged<String> onSend;
   final VoidCallback onCopied;
   final void Function(String videoId, String sharedBy)? onPlaySharedVideo;
+  final Set<String> premiumMembers;
 
   /// Embedded (mobile portrait) skips its own glass shell + close button.
   final bool embedded;
@@ -220,6 +222,7 @@ class _RoomChatPanelState extends State<RoomChatPanel> {
                 final bubble = _MessageRow(
                   message: message,
                   own: message.senderId == widget.sync.userId,
+                  premium: widget.premiumMembers.contains(message.senderId),
                   onCopied: widget.onCopied,
                   onPlaySharedVideo: widget.onPlaySharedVideo,
                 );
@@ -345,12 +348,14 @@ class _MessageRow extends StatefulWidget {
   const _MessageRow({
     required this.message,
     required this.own,
+    required this.premium,
     required this.onCopied,
     required this.onPlaySharedVideo,
   });
 
   final ChatMessage message;
   final bool own;
+  final bool premium;
   final VoidCallback onCopied;
   final void Function(String videoId, String sharedBy)? onPlaySharedVideo;
 
@@ -486,7 +491,12 @@ class _MessageRowState extends State<_MessageRow> {
       crossAxisAlignment: .end,
       spacing: 8,
       children: [
-        PTAvatar(userId: message.senderId, displayName: message.displayName, size: 28),
+        PTAvatar(
+          userId: message.senderId,
+          displayName: message.displayName,
+          size: 28,
+          premium: widget.premium,
+        ),
         Flexible(
           child: Column(
             crossAxisAlignment: .start,

@@ -18,6 +18,33 @@ enum RoomMediaKind {
   String get wire => name;
 }
 
+enum AvLevel {
+  none,
+  voice,
+  video;
+
+  static AvLevel fromWire(String? value) => switch (value) {
+    'voice' => .voice,
+    'video' => .video,
+    _ => .none,
+  };
+
+  bool get allowsVoice => this != .none;
+  bool get allowsVideo => this == .video;
+}
+
+enum RoomState {
+  live,
+  dormant,
+  expired;
+
+  static RoomState fromWire(String? value) => switch (value) {
+    'live' => .live,
+    'dormant' => .dormant,
+    _ => .expired,
+  };
+}
+
 class Room {
   const Room({
     required this.id,
@@ -34,6 +61,18 @@ class Room {
     this.mediaUrl,
     this.mediaUpdatedAt,
     this.transportLock = false,
+    this.persistent = false,
+    this.resumableUntil,
+    this.dormantHours = 0,
+    this.avLevel = .none,
+    this.maxMembers = 8,
+    this.mediaPosition,
+    this.mediaPositionAt,
+    this.mediaFileSize,
+    this.mediaR2Key,
+    this.mediaUploadId,
+    this.mediaUploadState = 'none',
+    this.mediaSharingLevel = 'none',
   });
 
   final String id;
@@ -63,7 +102,83 @@ class Room {
   /// "The host has the remote" — when true only the host may play/pause/seek.
   final bool transportLock;
 
+  final bool persistent;
+  final DateTime? resumableUntil;
+  final int dormantHours;
+
+  final AvLevel avLevel;
+  final int maxMembers;
+
+  final Duration? mediaPosition;
+  final DateTime? mediaPositionAt;
+
+  final int? mediaFileSize;
+  final String? mediaR2Key;
+  final String? mediaUploadId;
+  final String mediaUploadState;
+  final String mediaSharingLevel;
+
   bool get hasMedia => mediaKind != .none;
+
+  bool get goesDormant => persistent || dormantHours > 0;
+
+  Room copyWith({
+    String? id,
+    String? code,
+    String? name,
+    String? createdBy,
+    DateTime? createdAt,
+    int? durationMinutes,
+    DateTime? expiresAt,
+    DateTime? endedAt,
+    RoomMediaKind? mediaKind,
+    String? mediaName,
+    Duration? mediaDuration,
+    String? mediaUrl,
+    DateTime? mediaUpdatedAt,
+    bool? transportLock,
+    bool? persistent,
+    DateTime? resumableUntil,
+    int? dormantHours,
+    AvLevel? avLevel,
+    int? maxMembers,
+    Duration? mediaPosition,
+    DateTime? mediaPositionAt,
+    int? mediaFileSize,
+    String? mediaR2Key,
+    String? mediaUploadId,
+    String? mediaUploadState,
+    String? mediaSharingLevel,
+  }) {
+    return Room(
+      id: id ?? this.id,
+      code: code ?? this.code,
+      name: name ?? this.name,
+      createdBy: createdBy ?? this.createdBy,
+      createdAt: createdAt ?? this.createdAt,
+      durationMinutes: durationMinutes ?? this.durationMinutes,
+      expiresAt: expiresAt ?? this.expiresAt,
+      endedAt: endedAt ?? this.endedAt,
+      mediaKind: mediaKind ?? this.mediaKind,
+      mediaName: mediaName ?? this.mediaName,
+      mediaDuration: mediaDuration ?? this.mediaDuration,
+      mediaUrl: mediaUrl ?? this.mediaUrl,
+      mediaUpdatedAt: mediaUpdatedAt ?? this.mediaUpdatedAt,
+      transportLock: transportLock ?? this.transportLock,
+      persistent: persistent ?? this.persistent,
+      resumableUntil: resumableUntil ?? this.resumableUntil,
+      dormantHours: dormantHours ?? this.dormantHours,
+      avLevel: avLevel ?? this.avLevel,
+      maxMembers: maxMembers ?? this.maxMembers,
+      mediaPosition: mediaPosition ?? this.mediaPosition,
+      mediaPositionAt: mediaPositionAt ?? this.mediaPositionAt,
+      mediaFileSize: mediaFileSize ?? this.mediaFileSize,
+      mediaR2Key: mediaR2Key ?? this.mediaR2Key,
+      mediaUploadId: mediaUploadId ?? this.mediaUploadId,
+      mediaUploadState: mediaUploadState ?? this.mediaUploadState,
+      mediaSharingLevel: mediaSharingLevel ?? this.mediaSharingLevel,
+    );
+  }
 
   factory Room.fromJson(Map<String, dynamic> json) {
     return Room(
@@ -85,10 +200,74 @@ class Room {
           ? DateTime.parse(json['media_updated_at'] as String)
           : null,
       transportLock: json['transport_lock'] as bool? ?? false,
+      persistent: json['persistent'] as bool? ?? false,
+      resumableUntil: json['resumable_until'] != null
+          ? DateTime.parse(json['resumable_until'] as String)
+          : null,
+      dormantHours: (json['dormant_hours'] as num?)?.toInt() ?? 0,
+      avLevel: AvLevel.fromWire(json['av_level'] as String?),
+      maxMembers: (json['max_members'] as num?)?.toInt() ?? 8,
+      mediaPosition: json['media_position_ms'] != null
+          ? Duration(milliseconds: (json['media_position_ms'] as num).toInt())
+          : null,
+      mediaPositionAt: json['media_position_at'] != null
+          ? DateTime.parse(json['media_position_at'] as String)
+          : null,
+      mediaFileSize: (json['media_file_size'] as num?)?.toInt(),
+      mediaR2Key: json['media_r2_key'] as String?,
+      mediaUploadId: json['media_upload_id'] as String?,
+      mediaUploadState: json['media_upload_state'] as String? ?? 'none',
+      mediaSharingLevel: json['media_sharing_level'] as String? ?? 'none',
     );
   }
 
   String get inviteLink => 'playtogether://join/$code';
+}
+
+class MyRoom {
+  const MyRoom({
+    required this.room,
+    required this.state,
+    required this.role,
+    required this.memberCount,
+    required this.isOwner,
+    required this.isMember,
+  });
+
+  final Room room;
+  final RoomState state;
+  final String role;
+  final int memberCount;
+
+  final bool isOwner;
+  final bool isMember;
+
+  bool get isHost => role == 'host';
+  bool get isLive => state == .live;
+  bool get isDormant => state == .dormant;
+
+  factory MyRoom.fromJson(Map<String, dynamic> json) => MyRoom(
+    room: Room.fromJson(json),
+    state: RoomState.fromWire(json['state'] as String?),
+    role: json['role'] as String? ?? 'member',
+    memberCount: (json['member_count'] as num?)?.toInt() ?? 0,
+    isOwner: json['is_owner'] as bool? ?? false,
+    isMember: json['is_member'] as bool? ?? true,
+  );
+}
+
+class RoomExitEdge {
+  RoomExitEdge(this._inRoom);
+
+  bool _inRoom;
+
+  bool get inRoom => _inRoom;
+
+  bool observe({required bool inRoom}) {
+    final exited = _inRoom && !inRoom;
+    _inRoom = inRoom;
+    return exited;
+  }
 }
 
 /// The room's canonical media, split out of [Room] so the sync layer can pass
@@ -160,14 +339,43 @@ class RoomMember {
 /// Friendly-copy mapping for RPC errors (design voice — no raw codes).
 enum RoomErrorCode {
   roomNotFound('room_not_found', "Hmm, we couldn't find a room with that code."),
+  roomDormant('room_dormant', 'That room is napping — the host has to wake it up first.'),
   roomEnded('room_ended', 'That room has already ended.'),
-  roomFull('room_full', 'This room is full — 8 watchers max.'),
+  roomFull('room_full', "This room is full — there's no space for one more."),
   roomBanned('room_banned', "The host removed you from this room, so you can't rejoin."),
   guestRoomLimit('guest_room_limit', 'Guests can host one live room at a time.'),
+  roomLimitReached(
+    'room_limit_reached',
+    "You've hit your room limit — delete an old room or go premium.",
+  ),
+  extensionUsed('extension_used', "You've already used your free hour on us."),
+  extensionCap('extension_cap', "That's as long as a single room can run."),
+  extendNotAllowed(
+    'extend_not_allowed',
+    "Guest rooms can't be extended — sign in to get more time.",
+  ),
+  notAMember('not_a_member', "You're not in that room any more."),
+  notOwner('not_owner', 'Only the person who made this room can delete it.'),
   notHost('not_host', 'Only the host can do that.'),
   cannotKickSelf('cannot_kick_self', "You can't remove yourself — leave the room instead."),
   invalidDuration('invalid_duration', 'Pick a duration between 5 minutes and 4 hours.'),
   invalidMedia('invalid_media', "Hmm, we couldn't set that as the room's video."),
+  activeUploadInProgress(
+    'active_upload_in_progress',
+    'You already have another file upload in progress.',
+  ),
+  uploadQuotaExceeded(
+    'upload_quota_exceeded',
+    "You've reached your weekly sharing quota (2.5 GB). Upgrade to Premium for unlimited sharing.",
+  ),
+  uploadCooldownActive(
+    'upload_cooldown_active',
+    'Uploads are temporarily cooling down. Please try again in a few minutes.',
+  ),
+  mediaSharingDisabled(
+    'media_sharing_disabled',
+    'Media sharing is temporarily undergoing maintenance.',
+  ),
   unknown('unknown', "Something went sideways. Give it another try.");
 
   const RoomErrorCode(this.code, this.message);

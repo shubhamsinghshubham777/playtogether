@@ -225,6 +225,106 @@ void main() {
       expect(properties.containsKey(r'$anon_distinct_id'), isFalse);
     });
   });
+
+  group('opt-out', () {
+    test('an opted-out run queues nothing and sends nothing', () async {
+      final sent = <String>[];
+      final analytics = Analytics()
+        ..init(
+          apiKey: 'phc_test',
+          optedOut: true,
+          transport: (uri, body) async {
+            sent.add(body);
+            return true;
+          },
+        );
+
+      expect(analytics.isEnabled, isFalse);
+      analytics.track('app_opened');
+      analytics.identify('user-1');
+      await analytics.flush();
+
+      expect(analytics.queuedCount, 0);
+      expect(sent, isEmpty);
+    });
+
+    test('opting out mid-session drops what was already queued', () async {
+      final sent = <String>[];
+      final analytics = Analytics()
+        ..init(
+          apiKey: 'phc_test',
+          transport: (uri, body) async {
+            sent.add(body);
+            return true;
+          },
+        );
+
+      analytics.track('room_created');
+      expect(analytics.queuedCount, 1);
+
+      analytics.setOptedOut(true);
+      expect(analytics.queuedCount, 0);
+
+      analytics.track('room_joined');
+      await analytics.flush();
+      expect(sent, isEmpty);
+    });
+
+    test('opting back in resumes from silence rather than replaying', () async {
+      final sent = <String>[];
+      final analytics = Analytics()
+        ..init(
+          apiKey: 'phc_test',
+          transport: (uri, body) async {
+            sent.add(body);
+            return true;
+          },
+        );
+
+      analytics.track('room_created');
+      analytics.setOptedOut(true);
+      analytics.setOptedOut(false);
+
+      expect(analytics.optedOut, isFalse);
+      expect(analytics.queuedCount, 0);
+
+      analytics.track('room_joined');
+      await analytics.flush();
+      expect(sent, hasLength(1));
+      expect(sent.single, contains('room_joined'));
+      expect(sent.single, isNot(contains('room_created')));
+    });
+
+    test('a build with no key still records the choice, for when one is added', () {
+      final analytics = Analytics()..init(apiKey: null, optedOut: true);
+      expect(analytics.optedOut, isTrue);
+      expect(analytics.isEnabled, isFalse);
+    });
+  });
+
+  group('subscription funnel events', () {
+    test('tracks subscription_screen_viewed and checkout_opened with sources', () {
+      fakeAsync((async) {
+        final transport = _RecordingTransport();
+        final analytics = _configured(transport);
+
+        analytics.track('subscription_screen_viewed', {'source': 'profile'});
+        analytics.track('checkout_opened', {'source': 'profile'});
+        analytics.track('purchase_confirmed');
+        analytics.track('debug_premium_granted');
+
+        async.elapse(const Duration(seconds: 31));
+
+        expect(transport.eventNames, [
+          'subscription_screen_viewed',
+          'checkout_opened',
+          'purchase_confirmed',
+          'debug_premium_granted',
+        ]);
+        expect(transport.calls.single.first['properties']['source'], 'profile');
+      });
+    });
+  });
 }
 
 class SocketExceptionStub implements Exception {
