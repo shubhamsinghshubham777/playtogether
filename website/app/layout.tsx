@@ -77,6 +77,9 @@ export const metadata: Metadata = {
       "max-snippet": -1,
     },
   },
+  other: {
+    "awin-verification": "Awin",
+  },
 };
 
 export default function RootLayout({
@@ -113,6 +116,7 @@ export default function RootLayout({
       className={`${spaceGrotesk.variable} ${outfit.variable} ${jetbrainsMono.variable} dark`}
     >
       <head>
+        <meta name="awin-verification" content="Awin" />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLdOrg) }}
