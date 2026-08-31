@@ -1,0 +1,107 @@
+name: Publish to Microsoft Store (MSIX)
+on:
+  workflow_dispatch:
+    inputs:
+      publish_to_store:
+        description: "Submit and publish to Microsoft Partner Center after building MSIX"
+        type: boolean
+        required: true
+        default: true
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-msstore
+  cancel-in-progress: true
+
+jobs:
+  build-and-publish:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v6
+
+      - name: Get Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          cache: true
+
+      - name: Cache Windows build outputs
+        uses: actions/cache@v4
+        with:
+          path: build/windows
+          key: ${{ runner.os }}-flutter-build-${{ hashFiles('pubspec.lock') }}
+
+      - name: Extract version from pubspec.yaml
+        id: version
+        shell: bash
+        run: |
+          VERSION=$(grep '^version:' pubspec.yaml | cut -d ' ' -f 2 | cut -d '+' -f 1)
+          echo "APP_VERSION=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Create .env file
+        run: |
+          echo "${{ secrets.ENV_FILE }}" | Out-File -FilePath .env -Encoding utf8
+
+      - name: Install dependencies
+        run: |
+          flutter config --enable-windows-desktop
+          flutter pub get
+
+      - name: Pre-extract libwebrtc
+        run: ./.github/scripts/preextract-libwebrtc.ps1
+
+      - name: Build Windows App (Store mode)
+        run: flutter build windows --release --dart-define=STORE_BUILD=true
+
+      - name: Create MSIX Package
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.APP_VERSION }}.0"
+          dart run msix:create --store --version $version --output-name "SyncTogether-${{ steps.version.outputs.APP_VERSION }}-Store"
+
+      - name: Upload MSIX artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-store-msix
+          path: build/windows/x64/runner/Release/SyncTogether-${{ steps.version.outputs.APP_VERSION }}-Store.msix
+
+      - name: Setup Microsoft Store Developer CLI
+        if: ${{ inputs.publish_to_store }}
+        uses: microsoft/microsoft-store-apppublisher@v1
+
+      - name: Configure Microsoft Store CLI
+        if: ${{ inputs.publish_to_store }}
+        env:
+          AZURE_AD_TENANT_ID: ${{ secrets.AZURE_AD_TENANT_ID }}
+          MSSTORE_SELLER_ID: ${{ secrets.MSSTORE_SELLER_ID }}
+          AZURE_AD_CLIENT_ID: ${{ secrets.AZURE_AD_CLIENT_ID }}
+          AZURE_AD_CLIENT_SECRET: ${{ secrets.AZURE_AD_CLIENT_SECRET }}
+        shell: pwsh
+        run: |
+          if (-not $env:AZURE_AD_CLIENT_ID -or -not $env:AZURE_AD_TENANT_ID) {
+            Write-Host "Microsoft Store credentials (AZURE_AD_CLIENT_ID / AZURE_AD_TENANT_ID) are not configured."
+            Write-Host "Skipping automated Partner Center publish (the MSIX artifact was built and uploaded successfully above)."
+            exit 0
+          }
+          msstore reconfigure `
+            --tenantId "$env:AZURE_AD_TENANT_ID" `
+            --sellerId "$env:MSSTORE_SELLER_ID" `
+            --clientId "$env:AZURE_AD_CLIENT_ID" `
+            --clientSecret "$env:AZURE_AD_CLIENT_SECRET"
+
+      - name: Publish to Microsoft Partner Center
+        if: ${{ inputs.publish_to_store }}
+        env:
+          AZURE_AD_CLIENT_ID: ${{ secrets.AZURE_AD_CLIENT_ID }}
+          MSSTORE_PRODUCT_ID: ${{ secrets.MSSTORE_PRODUCT_ID }}
+        shell: pwsh
+        run: |
+          if (-not $env:AZURE_AD_CLIENT_ID) {
+            Write-Host "Skipping publish step because credentials are not configured."
+            exit 0
+          }
+          $msixPath = "build/windows/x64/runner/Release/SyncTogether-${{ steps.version.outputs.APP_VERSION }}-Store.msix"
+          Write-Host "Publishing $msixPath for Product ID $env:MSSTORE_PRODUCT_ID..."
+          msstore publish $msixPath

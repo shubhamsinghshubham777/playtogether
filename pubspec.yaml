@@ -47,6 +47,7 @@ dev_dependencies:
   flutter_launcher_icons: 0.14.4
   flutter_lints: 6.0.0
   inno_bundle: 0.11.2
+  msix: 3.18.0
 
 flutter:
   uses-material-design: true
@@ -91,9 +92,20 @@ flutter:
 
 inno_bundle:
   id: a05680d0-e422-11f0-af00-4b68febb008b
-  publisher: Shubham Singh
+  publisher: Singh Software Services
   languages:
     - english
+
+msix_config:
+  display_name: SyncTogether
+  publisher_display_name: Singh Software Services
+  identity_name: SinghSoftwareServices.SyncTogether
+  publisher: CN=C6708BF8-1F72-4C1B-BCDB-C05875ADF7E6
+  logo_path: assets/icon/app_icon.png
+  capabilities: "internetClient,microphone,webcam"
+  protocol_activation: synctogether
+  architecture: x64
+  store: true
 
 # Regenerate with: fvm dart run flutter_launcher_icons
 # Source art in assets/icon/ is built by tool/generate_app_icon.py from the

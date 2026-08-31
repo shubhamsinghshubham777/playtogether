@@ -97,11 +97,11 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "app.synctogether" "\0"
+            VALUE "CompanyName", "Singh Software Services" "\0"
             VALUE "FileDescription", "synctogether" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "app.synctogether.windows" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 Shubham Singh. All rights reserved." "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 Singh Software Services. All rights reserved." "\0"
             VALUE "OriginalFilename", "synctogether.exe" "\0"
             VALUE "ProductName", "synctogether" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
