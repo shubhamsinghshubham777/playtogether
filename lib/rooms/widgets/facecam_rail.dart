@@ -10,6 +10,8 @@ import 'package:synctogether/ui/identity.dart';
 import 'package:synctogether/ui/pt_motion.dart';
 import 'package:synctogether/ui/pt_theme.dart';
 
+const bool kDemoMode = bool.fromEnvironment('DEMO_MODE', defaultValue: false);
+
 enum FacecamLayout { railLeft, stripTop, miniStackRight }
 
 /// Facecam tiles per present member: live video when the member publishes a
@@ -187,12 +189,30 @@ class _FacecamTile extends StatelessWidget {
     return null;
   }
 
+  static String? _mockFacecamAsset(String userId) {
+    switch (userId) {
+      case 'user-alex':
+        return 'assets/store/facecam_alex.jpg';
+      case 'user-sarah':
+        return 'assets/store/facecam_sarah.jpg';
+      case 'user-david':
+        return 'assets/store/facecam_david.jpg';
+      case 'user-elena':
+        return 'assets/store/facecam_elena.jpg';
+      default:
+        return null;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final participant = _participant;
     final videoTrack = _videoTrack(participant);
+    final mockAsset = kDemoMode ? _mockFacecamAsset(member.userId) : null;
+    final hasVideo = videoTrack != null || mockAsset != null;
     final micOff = _micOff(participant);
-    final speaking = participant?.isSpeaking ?? false;
+    final speaking =
+        participant?.isSpeaking ?? (kDemoMode && member.userId == 'user-sarah');
 
     final height = compact ? 58.0 : 112.0;
     final radius = compact ? 13.0 : 16.0;
@@ -237,6 +257,8 @@ class _FacecamTile extends StatelessWidget {
           children: [
             if (videoTrack != null)
               lk.VideoTrackRenderer(videoTrack, fit: .cover)
+            else if (mockAsset != null)
+              Image.asset(mockAsset, fit: BoxFit.cover)
             else
               Container(
                 decoration: const BoxDecoration(
@@ -303,7 +325,7 @@ class _FacecamTile extends StatelessWidget {
                         ),
                 ),
               ),
-            if (videoTrack != null || compact)
+            if (hasVideo || compact)
               Positioned(
                 left: compact ? 5 : 8,
                 bottom: compact ? 5 : 8,
@@ -327,6 +349,13 @@ class _FacecamTile extends StatelessWidget {
                         mainAxisSize: .min,
                         spacing: 3,
                         children: [
+                          if (premium)
+                            Icon(
+                              Symbols.crown_rounded,
+                              size: compact ? 10 : 12,
+                              fill: 1,
+                              color: const Color(0xFFFFB800),
+                            ),
                           Text(
                             isSelf ? 'You' : member.displayName,
                             overflow: .ellipsis,
@@ -367,7 +396,7 @@ class _FacecamTile extends StatelessWidget {
               top: compact ? 5 : 7,
               right: compact ? 5 : 7,
               child: AnimatedScale(
-                scale: micOff && participant != null ? 1 : 0,
+                scale: (micOff && participant != null) || (kDemoMode && member.userId == 'user-david') ? 1 : 0,
                 duration: PTMotion.functional(context, PTMotion.state),
                 curve: micOff ? PTMotion.arrive : PTMotion.exit,
                 child: Container(

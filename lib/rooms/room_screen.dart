@@ -57,13 +57,23 @@ import 'package:synctogether/ui/pt_theme.dart';
 import 'package:synctogether/ui/responsive.dart';
 import 'package:window_manager/window_manager.dart';
 
+const bool kDemoMode = bool.fromEnvironment('DEMO_MODE', defaultValue: false);
+
 enum PlaybackMode { local, youtube }
 
 class RoomScreen extends StatefulWidget {
-  const RoomScreen({super.key, required this.roomId, required this.player});
+  const RoomScreen({
+    super.key,
+    required this.roomId,
+    required this.player,
+    this.initialChatOpen = false,
+    this.initialDialogOpen,
+  });
 
   final String roomId;
   final Player player;
+  final bool initialChatOpen;
+  final String? initialDialogOpen;
 
   @override
   State<RoomScreen> createState() => _RoomScreenState();
@@ -351,7 +361,18 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
         });
       }
     });
-    _init();
+    if (widget.initialChatOpen) {
+      _chatOpen = true;
+      _chatAnim.value = 1.0;
+    }
+    _init().then((_) {
+      if (!mounted) return;
+      if (widget.initialDialogOpen == 'media') {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _showModeSelectionDialog();
+        });
+      }
+    });
   }
 
   @override
@@ -1458,8 +1479,17 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
     final media = _canonicalMedia;
     if (!media.isSet) return;
     _resumeAttempted = true;
-
     final held = resumeSeekPosition(held: _room?.mediaPosition, mediaDuration: media.duration);
+
+    if (kDemoMode) {
+      _resolveFirstSource();
+      _idleSourceTimer?.cancel();
+      _duration = media.duration ?? const Duration(hours: 2, minutes: 49, seconds: 3);
+      _position = _room?.mediaPosition ?? const Duration(hours: 1, minutes: 24, seconds: 18);
+      _playing = true;
+      setState(() {});
+      return;
+    }
 
     if (media.kind == .youtube) {
       final url = media.url;
@@ -3073,11 +3103,14 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
       fit: .expand,
       children: [
         if (_mode == .local)
-          Video(
-            controller: controller,
-            controls: NoVideoControls,
-            subtitleViewConfiguration: const SubtitleViewConfiguration(padding: EdgeInsets.all(32)),
-          ),
+          widget.player.state.duration > Duration.zero || !kDemoMode
+              ? Video(
+                  controller: controller,
+                  controls: NoVideoControls,
+                  subtitleViewConfiguration:
+                      const SubtitleViewConfiguration(padding: EdgeInsets.all(32)),
+                )
+              : Image.asset('assets/store/movie_still.jpg', fit: BoxFit.cover),
         if (_mode == .youtube && _youtubeController != null)
           // The embed is a display surface, not a control surface. Its own
           // chrome is stripped, so the only things left to click are the big
@@ -3783,10 +3816,12 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
               ),
             ),
           if (_sync != null)
-            Positioned(
+            AnimatedPositioned(
+              duration: PTMotion.functional(context, PTMotion.state),
+              curve: _controlsVisible ? PTMotion.enter : PTMotion.exit,
               top: 84,
               right: 24,
-              bottom: 110,
+              bottom: _controlsVisible ? (_reactOpen ? 224.0 : 160.0) : 24.0,
               width: 320,
               child: _chatRevealed(
                 offscreen: 320,
@@ -4051,10 +4086,12 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
                   ),
                 ),
               if (_sync != null)
-                Positioned(
+                AnimatedPositioned(
+                  duration: PTMotion.functional(context, PTMotion.state),
+                  curve: _controlsVisible ? PTMotion.enter : PTMotion.exit,
                   top: 72,
                   right: 0,
-                  bottom: 86,
+                  bottom: _controlsVisible ? (_reactOpen ? 190.0 : 138.0) : 16.0,
                   width: 300,
                   child: _chatRevealed(
                     offscreen: 300,

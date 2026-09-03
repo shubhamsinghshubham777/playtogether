@@ -85,8 +85,9 @@ Set<String> premiumMembersFrom(Map<String, String> tiers) => {
 };
 
 class EntitlementService extends ChangeNotifier {
+  EntitlementService();
   EntitlementService._();
-  static final instance = EntitlementService._();
+  static EntitlementService instance = EntitlementService._();
 
   SupabaseClient get _client => Supabase.instance.client;
 

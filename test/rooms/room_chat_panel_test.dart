@@ -174,4 +174,69 @@ void main() {
     expect(find.text('Play for everyone'), findsNothing);
     sync.dispose();
   });
+
+  testWidgets('can scroll up in chatbox without being forced back to the bottom', (tester) async {
+    final sync = _sync();
+    final messages = List.generate(
+      30,
+      (i) => ChatMessage(
+        senderId: i.isEven ? _me : _other,
+        displayName: 'User $i',
+        content: 'Message $i',
+        sentAt: DateTime.utc(2026, 7, 31, 16, i),
+      ),
+    );
+
+    await _pump(tester, sync: sync, messages: messages);
+
+    // Initial state: scrolled to bottom. Message 29 should be visible.
+    expect(find.text('Message 29'), findsOneWidget);
+
+    final listFinder = find.byType(ListView);
+    final scrollable = tester.state<ScrollableState>(
+      find.descendant(of: listFinder, matching: find.byType(Scrollable)),
+    );
+    final initialOffset = scrollable.position.pixels;
+    expect(initialOffset, greaterThan(0));
+
+    // Try scrolling up using mouse wheel events
+    await tester.sendEventToBinding(
+      PointerScrollEvent(
+        position: tester.getCenter(listFinder),
+        scrollDelta: const Offset(0, -40),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final scrolledOffset = scrollable.position.pixels;
+    expect(scrolledOffset, lessThan(initialOffset));
+    sync.dispose();
+  });
+
+  testWidgets('loading history after initial empty mount scrolls to bottom', (tester) async {
+    final sync = _sync();
+    final messages = <ChatMessage>[];
+
+    await _pump(tester, sync: sync, messages: messages);
+
+    // Now history loads
+    messages.addAll(
+      List.generate(
+        30,
+        (i) => ChatMessage(
+          senderId: i.isEven ? _me : _other,
+          displayName: 'User $i',
+          content: 'Message $i',
+          sentAt: DateTime.utc(2026, 7, 31, 16, i),
+        ),
+      ),
+    );
+
+    // Re-pump with the loaded messages
+    await _pump(tester, sync: sync, messages: messages);
+
+    expect(find.text('Message 29'), findsOneWidget);
+    sync.dispose();
+  });
 }
+

@@ -60,6 +60,7 @@ flutter:
     # the OS's, for machines whose own root store cannot complete our chains.
     - assets/ca/cacert.pem
     - assets/emoji/
+    - assets/store/
   fonts:
     - family: Space Grotesk
       fonts:

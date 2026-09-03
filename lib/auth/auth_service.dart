@@ -9,8 +9,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 /// Thin wrapper over Supabase auth. Session persistence and token refresh are
 /// handled by supabase_flutter; this only exposes the state the app reacts to.
 class AuthService {
+  AuthService();
   AuthService._();
-  static final instance = AuthService._();
+  static AuthService instance = AuthService._();
 
   SupabaseClient get _client => Supabase.instance.client;
 

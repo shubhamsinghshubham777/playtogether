@@ -9,8 +9,9 @@ import 'room_models.dart';
 enum RoomJoinSource { code, deeplink }
 
 class RoomService extends ChangeNotifier {
+  RoomService();
   RoomService._();
-  static final instance = RoomService._();
+  static RoomService instance = RoomService._();
 
   SupabaseClient get _client => Supabase.instance.client;
 

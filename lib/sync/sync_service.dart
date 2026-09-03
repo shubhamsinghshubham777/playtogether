@@ -23,15 +23,17 @@ export 'sync_logic.dart';
 /// 2. [_isApplyingRemoteAction] suppresses re-broadcast while applying;
 /// 3. last-action-wins ordering in [_shouldApply].
 class SyncService {
+  static SyncBackend? defaultBackendOverride;
+
   SyncService(
     this._player, {
     required this.room,
     required this.profile,
     required String role,
-    this.backend = const SupabaseSyncBackend(),
-  })
-    // ignore: prefer_initializing_formals
-    : _role = role {
+    SyncBackend? backend,
+  }) : backend = backend ?? defaultBackendOverride ?? const SupabaseSyncBackend(),
+       // ignore: prefer_initializing_formals
+       _role = role {
     _canonicalMedia = RoomMedia.fromRoom(room);
     _mediaUploadState = room.mediaUploadState;
   }

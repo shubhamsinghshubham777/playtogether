@@ -29,9 +29,12 @@ String roomPath(String roomId) => '$kRoomPathPrefix$roomId';
 String? roomIdOfPath(String path) =>
     path.startsWith(kRoomPathPrefix) ? path.substring(kRoomPathPrefix.length) : null;
 
+const bool kDemoMode = bool.fromEnvironment('DEMO_MODE', defaultValue: false);
+const bool kDemoRoom = bool.fromEnvironment('DEMO_ROOM', defaultValue: false);
+
 GoRouter buildRouter(Player player) {
   return GoRouter(
-    initialLocation: '/lobby',
+    initialLocation: kDemoRoom ? '/lobby/room/demo-room-1' : '/lobby',
     refreshListenable: _AuthRefresh(),
     redirect: (context, state) {
       final signedIn = AuthService.instance.isSignedIn;
@@ -66,9 +69,13 @@ GoRouter buildRouter(Player player) {
             pageBuilder: (context, state) => _rise(
               state,
               RoomScreen(
-                key: ValueKey(state.pathParameters['id']!),
+                key: ValueKey(
+                  '${state.pathParameters['id']!}_${state.uri.queryParameters['chat']}_${state.uri.queryParameters['dialog']}',
+                ),
                 roomId: state.pathParameters['id']!,
                 player: player,
+                initialChatOpen: state.uri.queryParameters['chat'] == 'true',
+                initialDialogOpen: state.uri.queryParameters['dialog'],
               ),
             ),
           ),

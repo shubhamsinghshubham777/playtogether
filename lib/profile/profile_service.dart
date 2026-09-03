@@ -7,8 +7,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'profile_models.dart';
 
 class ProfileService extends ChangeNotifier {
+  ProfileService();
   ProfileService._();
-  static final instance = ProfileService._();
+  static ProfileService instance = ProfileService._();
 
   SupabaseClient get _client => Supabase.instance.client;
 

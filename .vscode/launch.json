@@ -10,6 +10,23 @@
             "type": "dart"
         },
         {
+            "name": "Demo Mode",
+            "request": "launch",
+            "type": "dart",
+            "args": [
+                "--dart-define=DEMO_MODE=true"
+            ]
+        },
+        {
+            "name": "Demo Mode: Watch Room",
+            "request": "launch",
+            "type": "dart",
+            "args": [
+                "--dart-define=DEMO_MODE=true",
+                "--dart-define=DEMO_ROOM=true"
+            ]
+        },
+        {
             "name": "debug (macOS)",
             "request": "launch",
             "type": "dart",

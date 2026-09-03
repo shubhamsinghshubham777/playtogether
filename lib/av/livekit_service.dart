@@ -20,7 +20,9 @@ class LiveKitService extends ChangeNotifier {
 
   /// AV is available only when the client knows the LiveKit URL; without it
   /// the whole facecam UI stays hidden.
-  static bool get isConfigured => (Env.livekitUrl ?? '').isNotEmpty;
+  static bool? isConfiguredOverride;
+  static bool isMockMode = false;
+  static bool get isConfigured => isConfiguredOverride ?? (Env.livekitUrl ?? '').isNotEmpty;
 
   static bool isAvailableFor(AvLevel level) => isConfigured && level.allowsVoice;
 
@@ -51,6 +53,10 @@ class LiveKitService extends ChangeNotifier {
   Future<void> connect() async {
     if (!isAvailableFor(avLevel) || _state == .connecting || _state == .connected) return;
     _setState(.connecting);
+    if (isMockMode) {
+      _setState(.connected);
+      return;
+    }
     try {
       final response = await Supabase.instance.client.functions.invoke(
         'livekit-token',

@@ -13,6 +13,8 @@ import 'package:synctogether/auth/auth_service.dart';
 import 'package:synctogether/auth/webview_runtime.dart';
 import 'package:synctogether/diagnostics.dart';
 import 'package:synctogether/env.dart';
+import 'package:synctogether/mock/mock_dependencies.dart';
+import 'package:synctogether/mock/store_capture.dart';
 import 'package:synctogether/platform.dart';
 import 'package:synctogether/rooms/room_models.dart';
 import 'package:synctogether/rooms/room_service.dart';
@@ -22,9 +24,12 @@ import 'package:synctogether/ui/banners.dart';
 import 'package:synctogether/ui/pt_theme.dart';
 import 'package:synctogether/ui/responsive.dart';
 import 'package:synctogether/ui/splash_screen.dart';
+
 import 'package:sentry_flutter/sentry_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:window_manager/window_manager.dart';
+
+const bool kCaptureStore = bool.fromEnvironment('CAPTURE_STORE', defaultValue: false);
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -58,6 +63,9 @@ Future<void> _bootstrap() async {
   await PTWebView.init();
   await Supabase.initialize(url: Env.supabaseUrl, publishableKey: Env.supabasePublishableKey);
   trace('supabase ready', category: 'auth', data: {'local_stack': Env.usingLocalStack});
+  if (kDemoMode) {
+    installMockDependencies();
+  }
   await AppVersion.load();
   final optedOut = await AnalyticsConsent.instance.load();
   Analytics.instance.init(
@@ -127,6 +135,11 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
     _appLinks.getInitialLink().then((uri) {
       if (uri != null) _onDeepLink(uri, source: 'cold_start');
     });
+    if (kCaptureStore) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        runStoreCaptureFlow(context, router);
+      });
+    }
   }
 
   String? _lastLinkHandled;
@@ -213,8 +226,10 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
       // The splash is an overlay inside the app, not a route: routing, auth
       // redirects and the deep-link handler above all keep running underneath
       // it, so an invite that arrives during the splash is not lost.
-      builder: (context, child) =>
-          buildResponsiveWrapper(context, PTSplash(child: child ?? const SizedBox.shrink())),
+      builder: (context, child) => RepaintBoundary(
+        key: storeCaptureBoundaryKey,
+        child: buildResponsiveWrapper(context, PTSplash(child: child ?? const SizedBox.shrink())),
+      ),
     );
   }
 }
