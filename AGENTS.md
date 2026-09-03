@@ -28,6 +28,8 @@ SyncTogether is a cross-platform Flutter application for synchronized, low-laten
 # Flutter Application
 fvm flutter pub get                     # Install dependencies
 fvm flutter run -d macos                # Run on macOS (or: windows, android, ios)
+fvm dart format .                       # Auto-format all Dart code
+fvm dart format --output=none --set-exit-if-changed . # Verify formatting matches CI
 fvm flutter analyze                     # Static analysis (flutter_lints)
 fvm flutter test                        # Run Dart unit/widget test suite
 
@@ -56,6 +58,13 @@ npm --prefix website test               # Run webhook idempotency & signature te
    - **Analytics (`lib/analytics.dart`)**: Use `Analytics.track` **only when an action was explicitly initiated by a human**. Never trigger analytics from background sync, remote actions, or gate evaluations.
 5. **Generated Assets**: Never manually edit `assets/sfx/splash.wav`, `assets/emoji/*.json`, `assets/ca/cacert.pem`, or icon PNGs. Use the generator scripts in `tool/`.
 6. **Licensing & Self-Hosting**: Licensed under PolyForm Noncommercial License 1.0.0 (`LICENSE`). Self-hosting documentation lives in `docs/self-hosting.md`. Commercial SaaS/resale and commercial use are restricted.
+7. **Pre-Commit Verification (MANDATORY)**:
+   Before committing code or concluding code modifications, the agent MUST ALWAYS run and verify the CI checks locally:
+   - **Format**: `fvm dart format --output=none --set-exit-if-changed .` (run `fvm dart format .` to format if differences exist).
+   - **Analysis**: `fvm flutter analyze` (zero issues/warnings).
+   - **Tests**: `fvm flutter test` (all unit and widget tests passing).
+   - **Database**: `supabase test db` (mandatory whenever `supabase/` files are touched).
+   Never commit or push code with unformatted files or failing tests.
 
 ---
 

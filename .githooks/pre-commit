@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+set -e
+
+echo "==> Running SyncTogether pre-commit checks..."
+
+# 1. Format check
+echo "--> Checking Dart code formatting..."
+fvm dart format --output=none --set-exit-if-changed . || {
+  echo ""
+  echo "❌ Dart formatting check failed!"
+  echo "Run 'fvm dart format .' to fix formatting issues before committing."
+  exit 1
+}
+
+# 2. Static analysis
+echo "--> Running Flutter analyzer..."
+fvm flutter analyze || {
+  echo ""
+  echo "❌ Static analysis failed!"
+  exit 1
+}
+
+echo "✅ All pre-commit checks passed."

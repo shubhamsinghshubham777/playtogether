@@ -386,14 +386,18 @@ class MockSyncChannel implements SyncChannel {
 
   @override
   List<Map<String, dynamic>> presenceState() {
-    return presence.map((p) => {
-      'user_id': p.userId,
-      'display_name': p.displayName,
-      'role': p.role,
-      'joined_at': p.joinedAt.toIso8601String(),
-      'ready_status': p.readyStatus.name,
-      'loaded_file_name': p.loadedFileName,
-    }).toList();
+    return presence
+        .map(
+          (p) => {
+            'user_id': p.userId,
+            'display_name': p.displayName,
+            'role': p.role,
+            'joined_at': p.joinedAt.toIso8601String(),
+            'ready_status': p.readyStatus.name,
+            'loaded_file_name': p.loadedFileName,
+          },
+        )
+        .toList();
   }
 
   @override
@@ -401,11 +405,7 @@ class MockSyncChannel implements SyncChannel {
 }
 
 class MockSyncBackend implements SyncBackend {
-  MockSyncBackend({
-    required this.room,
-    required this.presence,
-    required this.chatHistory,
-  });
+  MockSyncBackend({required this.room, required this.presence, required this.chatHistory});
 
   final Room room;
   final List<PresentMember> presence;
@@ -436,12 +436,14 @@ class MockSyncBackend implements SyncBackend {
     required String senderId,
     required String content,
   }) async {
-    chatHistory.add(ChatMessage(
-      senderId: senderId,
-      displayName: 'Alex Rivers',
-      content: content,
-      sentAt: DateTime.now(),
-    ));
+    chatHistory.add(
+      ChatMessage(
+        senderId: senderId,
+        displayName: 'Alex Rivers',
+        content: content,
+        sentAt: DateTime.now(),
+      ),
+    );
   }
 }
 

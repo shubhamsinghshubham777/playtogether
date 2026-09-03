@@ -201,10 +201,7 @@ void main() {
 
     // Try scrolling up using mouse wheel events
     await tester.sendEventToBinding(
-      PointerScrollEvent(
-        position: tester.getCenter(listFinder),
-        scrollDelta: const Offset(0, -40),
-      ),
+      PointerScrollEvent(position: tester.getCenter(listFinder), scrollDelta: const Offset(0, -40)),
     );
     await tester.pumpAndSettle();
 
@@ -239,4 +236,3 @@ void main() {
     sync.dispose();
   });
 }
-

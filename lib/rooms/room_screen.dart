@@ -3107,8 +3107,9 @@ class _RoomScreenState extends State<RoomScreen> with WindowListener, TickerProv
               ? Video(
                   controller: controller,
                   controls: NoVideoControls,
-                  subtitleViewConfiguration:
-                      const SubtitleViewConfiguration(padding: EdgeInsets.all(32)),
+                  subtitleViewConfiguration: const SubtitleViewConfiguration(
+                    padding: EdgeInsets.all(32),
+                  ),
                 )
               : Image.asset('assets/store/movie_still.jpg', fit: BoxFit.cover),
         if (_mode == .youtube && _youtubeController != null)

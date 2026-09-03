@@ -211,8 +211,7 @@ class _FacecamTile extends StatelessWidget {
     final mockAsset = kDemoMode ? _mockFacecamAsset(member.userId) : null;
     final hasVideo = videoTrack != null || mockAsset != null;
     final micOff = _micOff(participant);
-    final speaking =
-        participant?.isSpeaking ?? (kDemoMode && member.userId == 'user-sarah');
+    final speaking = participant?.isSpeaking ?? (kDemoMode && member.userId == 'user-sarah');
 
     final height = compact ? 58.0 : 112.0;
     final radius = compact ? 13.0 : 16.0;
@@ -396,7 +395,10 @@ class _FacecamTile extends StatelessWidget {
               top: compact ? 5 : 7,
               right: compact ? 5 : 7,
               child: AnimatedScale(
-                scale: (micOff && participant != null) || (kDemoMode && member.userId == 'user-david') ? 1 : 0,
+                scale:
+                    (micOff && participant != null) || (kDemoMode && member.userId == 'user-david')
+                    ? 1
+                    : 0,
                 duration: PTMotion.functional(context, PTMotion.state),
                 curve: micOff ? PTMotion.arrive : PTMotion.exit,
                 child: Container(
