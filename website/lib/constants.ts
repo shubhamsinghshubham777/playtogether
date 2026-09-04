@@ -111,7 +111,7 @@ export const PRICING_TIERS = {
       "Video + Voice facecams",
       "24 animated Lottie reaction emoji",
       "Persistent rooms (never expire or delete)",
-      "Room host privileges denormalized to all joiners",
+      "Host's Premium perks shared with all room members",
       "Priority customer support",
     ],
   },

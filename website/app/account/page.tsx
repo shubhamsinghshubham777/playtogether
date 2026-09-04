@@ -503,7 +503,7 @@ function AccountDashboard() {
               className="text-[11px] text-gray-400 hover:text-purple-300 flex items-center gap-1.5 transition-colors cursor-pointer"
             >
               <Download className="w-3.5 h-3.5" />
-              <span>Export My Data (GDPR JSON)</span>
+              <span>Export Account Data</span>
             </button>
           </div>
         </GlassPanel>
