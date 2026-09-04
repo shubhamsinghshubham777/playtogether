@@ -89,7 +89,7 @@ export default async function DownloadPage() {
 
           <div className="space-y-3 pt-4 border-t border-white/5">
             <PTButton
-              href={release.macDownloadUrl}
+              href="/api/download?platform=macos"
               variant="primary"
               size="lg"
               className="w-full"
@@ -128,7 +128,7 @@ export default async function DownloadPage() {
 
           <div className="space-y-3 pt-4 border-t border-white/5">
             <PTButton
-              href={release.winDownloadUrl}
+              href="/api/download?platform=windows"
               variant="secondary"
               size="lg"
               className="w-full"

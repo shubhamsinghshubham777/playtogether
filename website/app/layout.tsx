@@ -4,6 +4,7 @@ import "./globals.css";
 import { Analytics } from "@vercel/analytics/next";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
+import { AnalyticsBeacon } from "@/components/AnalyticsBeacon";
 import { SITE_CONFIG } from "@/lib/constants";
 
 const spaceGrotesk = Space_Grotesk({
@@ -131,6 +132,7 @@ export default function RootLayout({
         <main className="flex-1 pt-20">{children}</main>
         <Footer />
         <Analytics />
+        <AnalyticsBeacon />
       </body>
     </html>
   );
