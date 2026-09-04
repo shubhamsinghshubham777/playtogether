@@ -24,6 +24,8 @@ export function PricingTable() {
     annualFormatted,
     monthlyEquivalentFormatted,
     savingsPct,
+    currencyCode,
+    countryCode,
     isLoading: isPriceLoading,
   } = usePricing();
 
@@ -116,10 +118,13 @@ export function PricingTable() {
     monthlyFormatted
   );
 
+  const isUsdOutsideUs = currencyCode === "USD" && countryCode !== "US";
   const premiumSubPrice = isPriceLoading
     ? "Fetching live pricing..."
     : billingCycle === "annual"
-    ? `${monthlyEquivalentFormatted} (Billed annually — Save ${savingsPct})`
+    ? `${monthlyEquivalentFormatted} (Billed annually${isUsdOutsideUs ? " in USD" : ""} — Save ${savingsPct})`
+    : isUsdOutsideUs
+    ? "Billed monthly in USD. Cancel anytime."
     : "Billed monthly. Cancel anytime.";
 
   return (

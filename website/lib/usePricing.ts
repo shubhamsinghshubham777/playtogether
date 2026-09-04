@@ -4,8 +4,10 @@ import { useEffect, useState, useCallback, useSyncExternalStore } from "react";
 import { getPaddleInstance } from "@/components/PaddleCheckout";
 import {
   COUNTRY_CURRENCY_MAP,
+  PADDLE_SUPPORTED_CURRENCIES,
   detectUserCountry,
   formatCurrency,
+  resolveCurrencySymbol,
   calculateSavingsPercentage,
   isLocalEnvironment,
   type LocalizedPriceData,
@@ -108,14 +110,23 @@ export function usePricing() {
       const paddle = await getPaddleInstance();
       if (paddle && typeof paddle.PricePreview === "function") {
         try {
-          const preview = await paddle.PricePreview({
+          const isSupported = PADDLE_SUPPORTED_CURRENCIES.has(targetCurrency);
+          const previewPayload: {
+            items: { priceId: string; quantity: number }[];
+            address: { countryCode: string };
+            currencyCode?: "USD" | "EUR" | "GBP" | "INR" | "CAD" | "AUD" | "JPY";
+          } = {
             items: [
               { priceId: PADDLE_MONTHLY_PRICE_ID, quantity: 1 },
               { priceId: PADDLE_ANNUAL_PRICE_ID, quantity: 1 },
             ],
             address: { countryCode: country },
-            currencyCode: targetCurrency as "USD" | "EUR" | "GBP" | "INR" | "CAD" | "AUD" | "JPY",
-          });
+          };
+          if (isSupported) {
+            previewPayload.currencyCode = targetCurrency as "USD" | "EUR" | "GBP" | "INR" | "CAD" | "AUD" | "JPY";
+          }
+
+          const preview = await paddle.PricePreview(previewPayload);
 
           if (preview?.data?.details?.lineItems?.length) {
             const lineItems = preview.data.details.lineItems;
@@ -126,11 +137,8 @@ export function usePricing() {
               lineItems.find((item) => item.price?.id === PADDLE_ANNUAL_PRICE_ID) ||
               lineItems[1];
 
-            const currencyCode = preview.data.currencyCode || targetCurrency;
-            const currencySymbol =
-              COUNTRY_CURRENCY_MAP[country]?.symbol ||
-              COUNTRY_CURRENCY_MAP[currencyCode]?.symbol ||
-              "$";
+            const currencyCode = preview.data.currencyCode || (isSupported ? targetCurrency : "USD");
+            const currencySymbol = resolveCurrencySymbol(currencyCode, country);
 
             const monthlyTotal =
               parseFloat(monthlyItem.totals?.total || monthlyItem.unitTotals?.total || "399") / 100;
@@ -140,13 +148,11 @@ export function usePricing() {
             const savingsPct = calculateSavingsPercentage(monthlyTotal, annualTotal);
 
             const result: LocalizedPriceData = {
-              monthlyFormatted:
-                monthlyItem.formattedTotals?.total || formatCurrency(monthlyTotal, currencyCode),
+              monthlyFormatted: formatCurrency(monthlyTotal, currencyCode, country),
               monthlyAmount: monthlyTotal,
-              annualFormatted:
-                annualItem.formattedTotals?.total || formatCurrency(annualTotal, currencyCode),
+              annualFormatted: formatCurrency(annualTotal, currencyCode, country),
               annualAmount: annualTotal,
-              monthlyEquivalentFormatted: `${formatCurrency(monthlyEq, currencyCode)} / mo`,
+              monthlyEquivalentFormatted: `${formatCurrency(monthlyEq, currencyCode, country)} / mo`,
               monthlyEquivalentAmount: monthlyEq,
               currencyCode,
               currencySymbol,

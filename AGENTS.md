@@ -65,6 +65,9 @@ npm --prefix website test               # Run webhook idempotency & signature te
    - **Tests**: `fvm flutter test` (all unit and widget tests passing).
    - **Database**: `supabase test db` (mandatory whenever `supabase/` files are touched).
    Never commit or push code with unformatted files or failing tests.
+8. **Communication & Formatting (MANDATORY)**:
+   - **NEVER use LaTeX math formatting**: Never use LaTeX math syntax (such as `$`, `$$`, `\text{}`, `\frac{}`, `\times`, `\mathbf{}`, `\approx`, `\sim`, etc.) in chat responses, explanations, plans, walkthroughs, or markdown documents.
+   - **Use clean plain text & standard symbols**: Always write out math using plain numbers, standard operators (`x`, `÷`, `=`, `~`, `approx`), percentages, and readable markdown tables so that calculations and breakdowns are crystal-clear and never show unrendered code clutter in any markdown viewer.
 
 ---
 

@@ -1,5 +1,32 @@
-import { NextResponse, type NextRequest } from "next/server";
-import { COUNTRY_CURRENCY_MAP, formatCurrency, calculateSavingsPercentage } from "@/lib/pricing";
+import { NextRequest, NextResponse } from "next/server";
+import {
+  COUNTRY_CURRENCY_MAP,
+  PADDLE_SUPPORTED_CURRENCIES,
+  formatCurrency,
+  resolveCurrencySymbol,
+  calculateSavingsPercentage,
+} from "@/lib/pricing";
+
+const FALLBACK_PRICES: Record<string, { m: number; a: number }> = {
+  INR: { m: 199, a: 999 },
+  USD: { m: 3.99, a: 29.99 },
+  GBP: { m: 3.49, a: 24.99 },
+  EUR: { m: 3.99, a: 29.99 },
+  CAD: { m: 4.99, a: 37.99 },
+  AUD: { m: 5.99, a: 44.99 },
+  JPY: { m: 550, a: 4200 },
+  BRL: { m: 14.90, a: 69.90 },
+  MXN: { m: 59, a: 349 },
+  PLN: { m: 11.99, a: 84.99 },
+  TRY: { m: 89, a: 429 },
+};
+
+const TIER3_PPP_COUNTRIES = new Set([
+  "PK", "BD", "LK", "NP", "BT", "MV", "NG", "KE", "EG", "GH", "MA", "DZ", "TN", "UG",
+  "ET", "TZ", "SN", "RW", "CM", "CI", "PH", "VN", "ID", "KH", "LA", "MM", "CO", "PE",
+  "AR", "BO", "EC", "PY", "VE", "GT", "HN", "SV", "NI", "DO", "UA", "GE", "AM", "AZ",
+  "MD", "UZ", "KZ", "KG", "TJ",
+]);
 
 export async function GET(request: NextRequest) {
   try {
@@ -7,6 +34,7 @@ export async function GET(request: NextRequest) {
     const country = (searchParams.get("country") || "US").toUpperCase();
     const countryConfig = COUNTRY_CURRENCY_MAP[country] || COUNTRY_CURRENCY_MAP["US"];
     const targetCurrency = searchParams.get("currency") || countryConfig.currency;
+    const isCurrencySupported = PADDLE_SUPPORTED_CURRENCIES.has(targetCurrency);
 
     const monthlyPriceId =
       process.env.NEXT_PUBLIC_PADDLE_MONTHLY_PRICE_ID ||
@@ -25,26 +53,33 @@ export async function GET(request: NextRequest) {
           : "https://sandbox-api.paddle.com";
 
       try {
+        const previewPayload: Record<string, unknown> = {
+          items: [
+            { price_id: monthlyPriceId, quantity: 1 },
+            { price_id: annualPriceId, quantity: 1 },
+          ],
+          address: { country_code: country },
+        };
+        if (isCurrencySupported) {
+          previewPayload.currency_code = targetCurrency;
+        }
+
         const previewRes = await fetch(`${envUrl}/pricing-preview`, {
           method: "POST",
           headers: {
             Authorization: `Bearer ${apiKey}`,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({
-            items: [
-              { price_id: monthlyPriceId, quantity: 1 },
-              { price_id: annualPriceId, quantity: 1 },
-            ],
-            address: { country_code: country },
-            currency_code: targetCurrency,
-          }),
+          body: JSON.stringify(previewPayload),
           next: { revalidate: 60 },
         });
 
         if (previewRes.ok) {
           const previewData = await previewRes.json();
-          const lineItems = previewData.data?.details?.lineItems || [];
+          const lineItems =
+            previewData.data?.details?.line_items ||
+            previewData.data?.details?.lineItems ||
+            [];
           const monthlyItem = lineItems.find(
             (item: { price?: { id?: string } }) => item.price?.id === monthlyPriceId
           ) || lineItems[0];
@@ -53,11 +88,8 @@ export async function GET(request: NextRequest) {
           ) || lineItems[1];
 
           if (monthlyItem && annualItem) {
-            const currencyCode = previewData.data?.currency_code || targetCurrency;
-            const currencySymbol =
-              COUNTRY_CURRENCY_MAP[country]?.symbol ||
-              COUNTRY_CURRENCY_MAP[currencyCode]?.symbol ||
-              "$";
+            const currencyCode = previewData.data?.currency_code || (isCurrencySupported ? targetCurrency : "USD");
+            const currencySymbol = resolveCurrencySymbol(currencyCode, country);
 
             // Parse total amounts
             const monthlyTotal = parseFloat(monthlyItem.totals?.total || "399") / 100;
@@ -70,11 +102,11 @@ export async function GET(request: NextRequest) {
               currencyCode,
               currencySymbol,
               countryCode: country,
-              monthlyFormatted: monthlyItem.formatted_totals?.total || formatCurrency(monthlyTotal, currencyCode),
+              monthlyFormatted: formatCurrency(monthlyTotal, currencyCode, country),
               monthlyAmount: monthlyTotal,
-              annualFormatted: annualItem.formatted_totals?.total || formatCurrency(annualTotal, currencyCode),
+              annualFormatted: formatCurrency(annualTotal, currencyCode, country),
               annualAmount: annualTotal,
-              monthlyEquivalentFormatted: `${formatCurrency(monthlyEq, currencyCode)} / mo`,
+              monthlyEquivalentFormatted: `${formatCurrency(monthlyEq, currencyCode, country)} / mo`,
               monthlyEquivalentAmount: monthlyEq,
               savingsPct,
               source: "paddle_api",
@@ -87,33 +119,21 @@ export async function GET(request: NextRequest) {
     }
 
     // Default localized fallback when Paddle API key is offline / not reachable
-    const fallbackPrices: Record<string, { m: number; a: number }> = {
-      INR: { m: 149, a: 999 },
-      USD: { m: 3.99, a: 29.99 },
-      GBP: { m: 3.49, a: 24.99 },
-      EUR: { m: 3.99, a: 29.99 },
-      CAD: { m: 4.99, a: 37.99 },
-      AUD: { m: 5.99, a: 44.99 },
-      JPY: { m: 550, a: 4200 },
-      BRL: { m: 9.90, a: 69.90 },
-      MXN: { m: 49, a: 349 },
-      PLN: { m: 11.99, a: 84.99 },
-      TRY: { m: 59, a: 429 },
-    };
-
-    const currency = targetCurrency in fallbackPrices ? targetCurrency : "USD";
-    const prices = fallbackPrices[currency] || fallbackPrices["USD"];
+    const isTier3 = TIER3_PPP_COUNTRIES.has(country);
+    const currency = isTier3 ? "USD" : (targetCurrency in FALLBACK_PRICES ? targetCurrency : "USD");
+    const prices = isTier3 ? { m: 2.29, a: 11.99 } : (FALLBACK_PRICES[currency] || FALLBACK_PRICES["USD"]);
     const monthlyEq = Math.round((prices.a / 12) * 100) / 100;
+    const currencySymbol = resolveCurrencySymbol(currency, country);
 
     return NextResponse.json({
       currencyCode: currency,
-      currencySymbol: countryConfig.symbol || "$",
+      currencySymbol,
       countryCode: country,
-      monthlyFormatted: formatCurrency(prices.m, currency),
+      monthlyFormatted: formatCurrency(prices.m, currency, country),
       monthlyAmount: prices.m,
-      annualFormatted: formatCurrency(prices.a, currency),
+      annualFormatted: formatCurrency(prices.a, currency, country),
       annualAmount: prices.a,
-      monthlyEquivalentFormatted: `${formatCurrency(monthlyEq, currency)} / mo`,
+      monthlyEquivalentFormatted: `${formatCurrency(monthlyEq, currency, country)} / mo`,
       monthlyEquivalentAmount: monthlyEq,
       savingsPct: calculateSavingsPercentage(prices.m, prices.a),
       source: "fallback",

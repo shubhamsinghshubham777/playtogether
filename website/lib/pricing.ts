@@ -16,12 +16,35 @@ export const COUNTRY_CURRENCY_MAP: Record<string, CountryConfig> = {
   AU: { country: "AU", currency: "AUD", name: "Australia", flag: "🇦🇺", symbol: "A$" },
   JP: { country: "JP", currency: "JPY", name: "Japan", flag: "🇯🇵", symbol: "¥" },
   BR: { country: "BR", currency: "BRL", name: "Brazil", flag: "🇧🇷", symbol: "R$" },
-  MX: { country: "MX", currency: "MXN", name: "Mexico", flag: "🇲🇽", symbol: "Mex$" },
+  MX: { country: "MX", currency: "MXN", name: "Mexico", flag: "🇲🇽", symbol: "M$" },
   PL: { country: "PL", currency: "PLN", name: "Poland", flag: "🇵🇱", symbol: "zł" },
   TR: { country: "TR", currency: "TRY", name: "Turkey", flag: "🇹🇷", symbol: "₺" },
-  NG: { country: "NG", currency: "USD", name: "Nigeria", flag: "🇳🇬", symbol: "$" },
-  PK: { country: "PK", currency: "USD", name: "Pakistan", flag: "🇵🇰", symbol: "$" },
-  PH: { country: "PH", currency: "USD", name: "Philippines", flag: "🇵🇭", symbol: "$" },
+  NG: { country: "NG", currency: "NGN", name: "Nigeria", flag: "🇳🇬", symbol: "₦" },
+  PK: { country: "PK", currency: "PKR", name: "Pakistan", flag: "🇵🇰", symbol: "₨" },
+  PH: { country: "PH", currency: "PHP", name: "Philippines", flag: "🇵🇭", symbol: "₱" },
+};
+
+export const PADDLE_SUPPORTED_CURRENCIES = new Set([
+  "ARS", "AUD", "BRL", "CAD", "CHF", "CLP", "CNY", "COP", "CZK", "DKK",
+  "EUR", "GBP", "HKD", "HUF", "ILS", "INR", "JPY", "KRW", "MXN", "NOK",
+  "NZD", "PEN", "PLN", "RUB", "SEK", "SGD", "THB", "TRY", "TWD", "UAH",
+  "USD", "VND", "ZAR",
+]);
+
+export const ZERO_DECIMAL_CURRENCIES = new Set(["INR", "JPY", "KRW", "VND", "CLP", "HUF", "TWD"]);
+
+export const DISAMBIGUATED_CURRENCY_SYMBOLS: Record<string, string> = {
+  MXN: "M$",
+  CAD: "CA$",
+  AUD: "A$",
+  NZD: "NZ$",
+  SGD: "S$",
+  HKD: "HK$",
+  BRL: "R$",
+  ARS: "AR$",
+  CLP: "CL$",
+  COP: "COL$",
+  TWD: "NT$",
 };
 
 export interface LocalizedPriceData {
@@ -39,20 +62,53 @@ export interface LocalizedPriceData {
 }
 
 /**
- * Formats a currency amount with symbol and appropriate decimals
+ * Formats a currency amount with symbol and appropriate decimals.
+ * Explicitly disambiguates currency symbols that share '$' (e.g. MXN -> M$, CAD -> CA$, AUD -> A$).
+ * Disambiguates USD outside the United States as 'US$' to avoid confusion.
  */
-export function formatCurrency(amount: number, currencyCode: string): string {
+export function formatCurrency(
+  amount: number,
+  currencyCode: string,
+  countryCode?: string
+): string {
+  const isUsdOutsideUs = currencyCode === "USD" && Boolean(countryCode && countryCode !== "US");
+  const disambiguated = isUsdOutsideUs ? "US$" : DISAMBIGUATED_CURRENCY_SYMBOLS[currencyCode];
+  const isZeroDecimal = ZERO_DECIMAL_CURRENCIES.has(currencyCode) || (amount % 1 === 0 && currencyCode === "INR");
+  const fractionDigits = isZeroDecimal ? 0 : 2;
+
+  if (disambiguated) {
+    const formattedNum = new Intl.NumberFormat("en-US", {
+      minimumFractionDigits: fractionDigits,
+      maximumFractionDigits: fractionDigits,
+    }).format(amount);
+    return `${disambiguated}${formattedNum}`;
+  }
+
   try {
-    return new Intl.NumberFormat(undefined, {
+    return new Intl.NumberFormat("en-US", {
       style: "currency",
       currency: currencyCode,
-      minimumFractionDigits: amount % 1 === 0 ? 0 : 2,
-      maximumFractionDigits: 2,
+      minimumFractionDigits: fractionDigits,
+      maximumFractionDigits: fractionDigits,
     }).format(amount);
   } catch {
-    const symbol = COUNTRY_CURRENCY_MAP[currencyCode]?.symbol || "$";
-    return `${symbol}${amount.toFixed(amount % 1 === 0 ? 0 : 2)}`;
+    const symbol = resolveCurrencySymbol(currencyCode, countryCode);
+    return `${symbol}${amount.toFixed(fractionDigits)}`;
   }
+}
+
+/**
+ * Resolves the display symbol for a currency, taking regional disambiguation into account.
+ */
+export function resolveCurrencySymbol(currencyCode: string, countryCode?: string): string {
+  if (currencyCode === "USD" && countryCode && countryCode !== "US") {
+    return "US$";
+  }
+  return (
+    DISAMBIGUATED_CURRENCY_SYMBOLS[currencyCode] ||
+    (countryCode && COUNTRY_CURRENCY_MAP[countryCode]?.symbol) ||
+    "$"
+  );
 }
 
 /**
