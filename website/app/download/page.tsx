@@ -4,11 +4,35 @@ import { PTButton } from "@/components/PTButton";
 import { getLatestRelease } from "@/lib/github";
 import {
   Download,
-  Apple,
-  Monitor,
   Smartphone,
   Sparkles,
 } from "lucide-react";
+
+function AppleLogo({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden="true"
+    >
+      <path d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701" />
+    </svg>
+  );
+}
+
+function WindowsLogo({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden="true"
+    >
+      <path d="M0 0h11v11H0zM13 0h11v11H13zM0 13h11v11H0zM13 13h11v11H13z" />
+    </svg>
+  );
+}
 
 export const metadata: Metadata = {
   title: "Download SyncTogether for macOS and Windows",
@@ -48,14 +72,14 @@ export default async function DownloadPage() {
         >
           <div className="space-y-4">
             <div className="w-14 h-14 rounded-2xl bg-purple-500/10 border border-purple-400/30 flex items-center justify-center text-purple-300 shadow-inner">
-              <Apple className="w-8 h-8" />
+              <AppleLogo className="w-7 h-7" />
             </div>
             <div>
               <h2 className="text-2xl font-bold text-white font-[family-name:var(--font-space-grotesk)]">
                 macOS
               </h2>
               <p className="text-xs text-gray-400 mt-0.5">
-                Universal Binary • Apple Silicon (M1/M2/M3/M4) &amp; Intel
+                Universal Binary • Apple Silicon &amp; Intel
               </p>
             </div>
             <div className="text-xs font-mono text-purple-300/80 bg-purple-950/40 p-2.5 rounded-xl border border-purple-500/15">
@@ -87,7 +111,7 @@ export default async function DownloadPage() {
         >
           <div className="space-y-4">
             <div className="w-14 h-14 rounded-2xl bg-purple-500/10 border border-purple-400/30 flex items-center justify-center text-purple-300 shadow-inner">
-              <Monitor className="w-8 h-8" />
+              <WindowsLogo className="w-7 h-7" />
             </div>
             <div>
               <h2 className="text-2xl font-bold text-white font-[family-name:var(--font-space-grotesk)]">
@@ -117,39 +141,6 @@ export default async function DownloadPage() {
             </p>
           </div>
         </GlassPanel>
-      </div>
-
-      {/* Installation Instructions & Verification */}
-      <div className="max-w-4xl mx-auto space-y-6">
-        <h3 className="text-xl font-bold text-white font-[family-name:var(--font-space-grotesk)] text-center">
-          Installation Instructions
-        </h3>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <GlassPanel className="p-6 space-y-3 text-sm">
-            <div className="flex items-center gap-2 font-bold text-purple-300">
-              <Apple className="w-4 h-4" />
-              <span>macOS Setup</span>
-            </div>
-            <ol className="space-y-2 text-xs text-gray-300 list-decimal list-inside leading-relaxed">
-              <li>Download and open the <code className="text-purple-300">.dmg</code> image.</li>
-              <li>Drag <strong>SyncTogether</strong> into your <strong>Applications</strong> folder.</li>
-              <li>On first launch, if prompted by Gatekeeper, right-click the app icon and select <strong>Open</strong>.</li>
-            </ol>
-          </GlassPanel>
-
-          <GlassPanel className="p-6 space-y-3 text-sm">
-            <div className="flex items-center gap-2 font-bold text-purple-300">
-              <Monitor className="w-4 h-4" />
-              <span>Windows Setup</span>
-            </div>
-            <ol className="space-y-2 text-xs text-gray-300 list-decimal list-inside leading-relaxed">
-              <li>Download and launch the <code className="text-purple-300">.exe</code> setup wizard.</li>
-              <li>Follow the installer prompts and grant required permissions.</li>
-              <li>Launch <strong>SyncTogether</strong> from your Start Menu or Desktop shortcut.</li>
-            </ol>
-          </GlassPanel>
-        </div>
       </div>
 
       {/* Mobile Teaser Card */}
